@@ -1,4 +1,5 @@
-﻿using Unity.Burst;
+﻿// File: Assets/PROJECT/Scripts/ECS/Spatial/SpatialHashBuildSystem.cs
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -7,7 +8,8 @@ using static OneBitRob.ECS.SpatialHashComponents;
 
 namespace OneBitRob.ECS
 {
-    [UpdateInGroup(typeof(SimulationSystemGroup), OrderFirst = true)]
+    [UpdateInGroup(typeof(SimulationSystemGroup))]
+    [UpdateAfter(typeof(OneBitRob.ECS.Sync.SyncBrainFromMonoSystem))] 
     public partial struct SpatialHashBuildSystem : ISystem
     {
         public static NativeParallelMultiHashMap<int, Entity> Grid;
@@ -18,7 +20,10 @@ namespace OneBitRob.ECS
 
         public void OnCreate(ref SystemState state)
         {
-            _targetsQuery = state.GetEntityQuery(ComponentType.ReadOnly<SpatialHashTarget>(), ComponentType.ReadOnly<LocalTransform>());
+            _targetsQuery = state.GetEntityQuery(
+                ComponentType.ReadOnly<SpatialHashTarget>(),
+                ComponentType.ReadOnly<LocalTransform>());
+
             state.RequireForUpdate<SpatialHashSettings>();
             _gridNative = new NativeParallelMultiHashMap<int, Entity>(1024, Allocator.Persistent);
             Grid = _gridNative;
@@ -32,22 +37,17 @@ namespace OneBitRob.ECS
         public void OnUpdate(ref SystemState state)
         {
             _gridNative.Clear();
-
             CellSize = SystemAPI.GetSingleton<SpatialHashSettings>().CellSize;
-            var writer = _gridNative.AsParallelWriter();
 
             state.Dependency = new BuildJob
-                {
-                    CellSize = CellSize,
-                    Grid = writer
-                }
-                .ScheduleParallel(_targetsQuery, state.Dependency);
+            {
+                CellSize = CellSize,
+                Grid = _gridNative.AsParallelWriter()
+            }.ScheduleParallel(_targetsQuery, state.Dependency);
 
-// #if UNITY_EDITOR
-//             // One‑frame, human‑readable count
-//             state.Dependency.Complete();      // wait so Count() is valid
-//             EcsLogger.Info(this, $"Spatial hash built: {_gridNative.Count()} entries");
-// #endif
+            // The container is static and not tracked by Entities.
+            // Complete the writer before anyone reads it this frame.
+            state.Dependency.Complete();
 
             Grid = _gridNative;
         }
@@ -60,8 +60,9 @@ namespace OneBitRob.ECS
 
             public void Execute(Entity entity, in LocalTransform transform)
             {
-                int3 cell = (int3)math.floor(transform.Position / CellSize);
-
+                float3 p = transform.Position;
+                // 2D top-down: collapse Y to 0 so vertical offsets don't create different cells
+                int3 cell = (int3)math.floor(new float3(p.x, 0f, p.z) / CellSize);
                 int key = (int)math.hash(cell);
                 Grid.Add(key, entity);
             }

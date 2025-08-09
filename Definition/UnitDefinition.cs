@@ -81,7 +81,7 @@ namespace OneBitRob
         public float autoTargetMinSwitchDistance = 3f;
 
         [SuffixLabel("units", Overlay = true)]
-        public float autoTargetDetectionRange = 10f;
+        public float targetDetectionRange = 10f;
 
         [SuffixLabel("secs", Overlay = true)]
         public float retargetCheckInterval = 1f;

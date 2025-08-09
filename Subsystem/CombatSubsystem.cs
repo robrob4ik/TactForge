@@ -1,5 +1,4 @@
-﻿
-using MoreMountains.Tools;
+﻿using MoreMountains.Tools;
 using OneBitRob.EnigmaEngine;
 using Unity.Entities;
 using UnityEngine;
@@ -12,9 +11,9 @@ public class CombatSubsystem : MonoBehaviour
     private EnigmaCharacterHandleWeapon   _characterHandleWeapon;
     private EnigmaCharacterOrientation3D  _orientation3D; 
     
-    
     private EnigmaWeaponAim _enigmaWeaponAim;
-    
+    private bool _warnedMissingAim;
+
     private void Awake()
     {
         _character      = GetComponent<EnigmaCharacter>();
@@ -22,9 +21,7 @@ public class CombatSubsystem : MonoBehaviour
         _orientation3D  = _character.FindAbility<EnigmaCharacterOrientation3D>();
     }
     
-    public bool IsAlive =>
-        _character != null &&
-        _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
+    public bool IsAlive => _character != null && _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
 
     public void Attack()
     {
@@ -35,15 +32,22 @@ public class CombatSubsystem : MonoBehaviour
 
     public void AimAtTarget(Transform target)
     {
-        if (_characterHandleWeapon.CurrentWeapon != null)
+        if (_characterHandleWeapon.CurrentWeapon != null && _enigmaWeaponAim == null)
+            _enigmaWeaponAim = _characterHandleWeapon.CurrentWeapon.gameObject.MMGetComponentNoAlloc<EnigmaWeaponAim>();
+
+        if (_enigmaWeaponAim == null)
         {
-            if (_enigmaWeaponAim == null)
+#if UNITY_EDITOR
+            if (!_warnedMissingAim)
             {
-                _enigmaWeaponAim = _characterHandleWeapon.CurrentWeapon.gameObject.MMGetComponentNoAlloc<EnigmaWeaponAim>();
-            }                 
+                Debug.LogWarning($"[{name}] EnigmaWeaponAim missing on current weapon; cannot aim.");
+                _warnedMissingAim = true;
+            }
+#endif
+            return;
         }
-        EnigmaLogger.Log("AimAtTarget:"+target.transform.position);
-        _enigmaWeaponAim.SetCurrentAim(target.transform.position - _character.transform.position);
+
+        var dir = target.transform.position - _character.transform.position;
+        _enigmaWeaponAim.SetCurrentAim(dir);
     }
 }
-

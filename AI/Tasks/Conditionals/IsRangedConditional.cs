@@ -15,6 +15,7 @@ namespace OneBitRob.AI
     public struct IsRangedTag       : IComponentData, IEnableableComponent { }
 
     [DisableAutoCreation]
+    [UpdateInGroup(typeof(AITaskSystemGroup))]
     public partial class IsRangedSystem
         : TaskProcessorSystem<IsRangedComponent, IsRangedTag>
     {

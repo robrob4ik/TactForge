@@ -20,8 +20,8 @@ namespace OneBitRob.AI
     {
     }
 
-
     [DisableAutoCreation]
+    [UpdateInGroup(typeof(AITaskSystemGroup))]
     public partial class ReadyToCastSpellSystem
         : TaskProcessorSystem<ReadyToCastSpellComponent, ReadyToCastSpellTag>
     {

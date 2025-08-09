@@ -15,6 +15,7 @@ namespace OneBitRob.AI
     public struct IsTargetInAttackRangeTag       : IComponentData, IEnableableComponent { }
 
     [DisableAutoCreation]
+    [UpdateInGroup(typeof(AITaskSystemGroup))]
     public partial class IsTargetInAttackRangeSystem
         : TaskProcessorSystem<IsTargetInAttackRangeComponent, IsTargetInAttackRangeTag>
     {

@@ -1,105 +1,65 @@
-﻿using Opsive.BehaviorDesigner.Runtime.Components;
-using Opsive.BehaviorDesigner.Runtime.Tasks;
+﻿using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
-using Unity.Collections;
 using Unity.Entities;
+using Unity.Transforms;
+using OneBitRob.ECS;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Casting unit spell")]
+    [NodeDescription("Request a spell cast based on CurrentSpell* collected earlier")]
     public class CastSpellAction : AbstractTaskAction<CastSpellComponent, CastSpellTag, CastSpellSystem>, IAction
     {
-        protected override CastSpellComponent CreateBufferElement(ushort runtimeIndex) { return new CastSpellComponent { Index = runtimeIndex }; }
+        protected override CastSpellComponent CreateBufferElement(ushort runtimeIndex) => new CastSpellComponent { Index = runtimeIndex };
     }
 
-    public struct CastSpellComponent : IBufferElementData, ITaskCommand
-    {
-        public ushort Index { get; set; }
-    }
+    public struct CastSpellComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }
+    public struct CastSpellTag : IComponentData, IEnableableComponent { }
 
-    public struct CastSpellTag : IComponentData, IEnableableComponent
-    {
-    }
-
-    // [DisableAutoCreation]
-    // public partial class CastSpellSystem : SystemBase
-    // {
-    //     protected override void OnUpdate()
-    //     {
-    //         var queue = new NativeQueue<Entity>(Allocator.TempJob);
-    //         var queueWriter = queue.AsParallelWriter();
-    //
-    //         var handle = Entities
-    //             .WithAll<CastSpellTag>()
-    //             .WithNativeDisableParallelForRestriction(queueWriter)
-    //             .ForEach((Entity entity,
-    //                 ref DynamicBuffer<TaskComponent> tasks,
-    //                 ref DynamicBuffer<CastSpellComponent> buffer) =>
-    //             {
-    //                 for (int i = 0; i < buffer.Length; i++)
-    //                 {
-    //                     var cmd = buffer[i];
-    //                     var task = tasks[cmd.Index];
-    //
-    //                     if (task.Status == TaskStatus.Queued)
-    //                     {
-    //                         task.Status = TaskStatus.Running;
-    //                         tasks[cmd.Index] = task;
-    //                     }
-    //                     else if (task.Status == TaskStatus.Running) { queueWriter.Enqueue(entity); }
-    //                 }
-    //             }).ScheduleParallel(Dependency);
-    //
-    //         handle.Complete();
-    //
-    //         while (queue.TryDequeue(out var entity))
-    //         {
-    //             if (!EntityManager.HasComponent<UnitBrainRef>(entity)) continue;
-    //
-    //             var brainRef = EntityManager.GetSharedComponentManaged<UnitBrainRef>(entity);
-    //             if (brainRef.Value == null) continue;
-    //             var tasks = EntityManager.GetBuffer<TaskComponent>(entity);
-    //             var buffer = EntityManager.GetBuffer<CastSpellComponent>(entity);
-    //
-    //             foreach (var cmd in buffer)
-    //             {
-    //                 var task = tasks[cmd.Index];
-    //                 if (task.Status != TaskStatus.Running) continue;
-    //
-    //                 var target = brainRef.Value.CurrentTarget;
-    //                 if (target != null)
-    //                 {
-    //                     brainRef.Value.TryCastSpell();
-    //                     Debug.Log($"[CastSpellSystem] Entity {entity.Index} Casting spell on {target.name}");
-    //                 }
-    //
-    //                 task.Status = target ? TaskStatus.Success : TaskStatus.Failure;
-    //                 tasks[cmd.Index] = task;
-    //             }
-    //         }
-    //
-    //         queue.Dispose();
-    //     }
-    // }
-    
     [DisableAutoCreation]
-    public partial class CastSpellSystem
-        : TaskProcessorSystem<CastSpellComponent, CastSpellTag>
+    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    public partial class CastSpellSystem : TaskProcessorSystem<CastSpellComponent, CastSpellTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
         {
-            var target = brain.CurrentTarget;
+            if (brain.UnitDefinition.unitSpells == null || brain.UnitDefinition.unitSpells.Count == 0)
+                return TaskStatus.Failure;
 
-            if (target != null)
+            var spell = brain.UnitDefinition.unitSpells[0];
+            var req = default(CastRequest);
+
+            switch (spell.TargetType)
             {
-                brain.TryCastSpell();
-#if UNITY_EDITOR
-                Debug.Log($"[CastSpellSystem] {e.Index} cast spell on {target.name}");
-#endif
+                case SpellTargetType.SingleTarget:
+                    if (brain.CurrentSpellTarget == null) return TaskStatus.Failure;
+                    var tgtEnt = UnitBrainRegistry.GetEntity(brain.CurrentSpellTarget);
+                    if (tgtEnt == Entity.Null) return TaskStatus.Failure;
+                    req.Kind = CastKind.SingleTarget;
+                    req.Target = tgtEnt;
+                    req.HasValue = 1;
+                    break;
+
+                case SpellTargetType.MultiTarget:
+                    // Keep bridge simple: single‑target the first one for now
+                    if (brain.CurrentSpellTargets == null || brain.CurrentSpellTargets.Count == 0) return TaskStatus.Failure;
+                    var t0 = UnitBrainRegistry.GetEntity(brain.CurrentSpellTargets[0]);
+                    if (t0 == Entity.Null) return TaskStatus.Failure;
+                    req.Kind = CastKind.SingleTarget;
+                    req.Target = t0;
+                    req.HasValue = 1;
+                    break;
+
+                case SpellTargetType.AreaOfEffect:
+                    if (!brain.CurrentSpellTargetPosition.HasValue) return TaskStatus.Failure;
+                    req.Kind = CastKind.AreaOfEffect;
+                    req.AoEPosition = brain.CurrentSpellTargetPosition.Value;
+                    req.HasValue = 1;
+                    break;
             }
 
-            return target ? TaskStatus.Success : TaskStatus.Failure;
+            EntityManager.SetComponentData(e, req);
+            return TaskStatus.Success;
         }
     }
 }

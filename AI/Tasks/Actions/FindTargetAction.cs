@@ -1,19 +1,20 @@
 ﻿using OneBitRob.Constants;
-using OneBitRob.ECS;
-using Opsive.BehaviorDesigner.Runtime.Components;
-using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 using Unity.Collections;
 using Unity.Entities;
+using Unity.Mathematics;
 using Unity.Transforms;
-using static OneBitRob.ECS.SpatialHashComponents;
+using OneBitRob.ECS;
+using Opsive.BehaviorDesigner.Runtime.Tasks;
+using Opsive.GraphDesigner.Runtime;
+using UnityEngine;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Finds a valid target via UnitBrain strategy")]
+    [NodeDescription("Finds a valid target via SpatialHash and writes Target component")]
     public class FindTargetAction : AbstractTaskAction<FindTargetComponent, FindTargetTag, FindTargetSystem>, IAction
     {
-        protected override FindTargetComponent CreateBufferElement(ushort runtimeIndex) { return new FindTargetComponent { Index = runtimeIndex }; }
+        protected override FindTargetComponent CreateBufferElement(ushort runtimeIndex)
+            => new FindTargetComponent { Index = runtimeIndex };
     }
 
     public struct FindTargetComponent : IBufferElementData, ITaskCommand
@@ -21,34 +22,64 @@ namespace OneBitRob.AI
         public ushort Index { get; set; }
     }
 
-    public struct FindTargetTag : IComponentData, IEnableableComponent
-    {
-    }
+    public struct FindTargetTag : IComponentData, IEnableableComponent { }
 
-
-    
     [DisableAutoCreation]
-    public partial class FindTargetSystem
-        : TaskProcessorSystem<FindTargetComponent, FindTargetTag>
+    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    public partial class FindTargetSystem : TaskProcessorSystem<FindTargetComponent, FindTargetTag>
     {
-   
-        protected override TaskStatus Execute(Entity e, UnitBrain brain)
+        ComponentLookup<LocalTransform> _posRO;
+        ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
+
+        protected override void OnCreate()
         {
-            // ── Fresh, frame‑local look‑ups (safe even after structural change)
-            var posLookup  = GetComponentLookup<LocalTransform>(true);
-            var factLookup = GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
+            base.OnCreate();
+            _posRO  = GetComponentLookup<LocalTransform>(true);
+            _factRO = GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
+        }
 
-            var wanted = new FixedList128Bytes<byte>();
-            wanted.Add(brain.UnitDefinition.isEnemy
-                ? GameConstants.ALLY_FACTION
-                : GameConstants.ENEMY_FACTION);
+        protected override void OnUpdate()
+        {
+            _posRO.Update(this);
+            _factRO.Update(this);
+            base.OnUpdate();
+        }
 
-            brain.CurrentTarget = brain.TargetingStrategy.GetTarget(
-                brain.transform.position, 100f, wanted,
-                ref posLookup, ref factLookup);
+        protected override TaskStatus Execute(Entity e, UnitBrain brain)
+        {   
+            FixedList128Bytes<byte> wanted = default;
+            wanted.Add(brain.UnitDefinition.isEnemy ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION);
 
-            return brain.CurrentTarget ? TaskStatus.Success : TaskStatus.Failure;
+            float range = brain.UnitDefinition.targetDetectionRange;
+            if (range <= 0f) range = 100f;
+
+            var selfPos = SystemAPI.GetComponent<LocalTransform>(e).Position;
+            var closest = SpatialHashSearch.GetClosest(selfPos, range, wanted, ref _posRO, ref _factRO);
+            if (closest == Entity.Null)
+                return TaskStatus.Failure;
+
+            // Hysteresis: only replace an existing valid target if the new one is
+            // at least autoTargetMinSwitchDistance units closer.
+            if (EntityManager.HasComponent<Target>(e))
+            {
+                var current = EntityManager.GetComponentData<Target>(e).Value;
+                if (current != Entity.Null && _posRO.HasComponent(current))
+                {
+                    float minSwitch = math.max(0f, brain.UnitDefinition.autoTargetMinSwitchDistance);
+                    if (minSwitch > 0f)
+                    {
+                        float distCurr = math.distance(_posRO[current].Position, selfPos);
+                        float distCand = math.distance(_posRO[closest].Position, selfPos);
+
+                        // If the candidate is not at least minSwitch units closer, keep current.
+                        if ((distCurr - distCand) < minSwitch)
+                            return TaskStatus.Success;
+                    }
+                }
+            }
+
+            EntityManager.SetComponentData(e, new Target { Value = closest });
+            return TaskStatus.Success;
         }
     }
-    
 }

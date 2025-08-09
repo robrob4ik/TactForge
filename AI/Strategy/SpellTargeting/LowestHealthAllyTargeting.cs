@@ -17,9 +17,10 @@ namespace OneBitRob.AI {
                                     ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factLookup)
         {
             var wanted = new FixedList128Bytes<byte>();
+            // BUGFIX: healers should scan SAME faction (allies), not opponents
             wanted.Add(brain.UnitDefinition.isEnemy
-                ? GameConstants.ALLY_FACTION    // enemy healer → look for enemy faction’s allies
-                : GameConstants.ENEMY_FACTION); // friendly healer → look for our own allies
+                ? GameConstants.ENEMY_FACTION
+                : GameConstants.ALLY_FACTION);
 
             using var ents = new NativeList<Entity>(Allocator.Temp);
             SpatialHashSearch.CollectInSphere(
@@ -51,7 +52,6 @@ namespace OneBitRob.AI {
             return bestHealth ? bestHealth.gameObject : null;
         }
 
-        // ────────────────────────────────────────────────────────── Unused for this spell
         public List<GameObject> GetTargets(UnitBrain _, SpellDefinition __,
                                            ref ComponentLookup<LocalTransform> ___,
                                            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> ____)

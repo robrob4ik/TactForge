@@ -3,6 +3,7 @@ using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
 using Unity.Collections;
 using Unity.Entities;
+using UnityEngine;
 
 namespace OneBitRob.AI
 {
@@ -20,15 +21,16 @@ namespace OneBitRob.AI
     public struct SetupUnitTag : IComponentData, IEnableableComponent
     {
     }
-
+    
     [DisableAutoCreation]
+    [UpdateInGroup(typeof(AITaskSystemGroup))]
     public partial class SetupUnitSystem
         : TaskProcessorSystem<SetupUnitComponent, SetupUnitTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
         {
             brain.Setup();
-            return TaskStatus.Success;              // one‑shot
+            return TaskStatus.Success;             
         }
     }
 }

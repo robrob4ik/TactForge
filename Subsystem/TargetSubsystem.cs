@@ -16,7 +16,7 @@ public class TargetSubsystem : MonoBehaviour
     public void Initialize(UnitBrain brain)
     {
         targetLayerMask = brain.GetTargetLayerMask();
-        autoTargetDetectionRange = brain.UnitDefinition.autoTargetDetectionRange;
+        autoTargetDetectionRange = brain.UnitDefinition.targetDetectionRange;
         retargetCheckInterval = brain.UnitDefinition.retargetCheckInterval;
 
         // Configure detection trigger

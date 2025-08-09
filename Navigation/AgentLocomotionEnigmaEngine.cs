@@ -11,15 +11,17 @@ using UnityEngine;
 public class AgentLocomotionEnigmaEngine : MonoBehaviour
 {
     private UnitDefinition _unitDefinition;
-    
+
     public AgentLocomotion Locomotion = AgentLocomotion.Default;
 
     AgentAuthoring m_Agent;
     AgentCylinderShapeAuthoring _cylinderShape;
     EnigmaCharacterMovement _characterMovement;
 
+    private Entity _agentEntity;
+
     ref AgentBody Body => ref World.DefaultGameObjectInjectionWorld.EntityManager
-        .GetComponentDataRW<AgentBody>(m_Agent.GetOrCreateEntity()).ValueRW;
+        .GetComponentDataRW<AgentBody>(_agentEntity).ValueRW;
 
     void OnEnable()
     {
@@ -27,6 +29,8 @@ public class AgentLocomotionEnigmaEngine : MonoBehaviour
         m_Agent = GetComponent<AgentAuthoring>();
         _cylinderShape = GetComponent<AgentCylinderShapeAuthoring>();
         _characterMovement = gameObject.GetComponent<EnigmaCharacter>()?.FindAbility<EnigmaCharacterMovement>();
+
+        _agentEntity = m_Agent.GetOrCreateEntity(); // cache to avoid repeated lookups
     }
 
     void FixedUpdate()

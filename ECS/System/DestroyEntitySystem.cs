@@ -7,32 +7,24 @@ using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    public struct DestroyEntityTag : IComponentData, IEnableableComponent
-    {
-    }
+    public struct DestroyEntityTag : IComponentData, IEnableableComponent { }
 
-    [UpdateInGroup(typeof(LateSimulationSystemGroup), OrderLast = true)]  
+    [UpdateInGroup(typeof(LateSimulationSystemGroup), OrderLast = true)]
     public partial class DestroyEntitySystem : SystemBase
     {
         protected override void OnUpdate()
         {
-            var ecb = new EntityCommandBuffer(Allocator.Temp);
+            var ecb       = new EntityCommandBuffer(Allocator.Temp);
             var toDestroy = new List<GameObject>(); // Collect GOs here
 
             foreach (var (destroyTag, entity) in SystemAPI.Query<RefRO<DestroyEntityTag>>().WithEntityAccess())
             {
-                // Collect associated GameObject via UnitBrainRef
-                if (EntityManager.HasComponent<UnitBrainRef>(entity))
+                var brain = UnitBrainRegistry.Get(entity);
+                if (brain && brain.gameObject)
                 {
-                    var brainRef = EntityManager.GetSharedComponentManaged<UnitBrainRef>(entity);
-                    var go = brainRef.Value?.gameObject;
-                    if (brainRef.Value != null && brainRef.Value.gameObject != null)
-                    {
-                        toDestroy.Add(brainRef.Value.gameObject);
-                        var gpuiPrefab = brainRef.Value.GetComponent<GPUIPrefab>();
-                        if (gpuiPrefab != null)
-                            GPUIPrefabAPI.RemovePrefabInstance(gpuiPrefab);    
-                    }
+                    toDestroy.Add(brain.gameObject);
+                    if (brain.TryGetComponent<GPUIPrefab>(out var gpuiPrefab))
+                        GPUIPrefabAPI.RemovePrefabInstance(gpuiPrefab);
                 }
 
                 ecb.DestroyEntity(entity);
@@ -41,7 +33,8 @@ namespace OneBitRob.ECS
             ecb.Playback(EntityManager);
             ecb.Dispose();
 
-            foreach (var go in toDestroy) { GameObject.Destroy(go); }
+            foreach (var go in toDestroy)
+                GameObject.Destroy(go);
         }
     }
 }

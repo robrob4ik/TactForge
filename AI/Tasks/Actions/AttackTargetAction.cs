@@ -1,103 +1,41 @@
-﻿using OneBitRob.Constants;
-using Opsive.BehaviorDesigner.Runtime.Components;
-using Opsive.BehaviorDesigner.Runtime.Tasks;
+﻿using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
-using Unity.Collections;
 using Unity.Entities;
+using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Finds a valid target via UnitBrain strategy")]
+    [NodeDescription("Request an attack on current Target")]
     public class AttackTargetAction : AbstractTaskAction<AttackTargetComponent, AttackTargetTag, AttackTargetSystem>, IAction
     {
-        protected override AttackTargetComponent CreateBufferElement(ushort runtimeIndex) { return new AttackTargetComponent { Index = runtimeIndex }; }
+        protected override AttackTargetComponent CreateBufferElement(ushort runtimeIndex) => new AttackTargetComponent { Index = runtimeIndex };
     }
 
-    public struct AttackTargetComponent : IBufferElementData, ITaskCommand
-    {
-        public ushort Index { get; set; }
-    }
+    public struct AttackTargetComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }
+    public struct AttackTargetTag : IComponentData, IEnableableComponent { }
 
-    public struct AttackTargetTag : IComponentData, IEnableableComponent
-    {
-    }
-
-    // [DisableAutoCreation]
-    // public partial class AttackTargetSystem : SystemBase
-    // {
-    //     protected override void OnUpdate()
-    //     {
-    //         var queue = new NativeQueue<Entity>(Allocator.TempJob);
-    //         var queueWriter = queue.AsParallelWriter();
-    //
-    //         var handle = Entities
-    //             .WithAll<AttackTargetTag>()
-    //             .WithNativeDisableParallelForRestriction(queueWriter)
-    //             .ForEach((Entity entity,
-    //                 ref DynamicBuffer<TaskComponent> tasks,
-    //                 ref DynamicBuffer<AttackTargetComponent> buffer) =>
-    //             {
-    //                 for (int i = 0; i < buffer.Length; i++)
-    //                 {
-    //                     var cmd = buffer[i];
-    //                     var task = tasks[cmd.Index];
-    //
-    //                     if (task.Status == TaskStatus.Queued)
-    //                     {
-    //                         task.Status = TaskStatus.Running;
-    //                         tasks[cmd.Index] = task;
-    //                     }
-    //                     else if (task.Status == TaskStatus.Running) { queueWriter.Enqueue(entity); }
-    //                 }
-    //             }).ScheduleParallel(Dependency);
-    //
-    //         handle.Complete();
-    //         
-    //         while (queue.TryDequeue(out var entity))
-    //         {
-    //             if (!EntityManager.HasComponent<UnitBrainRef>(entity)) continue;
-    //
-    //             var brainRef = EntityManager.GetSharedComponentManaged<UnitBrainRef>(entity);
-    //             if (brainRef.Value == null) continue;
-    //             var tasks = EntityManager.GetBuffer<TaskComponent>(entity);
-    //             var buffer = EntityManager.GetBuffer<AttackTargetComponent>(entity);
-    //
-    //             foreach (var cmd in buffer)
-    //             {
-    //                 var task = tasks[cmd.Index];
-    //                 if (task.Status != TaskStatus.Running) continue;
-    //                 
-    //                 var target = brainRef.Value.CurrentTarget;
-    //                 if (target != null)
-    //                 {
-    //                     brainRef.Value.Attack(target.transform);
-    //                     EnigmaLogger.Log($"[AttackTargetSystem] Entity {entity.Index} attacking {target.name}");
-    //                 } 
-    //                 
-    //                 task.Status = target ? TaskStatus.Success : TaskStatus.Failure;
-    //                 tasks[cmd.Index] = task;
-    //             }
-    //         }
-    //
-    //         queue.Dispose();
-    //     }
-    // }
-    
     [DisableAutoCreation]
-    public partial class AttackTargetSystem
-        : TaskProcessorSystem<AttackTargetComponent, AttackTargetTag>
+    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    public partial class AttackTargetSystem : TaskProcessorSystem<AttackTargetComponent, AttackTargetTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
         {
-            var target = brain.CurrentTarget;
+            if (!EntityManager.HasComponent<Target>(e)) return TaskStatus.Failure;
 
-            if (target != null)
+            var target = EntityManager.GetComponentData<Target>(e).Value;
+            if (target == Entity.Null) return TaskStatus.Failure;
+
+            if (!EntityManager.HasComponent<AttackRequest>(e))
+                EntityManager.AddComponentData(e, new AttackRequest { Target = target, HasValue = 1 });
+            else
             {
-                brain.Attack(target.transform);
-                EcsLogger.Info(this, $"[{e.Index}] attacking {target.name}");
+                var req = EntityManager.GetComponentData<AttackRequest>(e);
+                req.Target   = target;
+                req.HasValue = 1;
+                EntityManager.SetComponentData(e, req);
             }
 
-            return target ? TaskStatus.Success : TaskStatus.Failure;
+            return TaskStatus.Success;
         }
     }
 }

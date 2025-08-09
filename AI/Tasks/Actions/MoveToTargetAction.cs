@@ -6,42 +6,30 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using Unity.VisualScripting;
-using UnityEngine;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Setting destination to Agents Navigation to move agent")]
+    [NodeDescription("Sets DesiredDestination to current Target position")]
     public class MoveToTargetAction : AbstractTaskAction<MoveToTargetComponent, MoveToTargetTag, MoveToTargetSystem>, IAction
     {
-        protected override MoveToTargetComponent CreateBufferElement(ushort runtimeIndex) { return new MoveToTargetComponent { Index = runtimeIndex }; }
+        protected override MoveToTargetComponent CreateBufferElement(ushort runtimeIndex)
+            => new MoveToTargetComponent { Index = runtimeIndex };
     }
 
-    public struct MoveToTargetComponent : IBufferElementData, ITaskCommand
-    {
-        public ushort Index { get; set; }
-    }
-
-    public struct MoveToTargetTag : IComponentData, IEnableableComponent
-    {
-    }
+    public struct MoveToTargetComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }
+    public struct MoveToTargetTag       : IComponentData, IEnableableComponent { }
 
     [DisableAutoCreation]
-    public partial class MoveToTargetSystem
-        : TaskProcessorSystem<MoveToTargetComponent, MoveToTargetTag>
+    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    public partial class MoveToTargetSystem : TaskProcessorSystem<MoveToTargetComponent, MoveToTargetTag>
     {
-        /* ── CONFIG – tweak in the Inspector if you like ──────────────────── */
-        const int  kFramesBetweenRetarget = 10;          // run re‑target every N frames
-        const float kDetectRangeDefault   = 100f;        // fallback when SO value is zero
-        
-        /* ── cached, read‑only look‑ups – refreshed once per frame ────────── */
-        ComponentLookup<LocalTransform>                      _posRO;
+        ComponentLookup<LocalTransform> _posRO;
         ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
 
         protected override void OnCreate()
         {
             base.OnCreate();
-            _posRO = GetComponentLookup<LocalTransform>(true);
+            _posRO  = GetComponentLookup<LocalTransform>(true);
             _factRO = GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
         }
 
@@ -49,57 +37,116 @@ namespace OneBitRob.AI
         {
             _posRO.Update(this);
             _factRO.Update(this);
-            base.OnUpdate();               // calls Execute() for each task
+            base.OnUpdate();
         }
-        
+
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
         {
-            if (brain.CurrentTarget == null) return TaskStatus.Failure;
-
-            // ── 1) Retarget (cheap) every k frames ─────────────────────────
-            if (UnityEngine.Time.frameCount % kFramesBetweenRetarget == 0 &&
-                brain.RemainingDistance() >= brain.UnitDefinition.autoTargetMinSwitchDistance)
+            // No Target → stop and fail
+            if (!EntityManager.HasComponent<Target>(e))
             {
-                FixedList128Bytes<byte> wanted = default;
-                wanted.Add(brain.UnitDefinition.isEnemy
-                    ? GameConstants.ALLY_FACTION
-                    : GameConstants.ENEMY_FACTION);
+                var dd0 = EntityManager.GetComponentData<DesiredDestination>(e);
+                dd0.Position = SystemAPI.GetComponent<LocalTransform>(e).Position;
+                dd0.HasValue = 1;
+                EntityManager.SetComponentData(e, dd0);
+                return TaskStatus.Failure;
+            }
 
-                float  range = brain.UnitDefinition.autoTargetDetectionRange;
-                if (range <= 0f) range = kDetectRangeDefault;
+            var target = EntityManager.GetComponentData<Target>(e).Value;
 
-                /* Returns *GameObject* to stay compatible with your current
-                   MonoBehaviour pipeline. No allocations, no safety checks,
-                   no Transform sync – the look‑ups are already cached. */
-                var candidate = brain.TargetingStrategy.GetTarget(
-                    (float3)brain.transform.position, range, wanted,
-                    ref _posRO, ref _factRO);
+            // Target entity invalid → clear, stop, and fail
+            if (target == Entity.Null || !_posRO.HasComponent(target))
+            {
+                EntityManager.SetComponentData(e, new Target { Value = Entity.Null });
 
-                if (candidate && candidate != brain.CurrentTarget)
+                var dd1 = EntityManager.GetComponentData<DesiredDestination>(e);
+                dd1.Position = SystemAPI.GetComponent<LocalTransform>(e).Position;
+                dd1.HasValue = 1;
+                EntityManager.SetComponentData(e, dd1);
+
+                return TaskStatus.Failure;
+            }
+
+            // ─────────────────────────────────────────────────────────────────────
+            // Opportunistic retargeting — THROTTLED
+            // This is the expensive call (spatial search). Only do it when:
+            //  • retarget interval has elapsed, AND
+            //  • there’s at least a chance to improve (current target is not already great).
+            // ─────────────────────────────────────────────────────────────────────
+            double now = SystemAPI.Time.ElapsedTime;
+            float  switchInterval = math.max(0f, brain.UnitDefinition.retargetCheckInterval);
+
+            bool canCheck = true;
+            if (switchInterval > 0f)
+            {
+                var cd = EntityManager.GetComponentData<RetargetCooldown>(e);
+                canCheck = now >= cd.NextTime;
+                if (canCheck)
                 {
-                    float3 selfPos  = _posRO[e].Position;
-                    float3 candPos  = _posRO[UnitBrainRegistry.GetEntity(candidate)].Position;
-                    float  distSqr  = math.distancesq(candPos, selfPos);
+                    cd.NextTime = now + switchInterval;
+                    EntityManager.SetComponentData(e, cd);
+                }
+            }
 
-                    if (distSqr < brain.RemainingDistance() * brain.RemainingDistance())
+            if (canCheck)
+            {
+                var wanted = default(FixedList128Bytes<byte>);
+                wanted.Add(brain.UnitDefinition.isEnemy ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION);
+
+                float range = brain.UnitDefinition.targetDetectionRange > 0
+                    ? brain.UnitDefinition.targetDetectionRange
+                    : 100f;
+
+                // Early-out: if current target is already very close, retargeting won’t help much.
+                float3 selfPos = _posRO[e].Position;
+                float3 currPos = _posRO[target].Position;
+                float  stop    = brain.UnitDefinition.stoppingDistance;
+                float  currDistSq = math.distancesq(selfPos, currPos);
+
+                // Don’t bother retargeting when you’re basically at the target.
+                if (currDistSq > (stop * stop * 4f)) // tweakable
+                {
+                    var candidate = SpatialHashSearch.GetClosest(selfPos, range, wanted, ref _posRO, ref _factRO);
+                    if (candidate != Entity.Null && candidate != target)
                     {
-                        Debug.Log($"Switching target from {brain.CurrentTarget.name} to {candidate.name}");
-                        brain.CurrentTarget = candidate; // switch!
+                        float minSwitch = math.max(0f, brain.UnitDefinition.autoTargetMinSwitchDistance);
+                        bool  shouldSwitch = true;
+
+                        if (minSwitch > 0f)
+                        {
+                            // Only pay two sqrts if we’re actually checking hysteresis.
+                            float distCand = math.distance(_posRO[candidate].Position, selfPos);
+                            float distCurr = math.sqrt(currDistSq);
+                            shouldSwitch = (distCurr - distCand) >= minSwitch;
+                        }
+
+                        if (shouldSwitch)
+                        {
+                            target = candidate;
+                            EntityManager.SetComponentData(e, new Target { Value = candidate });
+                        }
                     }
                 }
             }
 
-            // ‑‑ Reached destination?
-            if (brain.HasReachedDestination())
+            // Push current target position as DesiredDestination (consumed by bridge)
+            var targetPos = _posRO[target].Position;
+            var dd = EntityManager.GetComponentData<DesiredDestination>(e);
+            dd.Position = targetPos;
+            dd.HasValue = 1;
+            EntityManager.SetComponentData(e, dd);
+
+            // ECS distance check for completion
+            var self = _posRO[e].Position;
+            float stopDist = brain.UnitDefinition.stoppingDistance;
+            if (math.distancesq(self, targetPos) <= stopDist * stopDist)
             {
-                brain.MoveToPosition(brain.transform.position); // stop
+                // small stop to prevent drift
+                dd.Position = self;
+                dd.HasValue = 1;
+                EntityManager.SetComponentData(e, dd);
                 return TaskStatus.Success;
             }
-
-            // ‑‑ Keep path updated
-            var targetPos = brain.CurrentTarget.transform.position;
-            if ((targetPos - brain.CurrentTargetPosition).sqrMagnitude >
-                AIConstants.MOVED_DIST_SQR_THRESHOLD) { brain.MoveToPosition(targetPos); }
 
             return TaskStatus.Running;
         }
