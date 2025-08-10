@@ -1,3 +1,5 @@
+// FILE: OneBitRob/AI/UnitBrain.cs
+
 using System;
 using System.Collections.Generic;
 using MoreMountains.Tools;
@@ -34,25 +36,22 @@ namespace OneBitRob.AI
         private AgentAuthoring _navAgent;
 
         // Strategies
-        private ICombatStrategy _combatStrategy;
         private ITargetingStrategy _targetingStrategy;
 
-        // Cached layer masks for this unit (avoid recomputing every call)
+        // Cached layer masks
         private LayerMask _targetMask;
         private LayerMask _detectionMask;
         private LayerMask _alliesMask;
 
-        // Runtime state (Mono-side convenience)
+        // Runtime state
         public GameObject CurrentTarget { get; set; }
-        public Vector3    CurrentTargetPosition { get; private set; }
-
+        public Vector3 CurrentTargetPosition { get; private set; }
         public GameObject CurrentSpellTarget { get; set; }
         public List<GameObject> CurrentSpellTargets { get; set; }
         public Vector3? CurrentSpellTargetPosition { get; set; }
-
-        public float  NextAllowedAttackTime { get; set; }
+        public float NextAllowedAttackTime { get; set; }
 #if UNITY_EDITOR
-        public string CurrentTaskName { get; set; } = "Idle"; // editor-only to avoid GC in player
+        public string CurrentTaskName { get; set; } = "Idle";
 #endif
 
         public Entity GetEntity() => _entity;
@@ -74,13 +73,13 @@ namespace OneBitRob.AI
             _isEnemy = UnitDefinition.isEnemy;
 
             // Subsystems / abilities
-            Character    = GetComponent<EnigmaCharacter>();
+            Character = GetComponent<EnigmaCharacter>();
             CombatSubsystem = GetComponent<CombatSubsystem>();
             HandleWeapon = Character ? Character.FindAbility<EnigmaCharacterHandleWeapon>() : null;
-            _navMove     = Character ? Character.FindAbility<EnigmaCharacterAgentsNavigationMovement>() : null;
-            _castSpell   = Character ? Character.FindAbility<EnigmaCharacterCastSpell>() : null;
-            _navAgent    = GetComponent<AgentAuthoring>();
-            Health       = GetComponent<EnigmaHealth>();
+            _navMove = Character ? Character.FindAbility<EnigmaCharacterAgentsNavigationMovement>() : null;
+            _castSpell = Character ? Character.FindAbility<EnigmaCharacterCastSpell>() : null;
+            _navAgent = GetComponent<AgentAuthoring>();
+            Health = GetComponent<EnigmaHealth>();
 
             // Health init
             if (Health != null)
@@ -90,9 +89,8 @@ namespace OneBitRob.AI
                 Health.CurrentHealth = UnitDefinition.health;
             }
 
-            // Strategies
-            _combatStrategy   = CombatStrategyFactory.GetStrategy(UnitDefinition.combatStrategy);
-            _targetingStrategy= TargetingStrategyFactory.GetStrategy(UnitDefinition.targetingStrategy);
+            // Targeting strategy
+            _targetingStrategy = TargetingStrategyFactory.GetStrategy(UnitDefinition.targetingStrategy);
 
             // Weapon + masks
             CacheLayerMasks();
@@ -103,21 +101,17 @@ namespace OneBitRob.AI
             }
 
             // Default spell
-            if (_castSpell != null && UnitDefinition.unitSpells != null && UnitDefinition.unitSpells.Count > 0)
-                _castSpell.CurrentSpell = UnitDefinition.unitSpells[0];
+            if (_castSpell != null && UnitDefinition.unitSpells != null && UnitDefinition.unitSpells.Count > 0) _castSpell.CurrentSpell = UnitDefinition.unitSpells[0];
         }
 
         private void CacheLayerMasks()
         {
-            _targetMask    = _isEnemy ? GameLayers.AllyMask            : GameLayers.EnemyMask;
-            _detectionMask = _isEnemy ? GameLayers.EnemyDetectionMask  : GameLayers.AllyDetectionMask;
-            _alliesMask    = _isEnemy ? GameLayers.EnemyMask           : GameLayers.AllyMask;
+            _targetMask = _isEnemy ? GameLayers.AllyMask : GameLayers.EnemyMask;
+            _detectionMask = _isEnemy ? GameLayers.EnemyDetectionMask : GameLayers.AllyDetectionMask;
+            _alliesMask = _isEnemy ? GameLayers.EnemyMask : GameLayers.AllyMask;
         }
 
-        public void Setup()
-        {
-            // Hook for custom per-unit init if you need it later.
-        }
+        public void Setup() { }
 
         public void SetEntity(Entity entity)
         {
@@ -127,46 +121,39 @@ namespace OneBitRob.AI
 
         private void OnDestroy()
         {
-            if (_entity != Entity.Null)
-                UnitBrainRegistry.Unregister(_entity, gameObject);
+            if (_entity != Entity.Null) UnitBrainRegistry.Unregister(_entity, gameObject);
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // Target helpers & masks
-        // ─────────────────────────────────────────────────────────────────────
-        public LayerMask GetTargetLayerMask()    => _targetMask;
+        // ─── Target helpers & masks ──────────────────────────────────────────
+        public LayerMask GetTargetLayerMask() => _targetMask;
         public LayerMask GetDetectionLayerMask() => _detectionMask;
-        public LayerMask GetAlliesLayerMask()    => _alliesMask;
-
+        public LayerMask GetAlliesLayerMask() => _alliesMask;
         public GameObject FindTarget() => CurrentTarget;
 
         public bool IsFacingTarget()
         {
             if (!CurrentTarget) return false;
             var toTgt = (CurrentTarget.transform.position - transform.position).normalized;
-            return Vector3.Dot(transform.forward, toTgt) >= 0.95f; // ~18°
+            return Vector3.Dot(transform.forward, toTgt) >= 0.95f;
         }
 
         public bool IsTargetAlive()
         {
-            // prefer Health on UnitBrain (cheaper + consistent)
             var targetBrain = CurrentTarget ? CurrentTarget.GetComponent<UnitBrain>() : null;
             if (targetBrain?.Health == null) return false;
             return targetBrain.Character != null
-                && targetBrain.Character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
+                   && targetBrain.Character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
         }
 
         public bool IsTargetInAttackRange(GameObject target)
         {
             if (!target) return false;
+            float r = UnitDefinition && UnitDefinition.weapon ? UnitDefinition.weapon.attackRange : 1.5f;
             var diff = transform.position - target.transform.position;
-            var r = UnitDefinition.attackRange;
             return diff.sqrMagnitude <= r * r;
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // Locomotion (called by bridge)
-        // ─────────────────────────────────────────────────────────────────────
+        // ─── Locomotion ─────────────────────────────────────────────────────
         public void MoveToPosition(Vector3 position)
         {
             CurrentTargetPosition = position;
@@ -177,22 +164,19 @@ namespace OneBitRob.AI
 
         public void SetForcedFacing(Vector3 worldPosition)
         {
-            if (_navMove != null)
-                _navMove.ForcedRotationTarget = worldPosition;
+            if (_navMove != null) _navMove.ForcedRotationTarget = worldPosition;
         }
 
         public void RotateToTarget()
         {
-            if (CurrentTarget)
-                SetForcedFacing(CurrentTarget.transform.position);
+            if (CurrentTarget) SetForcedFacing(CurrentTarget.transform.position);
         }
 
         public void RotateToSpellTarget()
         {
             if (CurrentSpellTarget)
                 SetForcedFacing(CurrentSpellTarget.transform.position);
-            else if (CurrentSpellTargetPosition.HasValue)
-                SetForcedFacing(CurrentSpellTargetPosition.Value);
+            else if (CurrentSpellTargetPosition.HasValue) SetForcedFacing(CurrentSpellTargetPosition.Value);
         }
 
         public Vector3 GetCurrentDirection() => transform.forward;
@@ -207,22 +191,21 @@ namespace OneBitRob.AI
 
         public float RemainingDistance() => _navAgent ? _navAgent.Body.RemainingDistance : 0f;
 
-        // ─────────────────────────────────────────────────────────────────────
-        // Combat
-        // ─────────────────────────────────────────────────────────────────────
-        public void Attack(Transform target) => _combatStrategy?.Attack(this, target);
-        public void AimAtTarget(Transform target) => CombatSubsystem?.AimAtTarget(target);
+        // ─── Combat ─────────────────────────────────────────────────────────
+        public void Attack(Transform target) => EcsAttackDispatcher.Request(this, target);
 
-        // ─────────────────────────────────────────────────────────────────────
-        // Spells
-        // ─────────────────────────────────────────────────────────────────────
-        public bool CanCastSpell()   => _castSpell != null && _castSpell.CanCast();
-        public bool ReadyToCastSpell()=> _castSpell != null && _castSpell.ReadyToCast();
+        public void AimAtTarget(Transform target)
+        {
+            if (target != null) SetForcedFacing(target.position); // hand off to AgentsNavigation / orientation
+        }
+
+        // ─── Spells ─────────────────────────────────────────────────────────
+        public bool CanCastSpell() => _castSpell != null && _castSpell.CanCast();
+        public bool ReadyToCastSpell() => _castSpell != null && _castSpell.ReadyToCast();
 
         public bool TryCastSpell()
         {
-            if (_castSpell == null || UnitDefinition.unitSpells == null || UnitDefinition.unitSpells.Count == 0)
-                return false;
+            if (_castSpell == null || UnitDefinition.unitSpells == null || UnitDefinition.unitSpells.Count == 0) return false;
 
             var spell = UnitDefinition.unitSpells[0];
             switch (spell.TargetType)
@@ -230,15 +213,14 @@ namespace OneBitRob.AI
                 case SpellTargetType.SingleTarget:
                     if (!CurrentSpellTarget) return false;
                     return _castSpell.TryCastSpell(CurrentSpellTarget);
-
                 case SpellTargetType.MultiTarget:
                     if (CurrentSpellTargets == null || CurrentSpellTargets.Count == 0) return false;
                     return _castSpell.TryCastSpell(null, CurrentSpellTargets);
-
                 case SpellTargetType.AreaOfEffect:
                     if (!CurrentSpellTargetPosition.HasValue) return false;
                     return _castSpell.TryCastSpell(null, null, CurrentSpellTargetPosition.Value);
             }
+
             return false;
         }
 
@@ -263,11 +245,32 @@ namespace OneBitRob.AI
                 UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.targetDetectionRange);
             }
 
-            if (UnitDefinition != null && UnitDefinition.attackRange > 0f)
+            if (UnitDefinition != null && UnitDefinition.weapon != null && UnitDefinition.weapon.attackRange > 0f)
             {
                 Gizmos.color = new Color(1f, 0.25f, 0.25f, 0.7f);
                 UnityEditor.Handles.color = Gizmos.color;
-                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.attackRange);
+                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.weapon.attackRange);
+
+                if (UnitDefinition.weapon is RangedWeaponDefinition rw)
+                {
+                    // optional viz for muzzle
+                    var fwd = transform.forward;
+                    Gizmos.color = new Color(1f, 0.3f, 0.3f, 0.9f);
+                    Gizmos.DrawLine(pos, pos + fwd * rw.muzzleForward);
+                }
+                else if (UnitDefinition.weapon is MeleeWeaponDefinition mw)
+                {
+                    var half = mw.halfAngleDeg;
+                    var fwd = transform.forward;
+                    var left = Quaternion.AngleAxis(-half, Vector3.up) * fwd;
+                    var right = Quaternion.AngleAxis(half, Vector3.up) * fwd;
+
+                    UnityEditor.Handles.color = new Color(1f, 0.2f, 0.2f, 0.35f);
+                    UnityEditor.Handles.DrawSolidArc(pos, Vector3.up, left, half * 2f, UnitDefinition.weapon.attackRange);
+                    Gizmos.color = new Color(1f, 0.2f, 0.2f, 0.9f);
+                    Gizmos.DrawLine(pos, pos + left * UnitDefinition.weapon.attackRange);
+                    Gizmos.DrawLine(pos, pos + right * UnitDefinition.weapon.attackRange);
+                }
             }
 
             if (UnitDefinition != null)
@@ -306,5 +309,7 @@ namespace OneBitRob.AI
 #endif
     }
 
-    public struct UnitBrainTag : IComponentData { }
+    public struct UnitBrainTag : IComponentData
+    {
+    }
 }

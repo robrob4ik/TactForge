@@ -1,4 +1,6 @@
-﻿using OneBitRob.AI;
+﻿// FILE: OneBitRob/Bridge/MonoBridgeSystem.cs
+
+using OneBitRob.AI;
 using OneBitRob.ECS;
 using Unity.Entities;
 using UnityEngine;
@@ -11,7 +13,6 @@ namespace OneBitRob.Bridge
     {
         protected override void OnUpdate()
         {
-            // 1) Desired destination -> Mono
             foreach (var (dd, e) in SystemAPI.Query<RefRW<DesiredDestination>>().WithEntityAccess())
             {
                 if (dd.ValueRO.HasValue == 0) continue;
@@ -25,10 +26,9 @@ namespace OneBitRob.Bridge
                     Debug.DrawLine(brain.transform.position, wanted, Color.cyan, 0f, false);
 #endif
                 }
-                dd.ValueRW = default; // consume
+                dd.ValueRW = default;
             }
 
-            // 2) Desired facing -> Mono (use cached ability via UnitBrain)
             foreach (var (df, e) in SystemAPI.Query<RefRW<DesiredFacing>>().WithEntityAccess())
             {
                 if (df.ValueRO.HasValue == 0) continue;
@@ -41,10 +41,9 @@ namespace OneBitRob.Bridge
                     Debug.DrawLine(brain.transform.position, facePos, Color.yellow, 0f, false);
 #endif
                 }
-                df.ValueRW = default; // consume
+                df.ValueRW = default;
             }
 
-            // 3) Sync Target -> UnitBrain.CurrentTarget (read-only mapping)
             foreach (var (target, e) in SystemAPI.Query<RefRO<Target>>().WithEntityAccess())
             {
                 var brain = UnitBrainRegistry.Get(e);
@@ -57,28 +56,30 @@ namespace OneBitRob.Bridge
 #endif
             }
 
-            // 4) Fire pooled projectiles requested by ECS
             foreach (var (spawn, e) in SystemAPI.Query<RefRW<EcsProjectileSpawnRequest>>().WithEntityAccess())
             {
                 if (spawn.ValueRO.HasValue == 0) continue;
 
                 var brain = UnitBrainRegistry.Get(e);
-                if (brain)
+                if (brain && brain.CombatSubsystem != null)
                 {
-                    var shooter = brain.GetComponent<EcsRangedShooter>();
+                    var origin = (Vector3)spawn.ValueRO.Origin;
+                    var dir    = ((Vector3)spawn.ValueRO.Direction).normalized;
+
+                    brain.CombatSubsystem.FireProjectile(
+                        origin,
+                        dir,
+                        brain.gameObject,
+                        spawn.ValueRO.Speed,
+                        spawn.ValueRO.Damage,
+                        spawn.ValueRO.MaxDistance
+                    );
 #if UNITY_EDITOR
-                    if (shooter == null)
-                        Debug.LogWarning($"[{brain.name}] Missing EcsRangedShooter for ranged ECS attack.");
+                    Debug.DrawRay(origin, dir * 1.2f, Color.red, 0f, false);
 #endif
-                    if (shooter != null)
-                    {
-                        var origin = (Vector3)spawn.ValueRO.Origin;
-                        var dir    = ((Vector3)spawn.ValueRO.Direction).normalized;
-                        shooter.Fire(origin, dir, brain.gameObject);
-                    }
                 }
 
-                spawn.ValueRW = default; // consume
+                spawn.ValueRW = default;
             }
         }
     }

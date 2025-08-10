@@ -1,11 +1,13 @@
-﻿using OneBitRob.ECS;
+﻿// FILE: OneBitRob/AI/CastExecutionSystem.cs
+// Change applied: UpdateAfter now targets SpellDecisionSystem instead of CastSpellSystem.
+
+using OneBitRob.ECS;
 using Unity.Entities;
 
 namespace OneBitRob.AI
 {
-    [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(CastSpellSystem))]
+    [UpdateAfter(typeof(SpellDecisionSystem))] // <-- was CastSpellSystem (invalid if BT didn't create it yet)
     public partial struct CastExecutionSystem : ISystem
     {
         private EntityQuery _castQuery;
@@ -23,7 +25,7 @@ namespace OneBitRob.AI
             var entities = _castQuery.ToEntityArray(Unity.Collections.Allocator.Temp);
             for (int i = 0; i < entities.Length; i++)
             {
-                var e   = entities[i];
+                var e = entities[i];
                 var req = em.GetComponentData<CastRequest>(e);
                 if (req.HasValue == 0) continue;
 
@@ -35,34 +37,29 @@ namespace OneBitRob.AI
                     continue;
                 }
 
-                // Bridge ECS -> Mono targeting
                 switch (req.Kind)
                 {
                     case CastKind.SingleTarget:
                     {
                         var go = UnitBrainRegistry.GetGameObject(req.Target);
-                        brain.CurrentSpellTarget        = go;
-                        brain.CurrentSpellTargets       = null;
-                        brain.CurrentSpellTargetPosition= null;
+                        brain.CurrentSpellTarget = go;
+                        brain.CurrentSpellTargets = null;
+                        brain.CurrentSpellTargetPosition = null;
                         break;
                     }
                     case CastKind.AreaOfEffect:
                     {
-                        brain.CurrentSpellTarget        = null;
-                        brain.CurrentSpellTargets       = null;
-                        brain.CurrentSpellTargetPosition= req.AoEPosition;
+                        brain.CurrentSpellTarget = null;
+                        brain.CurrentSpellTargets = null;
+                        brain.CurrentSpellTargetPosition = req.AoEPosition;
                         break;
                     }
-                    default:
-                        break;
                 }
 
-                // Fire if ready
                 if (brain.ReadyToCastSpell() && brain.CanCastSpell())
                 {
                     brain.RotateToSpellTarget();
-                    var ok = brain.TryCastSpell();
-                    // Whether or not we succeeded, we clear the request to avoid spamming
+                    brain.TryCastSpell();
                 }
 
                 req.HasValue = 0;

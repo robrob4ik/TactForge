@@ -1,4 +1,4 @@
-﻿// File: Assets/PROJECT/Scripts/ECS/Spatial/SpatialHashBuildSystem.cs
+﻿// FILE: Assets/PROJECT/Scripts/ECS/Spatial/SpatialHashBuildSystem.cs
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
@@ -9,7 +9,7 @@ using static OneBitRob.ECS.SpatialHashComponents;
 namespace OneBitRob.ECS
 {
     [UpdateInGroup(typeof(SimulationSystemGroup))]
-    [UpdateAfter(typeof(OneBitRob.ECS.Sync.SyncBrainFromMonoSystem))] 
+    [UpdateAfter(typeof(OneBitRob.ECS.Sync.SyncBrainFromMonoSystem))]
     public partial struct SpatialHashBuildSystem : ISystem
     {
         public static NativeParallelMultiHashMap<int, Entity> Grid;
@@ -36,8 +36,20 @@ namespace OneBitRob.ECS
 
         public void OnUpdate(ref SystemState state)
         {
+            // Ensure capacity scales with number of targets (avoid overflow with >1024 entries)
+            int targetCount = _targetsQuery.CalculateEntityCount();
+            int requiredCapacity = math.max(1024, targetCount * 2);
+            if (!_gridNative.IsCreated || _gridNative.Capacity < requiredCapacity)
+            {
+                if (_gridNative.IsCreated) _gridNative.Dispose();
+                _gridNative = new NativeParallelMultiHashMap<int, Entity>(requiredCapacity, Allocator.Persistent);
+            }
+
             _gridNative.Clear();
-            CellSize = SystemAPI.GetSingleton<SpatialHashSettings>().CellSize;
+
+            var settings = SystemAPI.GetSingleton<SpatialHashSettings>();
+            // Prevent bad settings from nuking performance or causing NaN ranges
+            CellSize = math.max(0.01f, settings.CellSize);
 
             state.Dependency = new BuildJob
             {
@@ -45,8 +57,7 @@ namespace OneBitRob.ECS
                 Grid = _gridNative.AsParallelWriter()
             }.ScheduleParallel(_targetsQuery, state.Dependency);
 
-            // The container is static and not tracked by Entities.
-            // Complete the writer before anyone reads it this frame.
+            // Complete writer before anyone reads Grid this frame.
             state.Dependency.Complete();
 
             Grid = _gridNative;

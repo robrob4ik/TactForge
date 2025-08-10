@@ -1,37 +1,41 @@
-﻿// File: Assets/PROJECT/Scripts/Combat/EcsBullet.cs
-using MoreMountains.Tools;
+﻿// FILE: OneBitRob/ECS/EcsProjectile.cs
+// Changes applied:
+// - Update() is now 'protected override' instead of 'private' to avoid CS0114 hiding warning.
+// - Calls base.Update() to preserve MMPoolableObject behavior.
+
 using OneBitRob.AI;
-using UnityEngine;
 
 namespace OneBitRob.ECS
 {
+    using MoreMountains.Tools;
+    using UnityEngine;
+
     /// <summary>
-    /// Minimal pooled bullet:
+    /// Minimal pooled projectile:
     /// - moves straight
     /// - single swept raycast per frame
     /// - damages first UnitBrain hit, then despawns
     /// </summary>
     [DisallowMultipleComponent]
-    public class EcsBullet : MMPoolableObject
+    public class EcsProjectile : MMPoolableObject
     {
         public struct ArmData
         {
             public GameObject Attacker;
-            public Vector3    Origin;
-            public Vector3    Direction;   // normalized
-            public float      Speed;
-            public float      Damage;
-            public float      MaxDistance;
-            public int        LayerMask;   // targets
+            public Vector3 Origin;
+            public Vector3 Direction;   // normalized
+            public float Speed;
+            public float Damage;
+            public float MaxDistance;
+            public int LayerMask;       // targets
         }
 
-        // runtime
         private GameObject _attacker;
         private Vector3 _dir;
         private float _speed;
         private float _damage;
         private float _remaining;
-        private int   _mask;
+        private int _mask;
         private Vector3 _lastPos;
 
         private readonly RaycastHit[] _hits = new RaycastHit[16];
@@ -56,8 +60,11 @@ namespace OneBitRob.ECS
             _lastPos = transform.position;
         }
 
-        private void Update()
+        // ← this was 'private void Update()' before; now it's an override
+        protected override void Update()
         {
+            base.Update(); // keep any base-class logic (e.g., auto-despawn timers)
+
             if (_remaining <= 0f) { Despawn(); return; }
 
             float stepLen = Mathf.Min(_speed * Time.deltaTime, _remaining);
@@ -91,11 +98,9 @@ namespace OneBitRob.ECS
                 var col = _hits[i].collider;
                 if (!col) continue;
 
-                // don't hit the shooter root
                 if (_attacker != null && col.transform.root == _attacker.transform.root)
                     continue;
 
-                // must hit a UnitBrain with a living health
                 var brain = col.GetComponentInParent<UnitBrain>();
                 if (brain == null || brain.Health == null || !brain.IsTargetAlive())
                     continue;
@@ -116,7 +121,6 @@ namespace OneBitRob.ECS
             if (brain != null && brain.Health != null && brain.Health.CanTakeDamageThisFrame())
             {
                 Vector3 dir = _dir;
-                // signature used elsewhere in your codebase (melee system)
                 brain.Health.Damage(_damage, _attacker, 0f, 0f, dir);
             }
         }

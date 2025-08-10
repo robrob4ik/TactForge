@@ -1,32 +1,29 @@
-﻿using System.Collections.Generic;
+﻿// FILE: OneBitRob/AI/ISpellTargetingStrategy.cs
 using OneBitRob.ECS;
 using Unity.Entities;
+using Unity.Mathematics;
 using Unity.Transforms;
-using UnityEngine;
 
 namespace OneBitRob.AI
 {
     public interface ISpellTargetingStrategy
     {
-        GameObject GetTarget(
-            UnitBrain brain,
-            SpellDefinition spell,
+        // Single-target selection. Return Entity.Null if not found.
+        Entity GetTarget(
+            Entity self,
+            in SpellConfig config,
             ref ComponentLookup<LocalTransform> posLookup,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factionLookup
+            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factionLookup,
+            ref ComponentLookup<HealthMirror> healthLookup
         );
 
-        List<GameObject> GetTargets(
-            UnitBrain brain,
-            SpellDefinition spell,
+        // AoE selection. Returns true/point if found.
+        bool TryGetAOETargetPoint(
+            Entity self,
+            in SpellConfig config,
             ref ComponentLookup<LocalTransform> posLookup,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factionLookup
-        );
-
-        Vector3? GetAOETargetPoint(
-            UnitBrain brain,
-            SpellDefinition spell,
-            ref ComponentLookup<LocalTransform> posLookup,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factionLookup
+            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factionLookup,
+            out float3 point
         );
     }
 }

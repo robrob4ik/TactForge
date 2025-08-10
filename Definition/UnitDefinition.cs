@@ -1,66 +1,54 @@
 using System.Collections.Generic;
-using Sirenix.OdinInspector;
 using UnityEngine;
 
 namespace OneBitRob
 {
-    public enum CombatStrategyType { Melee, Ranged }
     public enum TargetingStrategyType { ClosestEnemy }
+    public enum CombatStrategyType { Ranged, Melee }
+    
     public enum UnitTrait { Undead, Beast, Goblin, Human }
     public enum UnitClass { Warrior, Mage, Hunter, Assassin, }
     public enum MovementType { Normal = 0, Melee = 1, Brute = 2, }
+    
+    public enum AttackAnimationSelect { Random, Sequential }
 
     [CreateAssetMenu(menuName = "SO/Units/Unit Definition")]
     public class UnitDefinition : ScriptableObject
     {
-        [Title("Visual & Prefab")]
-        [PreviewField(100)]
+        [Header("Visual & Prefab")]
         public GameObject unitModel;
 
-        [Title("Classification")]
-        [ListDrawerSettings(ShowPaging = true, NumberOfItemsPerPage = 10, DraggableItems = true)]
+        [Header("Classification")]
         public List<UnitTrait> traits = new();
-        [ListDrawerSettings(ShowPaging = true, NumberOfItemsPerPage = 10, DraggableItems = true)]
         public List<UnitClass> classes = new();
 
-        [Title("Shop Settings")]
+        [Header("Shop Settings")]
         [Range(1, 5)] public int price = 1;
         [Range(1, 5)] public int tier = 1;
         public string unitName;
 
-        [Title("Base Stats")]
+        [Header("Base Stats")]
         public int health = 100;
-        [SuffixLabel("m/s", Overlay = true)] public float moveSpeed = 4f;
+        [Tooltip("m/s")] public float moveSpeed = 4f;
         public float acceleration = 10f;
-        [EnumToggleButtons] public MovementType movementType = MovementType.Normal;
+        public MovementType movementType = MovementType.Normal;
 
-        [Title("Agent")]
-        [SuffixLabel("units", Overlay = true)] public float stoppingDistance = 1.5f;
-        [SuffixLabel("units", Overlay = true)] public float autoTargetMinSwitchDistance = 3f;
-        [SuffixLabel("units", Overlay = true)] public float targetDetectionRange = 10f;
-        [SuffixLabel("secs",  Overlay = true)] public float retargetCheckInterval = 1f;
+        [Header("Agent")]
+        [Tooltip("units")] public float stoppingDistance = 1.5f;
+        [Tooltip("units")] public float autoTargetMinSwitchDistance = 3f;
+        [Tooltip("units")] public float targetDetectionRange = 10f;
+        [Tooltip("secs")]  public float retargetCheckInterval = 1f;
 
-        [Title("Combat (Shared)")]
-        [SuffixLabel("units", Overlay = true)] public float attackRange = 1.5f;
-        [SuffixLabel("HP",    Overlay = true)] public float attackDamage = 10f;
-        [SuffixLabel("units", Overlay = true)] public float combatStanceDistance = 10f;
-        [SuffixLabel("secs",  Overlay = true)] public float attackCooldown = 0.5f;
+        [Header("Team")]
         public bool isEnemy = false;
 
-        [Title("Advanced Combat Tuning")]
-        [Range(0f, 179f)] public float meleeHalfAngleDeg = 60f;
-        [Min(1)] public int meleeMaxTargets = 3;
-        [SuffixLabel("secs", Overlay = true)] public float meleeInvincibility = 0.10f;
-        [Tooltip("Meters forward from character center to spawn ECS ranged projectiles.")]
-        [SuffixLabel("units", Overlay = true)]
-        public float rangedMuzzleForward = 0.60f;
+        [Header("Strategies")]
+        public TargetingStrategyType targetingStrategy;
 
-        [Title("Strategies")]
-        [EnumToggleButtons] public TargetingStrategyType targetingStrategy;
-        [EnumToggleButtons] public CombatStrategyType     combatStrategy;
+        [Header("Combat")]
+        public WeaponDefinition weapon;
 
-        [Title("Skills & Buffs")]
-        [ListDrawerSettings(ShowPaging = true, NumberOfItemsPerPage = 10, DraggableItems = true)]
+        [Header("Spells (unique per unit)")]
         public List<SpellDefinition> unitSpells;
     }
 }

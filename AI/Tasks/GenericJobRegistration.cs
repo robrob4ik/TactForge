@@ -1,0 +1,17 @@
+﻿using Unity.Jobs;
+
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.AttackTargetComponent, OneBitRob.AI.AttackTargetTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.CastSpellComponent, OneBitRob.AI.CastSpellTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.MoveToTargetComponent, OneBitRob.AI.MoveToTargetTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.RotateToTargetComponent, OneBitRob.AI.RotateToTargetTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.RotateToSpellTargetComponent, OneBitRob.AI.RotateToSpellTargetTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.FindTargetComponent, OneBitRob.AI.FindTargetTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.FindSpellTargetComponent, OneBitRob.AI.FindSpellTargetTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.CanCastSpellComponent, OneBitRob.AI.CanCastSpellTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.IsTargetInAttackRangeComponent, OneBitRob.AI.IsTargetInAttackRangeTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.IsRangedComponent, OneBitRob.AI.IsRangedTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.IsTargetAliveComponent, OneBitRob.AI.IsTargetAliveTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.IsMeleeComponent, OneBitRob.AI.IsMeleeTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.IsRangedComponent, OneBitRob.AI.IsRangedTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.ReadyToCastSpellComponent, OneBitRob.AI.ReadyToCastSpellTag>))]
+[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.SetupUnitComponent, OneBitRob.AI.SetupUnitTag>))]

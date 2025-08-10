@@ -1,4 +1,6 @@
-﻿using MoreMountains.Tools;
+﻿// FILE: OneBitRob/EnigmaEngine/EnigmaCharacterAgentsNavigationMovement.cs
+using MoreMountains.Tools;
+using OneBitRob;
 using OneBitRob.AI;
 using ProjectDawn.Navigation.Hybrid;
 using UnityEngine;
@@ -39,10 +41,19 @@ namespace OneBitRob.EnigmaEngine
             ProcessCharacterRotation();
         }
 
+        private float GetCombatStanceDistance()
+        {
+            // Enter stance slightly before actual attack range so units settle nicely
+            var weapon = _unitBrain != null && _unitBrain.UnitDefinition != null ? _unitBrain.UnitDefinition.weapon : null;
+            float range = (weapon != null) ? Mathf.Max(0.01f, weapon.attackRange) : 1.5f;
+            return Mathf.Max(1.0f, range * 0.9f);
+        }
+
         private void ProcessCharacterMovement()
         {
             var movingHorizontally = _agent.Body.Velocity.x != 0f || _agent.Body.Velocity.z != 0f;
             var remainingDistance = _agent.Body.RemainingDistance;
+            float combatStanceDistance = GetCombatStanceDistance();
 
             switch (_movement.CurrentState)
             {
@@ -54,7 +65,7 @@ namespace OneBitRob.EnigmaEngine
                         break;
                     }
 
-                    if (remainingDistance < _unitBrain.UnitDefinition.combatStanceDistance)
+                    if (remainingDistance < combatStanceDistance)
                     {
                         _movement.ChangeState(EnigmaCharacterStates.MovementStates.CombatStance);
                         UpdateMovementAnimators();
@@ -62,7 +73,7 @@ namespace OneBitRob.EnigmaEngine
                     break;
 
                 case EnigmaCharacterStates.MovementStates.Idle:
-                    if (movingHorizontally && remainingDistance < _unitBrain.UnitDefinition.combatStanceDistance)
+                    if (movingHorizontally && remainingDistance < combatStanceDistance)
                     {
                         _movement.ChangeState(EnigmaCharacterStates.MovementStates.CombatStance);
                         UpdateMovementAnimators();
@@ -77,7 +88,7 @@ namespace OneBitRob.EnigmaEngine
                     break;
 
                 case EnigmaCharacterStates.MovementStates.CombatStance:
-                    if (remainingDistance > _unitBrain.UnitDefinition.combatStanceDistance && movingHorizontally)
+                    if (remainingDistance > combatStanceDistance && movingHorizontally)
                     {
                         _movement.ChangeState(EnigmaCharacterStates.MovementStates.Walking);
                         UpdateMovementAnimators();
@@ -127,7 +138,7 @@ namespace OneBitRob.EnigmaEngine
                 {
                     Quaternion targetRot = Quaternion.LookRotation(dir, Vector3.up);
                     _character.transform.rotation = Quaternion.RotateTowards(
-                        _character.transform.rotation,  // <-- FIX: was using _model
+                        _character.transform.rotation,
                         targetRot,
                         RotationSpeed * Time.deltaTime
                     );

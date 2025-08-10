@@ -1,12 +1,13 @@
-﻿using Unity.Collections;
+﻿// FILE: OneBitRob/AI/AttackRangeFlagSystem.cs
+using OneBitRob.ECS;
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    /// Updates InAttackRange based on distance to Target and the unit's attackRange.
+    /// Updates InAttackRange based on distance to Target and the weapon's attackRange.
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     public partial struct AttackRangeFlagSystem : ISystem
     {
@@ -51,13 +52,15 @@ namespace OneBitRob.AI
                     continue;
                 }
 
-                float3 selfPos = em.GetComponentData<LocalTransform>(e).Position;
-                float3 tgtPos  = em.GetComponentData<LocalTransform>(targ).Position;
+                float3 selfPos = _posRO[e].Position;
+                float3 tgtPos  = _posRO[targ].Position;
                 float  distSq  = math.lengthsq(selfPos - tgtPos);
 
-                // Read range from UnitDefinition via UnitBrain hybrid (cheap + simple).
                 var brain = UnitBrainRegistry.Get(e);
-                float range = brain != null ? math.max(0.01f, brain.UnitDefinition.attackRange) : 0.01f;
+                float range = 0.01f;
+                if (brain != null && brain.UnitDefinition != null && brain.UnitDefinition.weapon != null)
+                    range = math.max(0.01f, brain.UnitDefinition.weapon.attackRange);
+
                 float rangeSq = range * range;
 
                 f.DistanceSq = distSq;

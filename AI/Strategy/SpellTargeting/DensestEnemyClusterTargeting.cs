@@ -1,51 +1,54 @@
-﻿using System.Collections.Generic;
+﻿// FILE: OneBitRob/AI/SpellTargeting/DensestEnemyClusterTargeting.cs
 using OneBitRob.Constants;
 using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using UnityEngine;
 
 namespace OneBitRob.AI
 {
     public struct DensestEnemyClusterTargeting : ISpellTargetingStrategy
     {
-        public GameObject GetTarget(UnitBrain _, SpellDefinition __,
+        public Entity GetTarget(
+            Entity _,
+            in SpellConfig __,
             ref ComponentLookup<LocalTransform> ___,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> ____) =>
-            null;
+            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> ____,
+            ref ComponentLookup<HealthMirror> _____)
+            => Entity.Null;
 
-        public List<GameObject> GetTargets(UnitBrain _, SpellDefinition __,
-            ref ComponentLookup<LocalTransform> ___,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> ____) =>
-            null;
-
-        public Vector3? GetAOETargetPoint(UnitBrain brain, SpellDefinition spell,
+        public bool TryGetAOETargetPoint(
+            Entity self,
+            in SpellConfig config,
             ref ComponentLookup<LocalTransform> posLookup,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factLookup)
+            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factLookup,
+            out float3 point)
         {
+            point = default;
+
+            byte selfFaction = factLookup.HasComponent(self) ? factLookup[self].Faction : GameConstants.ALLY_FACTION;
+            byte enemyFaction = (selfFaction == GameConstants.ENEMY_FACTION)
+                ? GameConstants.ALLY_FACTION
+                : GameConstants.ENEMY_FACTION;
+
             var wanted = new FixedList128Bytes<byte>();
-            wanted.Add(
-                brain.UnitDefinition.isEnemy
-                    ? GameConstants.ENEMY_FACTION
-                    : GameConstants.ALLY_FACTION
-            );
+            wanted.Add(enemyFaction);
 
             using var ents = new NativeList<Entity>(Allocator.Temp);
             SpatialHashSearch.CollectInSphere(
-                brain.transform.position,
-                spell.Range,
+                posLookup.HasComponent(self) ? posLookup[self].Position : float3.zero,
+                config.Range,
                 wanted,
                 ents,
                 ref posLookup,
-                ref factLookup
-            );
+                ref factLookup);
 
-            if (ents.Length == 0) return null;
+            if (ents.Length == 0) return false;
 
-            float bestCount = 0;
+            float  bestCount  = 0;
             float3 bestCenter = float3.zero;
+            float  radiusSq   = config.AreaRadius * config.AreaRadius;
 
             for (int i = 0; i < ents.Length; i++)
             {
@@ -54,19 +57,19 @@ namespace OneBitRob.AI
 
                 for (int j = 0; j < ents.Length; j++)
                 {
-                    if (math.distancesq(centerPos, posLookup[ents[j]].Position)
-                        <= spell.AreaRadius * spell.AreaRadius)
+                    if (math.distancesq(centerPos, posLookup[ents[j]].Position) <= radiusSq)
                         count++;
                 }
 
                 if (count > bestCount)
                 {
-                    bestCount = count;
+                    bestCount  = count;
                     bestCenter = centerPos;
                 }
             }
 
-            return bestCount > 0 ? (Vector3)bestCenter : null;
+            if (bestCount > 0) { point = bestCenter; return true; }
+            return false;
         }
     }
 }

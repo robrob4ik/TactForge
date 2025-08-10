@@ -1,11 +1,10 @@
-﻿using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
+﻿using OneBitRob.ECS;
+using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Unity.Entities;
-using OneBitRob.ECS;
+using UnityEngine;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Request an attack on current Target")]
     public class AttackTargetAction : AbstractTaskAction<AttackTargetComponent, AttackTargetTag, AttackTargetSystem>, IAction
     {
         protected override AttackTargetComponent CreateBufferElement(ushort runtimeIndex) => new AttackTargetComponent { Index = runtimeIndex };
@@ -14,7 +13,6 @@ namespace OneBitRob.AI
     public struct AttackTargetComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }
     public struct AttackTargetTag : IComponentData, IEnableableComponent { }
 
-    [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     public partial class AttackTargetSystem : TaskProcessorSystem<AttackTargetComponent, AttackTargetTag>
     {
@@ -30,7 +28,7 @@ namespace OneBitRob.AI
             else
             {
                 var req = EntityManager.GetComponentData<AttackRequest>(e);
-                req.Target   = target;
+                req.Target = target;
                 req.HasValue = 1;
                 EntityManager.SetComponentData(e, req);
             }

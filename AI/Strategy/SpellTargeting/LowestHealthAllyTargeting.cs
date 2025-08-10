@@ -1,65 +1,67 @@
-﻿using System.Collections.Generic;
+﻿// FILE: OneBitRob/AI/SpellTargeting/LowestHealthAllyTargeting.cs
 using OneBitRob.Constants;
 using OneBitRob.ECS;
-using OneBitRob.EnigmaEngine;
 using Unity.Collections;
 using Unity.Entities;
+using Unity.Mathematics;
 using Unity.Transforms;
-using UnityEngine;
 
-namespace OneBitRob.AI {
-    
-   public struct LowestHealthAllyTargeting : ISpellTargetingStrategy
+namespace OneBitRob.AI
+{
+    public struct LowestHealthAllyTargeting : ISpellTargetingStrategy
     {
-        // ────────────────────────────────────────────────────────── Single‑target healing
-        public GameObject GetTarget(UnitBrain brain, SpellDefinition spell,
-                                    ref ComponentLookup<LocalTransform>              posLookup,
-                                    ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factLookup)
+        public Entity GetTarget(
+            Entity self,
+            in SpellConfig config,
+            ref ComponentLookup<LocalTransform> posLookup,
+            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factLookup,
+            ref ComponentLookup<HealthMirror> healthLookup)
         {
+            byte selfFaction = factLookup.HasComponent(self) ? factLookup[self].Faction : GameConstants.ALLY_FACTION;
+
             var wanted = new FixedList128Bytes<byte>();
-            // BUGFIX: healers should scan SAME faction (allies), not opponents
-            wanted.Add(brain.UnitDefinition.isEnemy
-                ? GameConstants.ENEMY_FACTION
-                : GameConstants.ALLY_FACTION);
+            wanted.Add(selfFaction);
 
             using var ents = new NativeList<Entity>(Allocator.Temp);
             SpatialHashSearch.CollectInSphere(
-                brain.transform.position,
-                spell.Range,
+                posLookup.HasComponent(self) ? posLookup[self].Position : float3.zero,
+                config.Range,
                 wanted,
                 ents,
                 ref posLookup,
                 ref factLookup);
 
-            EnigmaHealth bestHealth = null;
-            float        lowestPct  = 1.1f;
+            Entity best = Entity.Null;
+            float lowestPct = 2f;
 
             for (int i = 0; i < ents.Length; i++)
             {
-                var go = UnitBrainRegistry.Get(ents[i])?.gameObject;
-                if (!go) continue;
+                var e = ents[i];
+                if (!healthLookup.HasComponent(e)) continue;
 
-                var hp = go.GetComponent<EnigmaHealth>();
-                if (!hp || hp.CurrentHealth >= hp.MaximumHealth) continue;
+                var hm = healthLookup[e];
+                if (hm.Max <= 0 || hm.Current >= hm.Max) continue;
 
-                float pct = hp.CurrentHealth / (float)hp.MaximumHealth;
+                float pct = (float)hm.Current / hm.Max;
                 if (pct < lowestPct)
                 {
-                    lowestPct  = pct;
-                    bestHealth = hp;
+                    lowestPct = pct;
+                    best = e;
                 }
             }
-            return bestHealth ? bestHealth.gameObject : null;
+
+            return best;
         }
 
-        public List<GameObject> GetTargets(UnitBrain _, SpellDefinition __,
-                                           ref ComponentLookup<LocalTransform> ___,
-                                           ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> ____)
-            => null;
-
-        public Vector3? GetAOETargetPoint(UnitBrain _, SpellDefinition __,
-                                          ref ComponentLookup<LocalTransform> ___,
-                                          ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> ____)
-            => null;
+        public bool TryGetAOETargetPoint(
+            Entity _,
+            in SpellConfig __,
+            ref ComponentLookup<LocalTransform> ___,
+            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> ____,
+            out float3 point)
+        {
+            point = default;
+            return false;
+        }
     }
 }

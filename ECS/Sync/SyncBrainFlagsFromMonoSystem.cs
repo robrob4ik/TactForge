@@ -1,6 +1,7 @@
-﻿using OneBitRob.AI;
+﻿// FILE: OneBitRob/ECS/Sync/SyncBrainFlagsFromMonoSystem.cs
+
+using OneBitRob.AI;
 using Unity.Entities;
-using OneBitRob.ECS;
 
 namespace OneBitRob.ECS.Sync
 {
@@ -23,13 +24,22 @@ namespace OneBitRob.ECS.Sync
                 alive.Value = (byte)(brain.CombatSubsystem != null && brain.CombatSubsystem.IsAlive ? 1 : 0);
                 em.SetComponentData(e, alive);
 
-                // Spell (if the component exists)
+                // Spell flags (if present)
                 if (em.HasComponent<SpellState>(e))
                 {
                     var ss = em.GetComponentData<SpellState>(e);
-                    ss.CanCast = (byte)(brain.CanCastSpell()    ? 1 : 0);
-                    ss.Ready   = (byte)(brain.ReadyToCastSpell()? 1 : 0);
+                    ss.CanCast = (byte)(brain.CanCastSpell()     ? 1 : 0);
+                    ss.Ready   = (byte)(brain.ReadyToCastSpell() ? 1 : 0);
                     em.SetComponentData(e, ss);
+                }
+
+                // Health mirror (if present)
+                if (em.HasComponent<HealthMirror>(e) && brain.Health != null)
+                {
+                    var hm = em.GetComponentData<HealthMirror>(e);
+                    hm.Current = brain.Health.CurrentHealth;
+                    hm.Max     = brain.Health.MaximumHealth;
+                    em.SetComponentData(e, hm);
                 }
             }
         }

@@ -1,4 +1,5 @@
-﻿// File: Assets/PROJECT/Scripts/ECS/Spatial/SpatialHashSearch.cs
+﻿// FILE: Assets/PROJECT/Scripts/ECS/Spatial/SpatialHashSearch.cs
+using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -16,10 +17,11 @@ namespace OneBitRob.ECS
             ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> targets)
         {
             var grid = SpatialHashBuildSystem.Grid;
-            if (!grid.IsCreated)
+            float cellSize = SpatialHashBuildSystem.CellSize;
+
+            if (!grid.IsCreated || cellSize <= 0f || acceptedFactions.Length == 0)
                 return Entity.Null;
 
-            float cellSize = SpatialHashBuildSystem.CellSize;
             int   range    = (int)math.ceil(maxDistance / cellSize);
             int3  baseCell = (int3)math.floor(new float3(position.x, 0f, position.z) / cellSize);
 
@@ -37,14 +39,15 @@ namespace OneBitRob.ECS
 
                 do
                 {
-                    if (!transforms.HasComponent(e)) continue;
-                    if (!targets.HasComponent(e))    continue;
+                    if (!transforms.HasComponent(e) || !targets.HasComponent(e))
+                        continue;
 
-                    var pos = transforms[e].Position;
-                    float sqr = math.distancesq(pos, position);
+                    byte faction = targets[e].Faction;
+                    if (!Contains(acceptedFactions, faction))
+                        continue;
+
+                    float sqr = math.distancesq(transforms[e].Position, position);
                     if (sqr >= bestDistSq) continue;
-
-                    if (!acceptedFactions.Contains(targets[e].Faction)) continue;
 
                     bestDistSq = sqr;
                     best = e;
@@ -64,10 +67,10 @@ namespace OneBitRob.ECS
             ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factions)
         {
             var grid = SpatialHashBuildSystem.Grid;
-            if (!grid.IsCreated)
+            float cellSize = SpatialHashBuildSystem.CellSize;
+            if (!grid.IsCreated || cellSize <= 0f || acceptedFactions.Length == 0)
                 return;
 
-            float cellSize = SpatialHashBuildSystem.CellSize;
             int   range    = (int)math.ceil(radius / cellSize);
             int3  baseCell = (int3)math.floor(new float3(position.x, 0f, position.z) / cellSize);
             float radiusSq = radius * radius;
@@ -83,18 +86,28 @@ namespace OneBitRob.ECS
 
                 do
                 {
-                    if (!transforms.HasComponent(e)) continue;
-                    if (!factions.HasComponent(e))   continue;
+                    if (!transforms.HasComponent(e) || !factions.HasComponent(e))
+                        continue;
+
+                    if (!Contains(acceptedFactions, factions[e].Faction))
+                        continue;
 
                     var pos = transforms[e].Position;
-                    if (math.distancesq(pos, position) > radiusSq) continue;
-
-                    if (!acceptedFactions.Contains(factions[e].Faction)) continue;
+                    if (math.distancesq(pos, position) > radiusSq)
+                        continue;
 
                     results.Add(e);
                 }
                 while (grid.TryGetNextValue(out e, ref it));
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool Contains(in FixedList128Bytes<byte> list, byte value)
+        {
+            for (int i = 0; i < list.Length; i++)
+                if (list[i] == value) return true;
+            return false;
         }
     }
 }

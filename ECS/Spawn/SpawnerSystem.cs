@@ -1,9 +1,11 @@
-﻿using Unity.Collections;
+﻿// FILE: OneBitRob/ECS/SpawnerSystem.cs
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 using System.Collections.Generic;
 using GPUInstancerPro.PrefabModule;
+using OneBitRob; // weapon/spell SOs + enums
 using OneBitRob.AI;
 using OneBitRob.Constants;
 using OneBitRob.ECS.GPUI;
@@ -108,11 +110,18 @@ namespace OneBitRob.ECS
                     state.EntityManager.AddComponentData(e, new DesiredDestination { Position = float3.zero, HasValue = 0 });
                     state.EntityManager.AddComponentData(e, new DesiredFacing     { TargetPosition = float3.zero, HasValue = 0 });
 
-                    // NEW flags / state
+                    // Flags / state
                     state.EntityManager.AddComponentData(e, new InAttackRange { Value = 0, DistanceSq = float.PositiveInfinity });
                     state.EntityManager.AddComponentData(e, new Alive { Value = 1 }); // spawn alive
 
-                    byte style = unitBrainMono.UnitDefinition.combatStrategy == CombatStrategyType.Melee ? (byte)1 : (byte)2;
+                    // Mirror HP to ECS (for Burst-able lowest-HP targeting)
+                    int hp = unitBrainMono.UnitDefinition != null ? unitBrainMono.UnitDefinition.health : 100;
+                    state.EntityManager.AddComponentData(e, new HealthMirror { Current = hp, Max = hp });
+
+                    // Style based on weapon (1=melee, 2=ranged)
+                    byte style = 1;
+                    var weapon = unitBrainMono.UnitDefinition != null ? unitBrainMono.UnitDefinition.weapon : null;
+                    if (weapon is RangedWeaponDefinition) style = 2;
                     state.EntityManager.AddComponentData(e, new CombatStyle { Value = style });
 
                     state.EntityManager.AddComponentData(e, new SpellState { CanCast = 0, Ready = 0 });
@@ -120,6 +129,7 @@ namespace OneBitRob.ECS
                     // Attack / Cast plumbing
                     state.EntityManager.AddComponentData(e, new AttackRequest { Target = Entity.Null, HasValue = 0 });
                     state.EntityManager.AddComponentData(e, new AttackCooldown { NextTime = 0f });
+                    state.EntityManager.AddComponentData(e, new AttackWindup { Active = 0, ReleaseTime = 0f });
                     state.EntityManager.AddComponentData(e, new CastRequest
                     {
                         Kind        = CastKind.None,
@@ -127,6 +137,27 @@ namespace OneBitRob.ECS
                         AoEPosition = float3.zero,
                         HasValue    = 0
                     });
+
+                    // Spell config (first spell only for now, KISS)
+                    if (unitBrainMono.UnitDefinition != null &&
+                        unitBrainMono.UnitDefinition.unitSpells != null &&
+                        unitBrainMono.UnitDefinition.unitSpells.Count > 0)
+                    {
+                        var spell = unitBrainMono.UnitDefinition.unitSpells[0];
+                        state.EntityManager.AddComponentData(e, new SpellConfig
+                        {
+                            TargetType           = spell.TargetType,
+                            EffectType           = spell.EffectType,
+                            Range                = spell.Range,
+                            RequiresLineOfSight  = (byte)(spell.RequiresLineOfSight ? 1 : 0),
+                            TargetLayerMask      = spell.TargetLayerMask.value,
+                            AreaRadius           = spell.AreaRadius,
+                            MaxTargets           = spell.MaxTargets,
+                            ChainJumpDelay       = spell.ChainJumpDelay,
+                            Strategy             = spell.TargetingStrategyType
+                        });
+                        state.EntityManager.AddComponentData(e, new SpellDecisionRequest { HasValue = 0 });
+                    }
 
                     state.EntityManager.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
                 }

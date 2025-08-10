@@ -1,20 +1,27 @@
-﻿using OneBitRob.ECS;
+﻿// FILE: OneBitRob/AI/Combat/EcsAttackDispatcher.cs
+using OneBitRob.ECS;
 using Unity.Entities;
 using UnityEngine;
 
 namespace OneBitRob.AI
 {
-    public class RangedCombatStrategy : ICombatStrategy
+    /// <summary>
+    /// Minimal helper to write AttackRequest to ECS (KISS instead of a "strategy" layer).
+    /// </summary>
+    public static class EcsAttackDispatcher
     {
-        public void Attack(UnitBrain brain, Transform target)
+        public static void Request(UnitBrain brain, Transform target)
         {
-            // Same as melee: write request, ECS decides if/when to actually shoot.
             if (brain == null || target == null) return;
 
             var e = brain.GetEntity();
             if (e == Entity.Null) return;
 
-            var em = World.DefaultGameObjectInjectionWorld.EntityManager;
+            var world = World.DefaultGameObjectInjectionWorld;
+            if (world == null) return;
+
+            var em = world.EntityManager;
+
             var tgtEnt = UnitBrainRegistry.GetEntity(target.gameObject);
             if (tgtEnt == Entity.Null) return;
 
