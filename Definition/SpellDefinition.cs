@@ -25,6 +25,8 @@ namespace OneBitRob
         Negative
     }
     
+    
+    
     [CreateAssetMenu(menuName = "SO/Spell Definition")]
     public class SpellDefinition : ScriptableObject
     {

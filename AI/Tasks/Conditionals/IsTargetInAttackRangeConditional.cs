@@ -1,10 +1,11 @@
 ﻿using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
+using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Success when target is within attack range")]
+    [NodeDescription("Success when target is within attack range (pure ECS flag)")]
     public class IsTargetInAttackRangeConditional
         : AbstractTaskAction<IsTargetInAttackRangeComponent, IsTargetInAttackRangeTag, IsTargetInAttackRangeSystem>, IConditional
     {
@@ -19,12 +20,12 @@ namespace OneBitRob.AI
     public partial class IsTargetInAttackRangeSystem
         : TaskProcessorSystem<IsTargetInAttackRangeComponent, IsTargetInAttackRangeTag>
     {
-        protected override TaskStatus Execute(Entity _, UnitBrain brain)
+        protected override TaskStatus Execute(Entity e, UnitBrain _)
         {
-            if (brain.CurrentTarget == null) return TaskStatus.Failure;
-            return brain.IsTargetInAttackRange(brain.CurrentTarget)
-                ? TaskStatus.Success
-                : TaskStatus.Failure;
+            var em = EntityManager;
+            if (!em.HasComponent<InAttackRange>(e)) return TaskStatus.Failure;
+            var flag = em.GetComponentData<InAttackRange>(e);
+            return flag.Value != 0 ? TaskStatus.Success : TaskStatus.Failure;
         }
     }
 }

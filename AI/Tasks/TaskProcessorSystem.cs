@@ -1,6 +1,6 @@
-﻿// Assets/PROJECT/Scripts/AI/Tasks/TaskProcessorSystem.cs
-using Opsive.BehaviorDesigner.Runtime.Components;
+﻿using Opsive.BehaviorDesigner.Runtime.Components;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
+using Unity.Burst;
 using Unity.Burst.Intrinsics;
 using Unity.Collections;
 using Unity.Entities;
@@ -28,22 +28,21 @@ namespace OneBitRob.AI
             var queue  = new NativeQueue<Entity>(Allocator.TempJob);
             var writer = queue.AsParallelWriter();
 
-            // Handles with correct read/write qualifiers
-            var cmdHandle    = GetBufferTypeHandle<TCmd>(true);         // read-only
+            var cmdHandle    = GetBufferTypeHandle<TCmd>(true);           // read-only
             var taskHandle   = GetBufferTypeHandle<TaskComponent>(false); // read-write
-            var entityHandle = GetEntityTypeHandle();                   // read-only by semantics
-            var tagHandle    = GetComponentTypeHandle<TTag>(true);      // read-only
+            var entityHandle = GetEntityTypeHandle();                     // read-only
+            var tagHandle    = GetComponentTypeHandle<TTag>(true);        // read-only (safety read)
 
             Dependency = new CollectRunningJob<TCmd, TTag>
             {
                 CmdHandle    = cmdHandle,
                 TaskHandle   = taskHandle,
                 EntityHandle = entityHandle,
-                TagHandle    = tagHandle,     // register tag read with safety system
+                TagHandle    = tagHandle,
                 QueueWriter  = writer
             }.ScheduleParallel(_query, Dependency);
 
-            // Run managed part after collection
+            // Managed part after collection
             Dependency.Complete();
 
             var em = EntityManager;
@@ -60,7 +59,9 @@ namespace OneBitRob.AI
                     ref var task = ref tasks.ElementAt(cmd.Index);
                     if (task.Status != TaskStatus.Running) continue;
 
+#if UNITY_EDITOR
                     brain.CurrentTaskName = typeof(TCmd).Name.Replace("Component", string.Empty);
+#endif
                     task.Status = Execute(e, brain);
                 }
             }
@@ -70,17 +71,15 @@ namespace OneBitRob.AI
 
         protected abstract TaskStatus Execute(Entity entity, UnitBrain brain);
 
+        [BurstCompile]
         struct CollectRunningJob<TCmdLocal, TTagLocal> : IJobChunk
             where TCmdLocal : unmanaged, IBufferElementData, ITaskCommand
             where TTagLocal : unmanaged, IComponentData, IEnableableComponent
         {
-            [ReadOnly] public BufferTypeHandle<TCmdLocal> CmdHandle;      // read
+            [ReadOnly] public BufferTypeHandle<TCmdLocal> CmdHandle;     // read
             public BufferTypeHandle<TaskComponent>       TaskHandle;     // write
             [ReadOnly] public EntityTypeHandle           EntityHandle;   // read
-
-            // not used in Execute, but MUST be present and marked [ReadOnly]
-            // to register a read on TTagLocal with the safety system
-            [ReadOnly] public ComponentTypeHandle<TTagLocal> TagHandle;
+            [ReadOnly] public ComponentTypeHandle<TTagLocal> TagHandle;  // register read
 
             public NativeQueue<Entity>.ParallelWriter QueueWriter;
 

@@ -1,10 +1,11 @@
 ﻿using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
+using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Returns Success while the current target is alive")]
+    [NodeDescription("Returns Success while the current target is alive (pure ECS)")]
     public class IsTargetAliveConditional
         : AbstractTaskAction<IsTargetAliveComponent, IsTargetAliveTag, IsTargetAliveSystem>, IConditional
     {
@@ -19,10 +20,13 @@ namespace OneBitRob.AI
     public partial class IsTargetAliveSystem
         : TaskProcessorSystem<IsTargetAliveComponent, IsTargetAliveTag>
     {
-        protected override TaskStatus Execute(Entity _, UnitBrain brain)
+        protected override TaskStatus Execute(Entity e, UnitBrain _)
         {
-            if (brain.CurrentTarget == null) return TaskStatus.Failure;
-            return brain.IsTargetAlive() ? TaskStatus.Success : TaskStatus.Failure;
+            var em = EntityManager;
+            if (!em.HasComponent<Target>(e)) return TaskStatus.Failure;
+            var target = em.GetComponentData<Target>(e).Value;
+            if (target == Entity.Null || !em.HasComponent<Alive>(target)) return TaskStatus.Failure;
+            return em.GetComponentData<Alive>(target).Value != 0 ? TaskStatus.Success : TaskStatus.Failure;
         }
     }
 }

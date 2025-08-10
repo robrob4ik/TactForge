@@ -35,21 +35,20 @@ namespace OneBitRob.EnigmaEngine
         public override void ProcessAbility()
         {
             base.ProcessAbility();
-            processCharacterMovement();
-            processCharacterRotation();
+            ProcessCharacterMovement();
+            ProcessCharacterRotation();
         }
 
-        private void processCharacterMovement()
+        private void ProcessCharacterMovement()
         {
-            var positiveVelocity = _agent.Body.Velocity.x != 0 || _agent.Body.Velocity.z != 0;
+            var movingHorizontally = _agent.Body.Velocity.x != 0f || _agent.Body.Velocity.z != 0f;
             var remainingDistance = _agent.Body.RemainingDistance;
-            
+
             switch (_movement.CurrentState)
             {
                 case EnigmaCharacterStates.MovementStates.Walking:
-                    if (!positiveVelocity)
+                    if (!movingHorizontally)
                     {
-                        EnigmaLogger.Log(_character.name + " - Changing state to Idle");
                         _movement.ChangeState(EnigmaCharacterStates.MovementStates.Idle);
                         UpdateMovementAnimators();
                         break;
@@ -57,77 +56,94 @@ namespace OneBitRob.EnigmaEngine
 
                     if (remainingDistance < _unitBrain.UnitDefinition.combatStanceDistance)
                     {
-                        EnigmaLogger.Log(_character.name + " - Changing state to CombatStance");
                         _movement.ChangeState(EnigmaCharacterStates.MovementStates.CombatStance);
                         UpdateMovementAnimators();
                     }
-
                     break;
 
-
                 case EnigmaCharacterStates.MovementStates.Idle:
-                    if (positiveVelocity && remainingDistance < _unitBrain.UnitDefinition.combatStanceDistance)
+                    if (movingHorizontally && remainingDistance < _unitBrain.UnitDefinition.combatStanceDistance)
                     {
-                        EnigmaLogger.Log(_character.name + " - Changing state to CombatStance");
                         _movement.ChangeState(EnigmaCharacterStates.MovementStates.CombatStance);
                         UpdateMovementAnimators();
                         break;
                     }
 
-                    if (positiveVelocity)
+                    if (movingHorizontally)
                     {
-                        EnigmaLogger.Log(_character.name + " - Changing state to Idle");
                         _movement.ChangeState(EnigmaCharacterStates.MovementStates.Walking);
                         UpdateMovementAnimators();
                     }
-
                     break;
 
                 case EnigmaCharacterStates.MovementStates.CombatStance:
-                    if (remainingDistance > _unitBrain.UnitDefinition.combatStanceDistance && positiveVelocity)
+                    if (remainingDistance > _unitBrain.UnitDefinition.combatStanceDistance && movingHorizontally)
                     {
-                        EnigmaLogger.Log(_character.name + " - Changing state to Walking");
                         _movement.ChangeState(EnigmaCharacterStates.MovementStates.Walking);
                         UpdateMovementAnimators();
                         break;
                     }
 
-                    if (!positiveVelocity)
+                    if (!movingHorizontally)
                     {
-                        EnigmaLogger.Log(_character.name + " - Changing state to Idle");
                         _movement.ChangeState(EnigmaCharacterStates.MovementStates.Idle);
                         UpdateMovementAnimators();
                         break;
                     }
-
                     break;
-                
-                default: 
+
+                default:
                     _movement.ChangeState(EnigmaCharacterStates.MovementStates.Idle);
                     UpdateMovementAnimators();
                     break;
             }
         }
 
-        private void processCharacterRotation()
+        private void ProcessCharacterRotation()
         {
-            var positiveVelocity = _agent.Body.Velocity.x != 0 || _agent.Body.Velocity.z != 0;
-            if (positiveVelocity)
+            // Rotate to movement if moving
+            var vx = _agent.Body.Velocity.x;
+            var vz = _agent.Body.Velocity.z;
+            bool hasVelocity = (vx * vx + vz * vz) > 0f;
+
+            if (hasVelocity)
             {
-                Vector3 vel = new Vector3(_agent.Body.Velocity.x, 0f, _agent.Body.Velocity.z);
+                Vector3 vel = new Vector3(vx, 0f, vz);
                 Quaternion targetRot = Quaternion.LookRotation(vel, Vector3.up);
-                _character.transform.rotation = Quaternion.RotateTowards(_character.transform.rotation, targetRot, RotationSpeed * Time.deltaTime);
+                _character.transform.rotation = Quaternion.RotateTowards(
+                    _character.transform.rotation,
+                    targetRot,
+                    RotationSpeed * Time.deltaTime
+                );
+                return;
             }
-            else if (ForcedRotationTarget != Vector3.zero)
+
+            // Else honor a forced rotation target if any
+            if (ForcedRotationTarget != Vector3.zero)
             {
-                Vector3 dirToTarget = ForcedRotationTarget - _character.transform.position;
-                dirToTarget.y = 0f;
-                Quaternion targetRotation = Quaternion.LookRotation(dirToTarget, Vector3.up);
-                _character.transform.rotation = Quaternion.RotateTowards(_model.transform.rotation, targetRotation, RotationSpeed * Time.deltaTime);
-                if (_character.transform.rotation == targetRotation) ForcedRotationTarget = Vector3.zero;
+                Vector3 dir = ForcedRotationTarget - _character.transform.position;
+                dir.y = 0f;
+                if (dir.sqrMagnitude > 0.0001f)
+                {
+                    Quaternion targetRot = Quaternion.LookRotation(dir, Vector3.up);
+                    _character.transform.rotation = Quaternion.RotateTowards(
+                        _character.transform.rotation,  // <-- FIX: was using _model
+                        targetRot,
+                        RotationSpeed * Time.deltaTime
+                    );
+
+                    // Clear once aligned (~1 degree)
+                    if (Quaternion.Angle(_character.transform.rotation, targetRot) < 1f)
+                    {
+                        ForcedRotationTarget = Vector3.zero;
+                    }
+                }
+                else
+                {
+                    ForcedRotationTarget = Vector3.zero;
+                }
             }
         }
-
 
         protected override void InitializeAnimatorParameters()
         {

@@ -36,6 +36,8 @@ namespace OneBitRob.EnigmaEngine
 
         public bool CanCast()
         {
+            if (CurrentSpell == null) return false;
+            
             switch (CurrentSpell.TargetType)
             {
                 case SpellTargetType.SingleTarget:

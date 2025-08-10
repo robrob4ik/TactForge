@@ -10,87 +10,113 @@ using UnityEngine;
 
 namespace OneBitRob.AI
 {
+    [DisallowMultipleComponent]
     [RequireComponent(typeof(UnitDefinitionProvider))]
     public class UnitBrain : MonoBehaviour
     {
+        // Strategies
         internal ITargetingStrategy TargetingStrategy => _targetingStrategy;
 
-        // Entity & ECS
+        // ECS identity
         private Entity _entity;
-        private World _world;
-        private EntityManager _entityManager;
 
-        // Definition and config
+        // Definition / config
         public UnitDefinition UnitDefinition { get; private set; }
+        private bool _isEnemy;
 
-        // Core systems
+        // Core subsystems (cached once)
         public CombatSubsystem CombatSubsystem { get; private set; }
         public EnigmaCharacter Character { get; private set; }
         public EnigmaCharacterHandleWeapon HandleWeapon { get; private set; }
         public EnigmaHealth Health { get; private set; }
+        private EnigmaCharacterAgentsNavigationMovement _navMove;
+        private EnigmaCharacterCastSpell _castSpell;
+        private AgentAuthoring _navAgent;
 
-        public float NextAllowedAttackTime { get; set; }
-        public string CurrentTaskName { get; set; } = "Idle";
-
-        // AI & Navigation
-        public ITargetingStrategy _targetingStrategy;
+        // Strategies
         private ICombatStrategy _combatStrategy;
-        private AgentAuthoring _navigationAgent;
+        private ITargetingStrategy _targetingStrategy;
 
-        // Abilities
-        private EnigmaCharacterAgentsNavigationMovement _characterAgentsNavigationMovement;
-        private EnigmaCharacterCastSpell _characterCastSpell;
+        // Cached layer masks for this unit (avoid recomputing every call)
+        private LayerMask _targetMask;
+        private LayerMask _detectionMask;
+        private LayerMask _alliesMask;
 
         // Runtime state (Mono-side convenience)
         public GameObject CurrentTarget { get; set; }
-        public Vector3 CurrentTargetPosition { get; private set; }
+        public Vector3    CurrentTargetPosition { get; private set; }
 
         public GameObject CurrentSpellTarget { get; set; }
         public List<GameObject> CurrentSpellTargets { get; set; }
         public Vector3? CurrentSpellTargetPosition { get; set; }
 
+        public float  NextAllowedAttackTime { get; set; }
+#if UNITY_EDITOR
+        public string CurrentTaskName { get; set; } = "Idle"; // editor-only to avoid GC in player
+#endif
+
         public Entity GetEntity() => _entity;
 
         private void Awake()
         {
-            // Load Definitions
-            UnitDefinition = GetComponent<UnitDefinitionProvider>().unitDefinition;
+            // Load definitions
+            var defProvider = GetComponent<UnitDefinitionProvider>();
+            if (!defProvider || defProvider.unitDefinition == null)
+            {
+#if UNITY_EDITOR
+                Debug.LogError($"[{name}] UnitDefinitionProvider or unitDefinition missing.");
+#endif
+                enabled = false;
+                return;
+            }
 
-            // Subsystems
+            UnitDefinition = defProvider.unitDefinition;
+            _isEnemy = UnitDefinition.isEnemy;
+
+            // Subsystems / abilities
+            Character    = GetComponent<EnigmaCharacter>();
             CombatSubsystem = GetComponent<CombatSubsystem>();
+            HandleWeapon = Character ? Character.FindAbility<EnigmaCharacterHandleWeapon>() : null;
+            _navMove     = Character ? Character.FindAbility<EnigmaCharacterAgentsNavigationMovement>() : null;
+            _castSpell   = Character ? Character.FindAbility<EnigmaCharacterCastSpell>() : null;
+            _navAgent    = GetComponent<AgentAuthoring>();
+            Health       = GetComponent<EnigmaHealth>();
 
-            // Character & Abilities
-            Character = GetComponent<EnigmaCharacter>();
-            HandleWeapon = Character.FindAbility<EnigmaCharacterHandleWeapon>();
-            _characterAgentsNavigationMovement = Character.FindAbility<EnigmaCharacterAgentsNavigationMovement>();
-            _characterCastSpell = Character.FindAbility<EnigmaCharacterCastSpell>();
-            _navigationAgent = GetComponent<AgentAuthoring>();
-
-            // Configure Weapon Target Layer
-            HandleWeapon.SetTargetLayerMask(UnitDefinition.isEnemy ? GameLayers.AllyMask : GameLayers.EnemyMask);
-            HandleWeapon.SetDamageableLayer(UnitDefinition.isEnemy ? GameLayers.AllyDamageableLayer : GameLayers.EnemyDamageableLayer);
-
-            // Default spell if available
-            if (UnitDefinition.unitSpells.Count > 0)
-                _characterCastSpell.CurrentSpell = UnitDefinition.unitSpells[0];
+            // Health init
+            if (Health != null)
+            {
+                Health.MaximumHealth = UnitDefinition.health;
+                Health.InitialHealth = UnitDefinition.health;
+                Health.CurrentHealth = UnitDefinition.health;
+            }
 
             // Strategies
-            _combatStrategy = CombatStrategyFactory.GetStrategy(UnitDefinition.combatStrategy);
-            _targetingStrategy = TargetingStrategyFactory.GetStrategy(UnitDefinition.targetingStrategy);
+            _combatStrategy   = CombatStrategyFactory.GetStrategy(UnitDefinition.combatStrategy);
+            _targetingStrategy= TargetingStrategyFactory.GetStrategy(UnitDefinition.targetingStrategy);
 
-            // Health
-            Health = GetComponent<EnigmaHealth>();
-            Health.MaximumHealth = UnitDefinition.health;
-            Health.InitialHealth = UnitDefinition.health;
-            Health.CurrentHealth = UnitDefinition.health;
+            // Weapon + masks
+            CacheLayerMasks();
+            if (HandleWeapon != null)
+            {
+                HandleWeapon.SetTargetLayerMask(_targetMask);
+                HandleWeapon.SetDamageableLayer(_isEnemy ? GameLayers.AllyDamageableLayer : GameLayers.EnemyDamageableLayer);
+            }
 
-            _world = World.DefaultGameObjectInjectionWorld;
-            _entityManager = _world.EntityManager;
+            // Default spell
+            if (_castSpell != null && UnitDefinition.unitSpells != null && UnitDefinition.unitSpells.Count > 0)
+                _castSpell.CurrentSpell = UnitDefinition.unitSpells[0];
+        }
+
+        private void CacheLayerMasks()
+        {
+            _targetMask    = _isEnemy ? GameLayers.AllyMask            : GameLayers.EnemyMask;
+            _detectionMask = _isEnemy ? GameLayers.EnemyDetectionMask  : GameLayers.AllyDetectionMask;
+            _alliesMask    = _isEnemy ? GameLayers.EnemyMask           : GameLayers.AllyMask;
         }
 
         public void Setup()
         {
-            // Placeholder: hook up per‑unit initialization here if needed.
+            // Hook for custom per-unit init if you need it later.
         }
 
         public void SetEntity(Entity entity)
@@ -105,10 +131,12 @@ namespace OneBitRob.AI
                 UnitBrainRegistry.Unregister(_entity, gameObject);
         }
 
-        // Target helpers
-        public LayerMask GetTargetLayerMask() => UnitDefinition.isEnemy ? GameLayers.AllyMask : GameLayers.EnemyMask;
-        public LayerMask GetDetectionLayerMask() => UnitDefinition.isEnemy ? GameLayers.EnemyDetectionMask : GameLayers.AllyDetectionMask;
-        public LayerMask GetAlliesLayerMask() => UnitDefinition.isEnemy ? GameLayers.EnemyMask : GameLayers.AllyMask;
+        // ─────────────────────────────────────────────────────────────────────
+        // Target helpers & masks
+        // ─────────────────────────────────────────────────────────────────────
+        public LayerMask GetTargetLayerMask()    => _targetMask;
+        public LayerMask GetDetectionLayerMask() => _detectionMask;
+        public LayerMask GetAlliesLayerMask()    => _alliesMask;
 
         public GameObject FindTarget() => CurrentTarget;
 
@@ -116,88 +144,100 @@ namespace OneBitRob.AI
         {
             if (!CurrentTarget) return false;
             var toTgt = (CurrentTarget.transform.position - transform.position).normalized;
-            var dot = Vector3.Dot(transform.forward, toTgt);
-            // Tighten/loosen as you prefer; this is ~18°
-            return dot >= 0.95f;
+            return Vector3.Dot(transform.forward, toTgt) >= 0.95f; // ~18°
         }
 
         public bool IsTargetAlive()
         {
-            var character = CurrentTarget?.MMGetComponentNoAlloc<EnigmaCharacter>();
-            return character != null && character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
+            // prefer Health on UnitBrain (cheaper + consistent)
+            var targetBrain = CurrentTarget ? CurrentTarget.GetComponent<UnitBrain>() : null;
+            if (targetBrain?.Health == null) return false;
+            return targetBrain.Character != null
+                && targetBrain.Character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
         }
 
         public bool IsTargetInAttackRange(GameObject target)
         {
+            if (!target) return false;
             var diff = transform.position - target.transform.position;
-            return diff.sqrMagnitude <= UnitDefinition.attackRange * UnitDefinition.attackRange;
+            var r = UnitDefinition.attackRange;
+            return diff.sqrMagnitude <= r * r;
         }
 
+        // ─────────────────────────────────────────────────────────────────────
         // Locomotion (called by bridge)
+        // ─────────────────────────────────────────────────────────────────────
         public void MoveToPosition(Vector3 position)
         {
             CurrentTargetPosition = position;
-            _navigationAgent.SetDestinationDeferred(position);
+            _navAgent?.SetDestinationDeferred(position);
         }
 
-        public void RunTo(Vector3 position) => _navigationAgent.SetDestination(position);
+        public void RunTo(Vector3 position) => _navAgent?.SetDestination(position);
+
+        public void SetForcedFacing(Vector3 worldPosition)
+        {
+            if (_navMove != null)
+                _navMove.ForcedRotationTarget = worldPosition;
+        }
 
         public void RotateToTarget()
         {
-            if (!CurrentTarget) return;
-            _characterAgentsNavigationMovement.ForcedRotationTarget = CurrentTarget.transform.position;
+            if (CurrentTarget)
+                SetForcedFacing(CurrentTarget.transform.position);
         }
 
         public void RotateToSpellTarget()
         {
-            // BUGFIX: previously rotated to CurrentTarget instead of the spell’s targeting point
             if (CurrentSpellTarget)
-            {
-                _characterAgentsNavigationMovement.ForcedRotationTarget = CurrentSpellTarget.transform.position;
-            }
+                SetForcedFacing(CurrentSpellTarget.transform.position);
             else if (CurrentSpellTargetPosition.HasValue)
-            {
-                _characterAgentsNavigationMovement.ForcedRotationTarget = CurrentSpellTargetPosition.Value;
-            }
+                SetForcedFacing(CurrentSpellTargetPosition.Value);
         }
 
         public Vector3 GetCurrentDirection() => transform.forward;
 
         public bool HasReachedDestination()
         {
-            var rd = _navigationAgent.Body.RemainingDistance;
+            if (_navAgent == null) return true;
+            var rd = _navAgent.Body.RemainingDistance;
             if (rd <= 0f) return false;
             return rd <= UnitDefinition.stoppingDistance + 0.001f;
         }
 
-        public float RemainingDistance() => _navigationAgent.Body.RemainingDistance;
+        public float RemainingDistance() => _navAgent ? _navAgent.Body.RemainingDistance : 0f;
 
+        // ─────────────────────────────────────────────────────────────────────
         // Combat
-        public void Attack(Transform target) => _combatStrategy.Attack(this, target);
-        public void AimAtTarget(Transform target) => CombatSubsystem.AimAtTarget(target);
+        // ─────────────────────────────────────────────────────────────────────
+        public void Attack(Transform target) => _combatStrategy?.Attack(this, target);
+        public void AimAtTarget(Transform target) => CombatSubsystem?.AimAtTarget(target);
 
+        // ─────────────────────────────────────────────────────────────────────
         // Spells
-        public bool CanCastSpell() => _characterCastSpell is not null && _characterCastSpell.CanCast();
-        public bool ReadyToCastSpell() => _characterCastSpell is not null && _characterCastSpell.ReadyToCast();
+        // ─────────────────────────────────────────────────────────────────────
+        public bool CanCastSpell()   => _castSpell != null && _castSpell.CanCast();
+        public bool ReadyToCastSpell()=> _castSpell != null && _castSpell.ReadyToCast();
 
         public bool TryCastSpell()
         {
-            if (UnitDefinition.unitSpells.Count == 0 || _characterCastSpell == null) return false;
+            if (_castSpell == null || UnitDefinition.unitSpells == null || UnitDefinition.unitSpells.Count == 0)
+                return false;
 
             var spell = UnitDefinition.unitSpells[0];
             switch (spell.TargetType)
             {
                 case SpellTargetType.SingleTarget:
-                    if (CurrentSpellTarget == null) return false;
-                    return _characterCastSpell.TryCastSpell(CurrentSpellTarget);
+                    if (!CurrentSpellTarget) return false;
+                    return _castSpell.TryCastSpell(CurrentSpellTarget);
 
                 case SpellTargetType.MultiTarget:
                     if (CurrentSpellTargets == null || CurrentSpellTargets.Count == 0) return false;
-                    return _characterCastSpell.TryCastSpell(null, CurrentSpellTargets);
+                    return _castSpell.TryCastSpell(null, CurrentSpellTargets);
 
                 case SpellTargetType.AreaOfEffect:
                     if (!CurrentSpellTargetPosition.HasValue) return false;
-                    return _characterCastSpell.TryCastSpell(null, null, CurrentSpellTargetPosition.Value);
+                    return _castSpell.TryCastSpell(null, null, CurrentSpellTargetPosition.Value);
             }
             return false;
         }
@@ -214,10 +254,8 @@ namespace OneBitRob.AI
 #if UNITY_EDITOR
         private void OnDrawGizmosSelected()
         {
-            // Draw aim/target and useful radii
             var pos = transform.position;
 
-            // Detection range
             if (UnitDefinition != null && UnitDefinition.targetDetectionRange > 0f)
             {
                 Gizmos.color = new Color(1f, 0.9f, 0.25f, 0.5f);
@@ -225,7 +263,6 @@ namespace OneBitRob.AI
                 UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.targetDetectionRange);
             }
 
-            // Attack range
             if (UnitDefinition != null && UnitDefinition.attackRange > 0f)
             {
                 Gizmos.color = new Color(1f, 0.25f, 0.25f, 0.7f);
@@ -233,7 +270,6 @@ namespace OneBitRob.AI
                 UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.attackRange);
             }
 
-            // Stopping distance
             if (UnitDefinition != null)
             {
                 Gizmos.color = new Color(0.25f, 1f, 0.35f, 0.65f);
@@ -241,7 +277,6 @@ namespace OneBitRob.AI
                 UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.stoppingDistance);
             }
 
-            // Desired destination (cyan)
             if (CurrentTargetPosition != default)
             {
                 Gizmos.color = Color.cyan;
@@ -249,7 +284,6 @@ namespace OneBitRob.AI
                 Gizmos.DrawSphere(CurrentTargetPosition, 0.1f);
             }
 
-            // Current target line (green)
             if (CurrentTarget)
             {
                 Gizmos.color = Color.green;
@@ -257,7 +291,6 @@ namespace OneBitRob.AI
                 Gizmos.DrawSphere(CurrentTarget.transform.position, 0.07f);
             }
 
-            // Spell target (magenta)
             if (CurrentSpellTarget)
             {
                 Gizmos.color = Color.magenta;

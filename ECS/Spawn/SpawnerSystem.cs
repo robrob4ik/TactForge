@@ -1,14 +1,14 @@
-﻿using System.Collections.Generic;
+﻿using Unity.Collections;
+using Unity.Entities;
+using Unity.Mathematics;
+using UnityEngine;
+using System.Collections.Generic;
 using GPUInstancerPro.PrefabModule;
 using OneBitRob.AI;
 using OneBitRob.Constants;
 using OneBitRob.ECS.GPUI;
 using Opsive.BehaviorDesigner.Runtime;
-using Unity.Collections;
-using Unity.Entities;
-using Unity.Mathematics;
 using Unity.Transforms;
-using UnityEngine;
 
 namespace OneBitRob.ECS
 {
@@ -50,7 +50,6 @@ namespace OneBitRob.ECS
                 }
             }
 
-            // Spawn
             foreach (var pos in allySpawnCenter)
                 SpawnGroup(ref state, data.EntityPrefab, data.AllyPrefabs, data.UnitsSpawnCount, pos, data, GameConstants.ALLY_FACTION);
 
@@ -82,20 +81,17 @@ namespace OneBitRob.ECS
                     var pos  = GetRandomPositionInArea(data.SpawnAreaFrom, data.SpawnAreaTo, rand) + spawnCenter;
                     state.EntityManager.SetComponentData(e, LocalTransform.FromPositionRotationScale(pos, quaternion.identity, 1f));
 
-                    /* ── 1) Visual (GPUI only) ───────────────────────────────── */
+                    // Visual (GPUI only)
                     var go   = Object.Instantiate(bodyPrefab, pos, Quaternion.identity);
                     var gpui = go.GetComponent<GPUIPrefab>();
-
                     if (!gpui)
                     {
                         Debug.LogError($"GPUIPrefab missing on {bodyPrefab.name}");
-                       // Object.Destroy(go);
                         continue;
                     }
-
                     GPUIPrefabAPI.AddPrefabInstanceImmediate(gpuiManager, gpui);
 
-                    // 2) gameplay bindings (NO shared managed component)
+                    // gameplay bindings (NO shared managed component)
                     var unitBrainMono = go.GetComponent<UnitBrain>();
                     unitBrainMono.SetEntity(e); // registers in UnitBrainRegistry
 
@@ -106,35 +102,32 @@ namespace OneBitRob.ECS
                         state.EntityManager.AddComponent<AllyTag>(e);
                     else if (faction == GameConstants.ENEMY_FACTION)
                         state.EntityManager.AddComponent<EnemyTag>(e);
-                    
+
                     state.EntityManager.AddComponentData(e, new Target { Value = Entity.Null });
 
-                    state.EntityManager.AddComponentData(e, new DesiredDestination
-                    {
-                        Position = float3.zero,
-                        HasValue = 0
-                    });
+                    state.EntityManager.AddComponentData(e, new DesiredDestination { Position = float3.zero, HasValue = 0 });
+                    state.EntityManager.AddComponentData(e, new DesiredFacing     { TargetPosition = float3.zero, HasValue = 0 });
 
-                    state.EntityManager.AddComponentData(e, new DesiredFacing
-                    {
-                        TargetPosition = float3.zero,
-                        HasValue = 0
-                    });
+                    // NEW flags / state
+                    state.EntityManager.AddComponentData(e, new InAttackRange { Value = 0, DistanceSq = float.PositiveInfinity });
+                    state.EntityManager.AddComponentData(e, new Alive { Value = 1 }); // spawn alive
 
-                    state.EntityManager.AddComponentData(e, new AttackRequest
-                    {
-                        Target   = Entity.Null,
-                        HasValue = 0
-                    });
+                    byte style = unitBrainMono.UnitDefinition.combatStrategy == CombatStrategyType.Melee ? (byte)1 : (byte)2;
+                    state.EntityManager.AddComponentData(e, new CombatStyle { Value = style });
 
+                    state.EntityManager.AddComponentData(e, new SpellState { CanCast = 0, Ready = 0 });
+
+                    // Attack / Cast plumbing
+                    state.EntityManager.AddComponentData(e, new AttackRequest { Target = Entity.Null, HasValue = 0 });
+                    state.EntityManager.AddComponentData(e, new AttackCooldown { NextTime = 0f });
                     state.EntityManager.AddComponentData(e, new CastRequest
                     {
-                        Kind     = CastKind.None,
-                        Target   = Entity.Null,
+                        Kind        = CastKind.None,
+                        Target      = Entity.Null,
                         AoEPosition = float3.zero,
-                        HasValue = 0
+                        HasValue    = 0
                     });
-                    
+
                     state.EntityManager.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
                 }
             }
