@@ -1,4 +1,8 @@
 ﻿// FILE: OneBitRob/ECS/SpawnerSystem.cs
+// CHANGES:
+// - Null-safe: units may have no spells or null entries.
+// - Build new SpellConfig from SpellDefinition.
+// - Register projectile/vfx/summon ids in SpellVisualRegistry.
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -24,10 +28,10 @@ namespace OneBitRob.ECS
 
         private void OnUpdate(ref SystemState state)
         {
-            var deltaTime  = SystemAPI.Time.DeltaTime;
-            var data       = SystemAPI.ManagedAPI.GetSingleton<SpawnerData>();
-            var timerEnt   = SystemAPI.GetSingletonEntity<SpawnerTimer>();
-            var timer      = SystemAPI.GetComponent<SpawnerTimer>(timerEnt);
+            var deltaTime = SystemAPI.Time.DeltaTime;
+            var data = SystemAPI.ManagedAPI.GetSingleton<SpawnerData>();
+            var timerEnt = SystemAPI.GetSingletonEntity<SpawnerTimer>();
+            var timer = SystemAPI.GetComponent<SpawnerTimer>(timerEnt);
 
             timer.ElapsedTime += deltaTime;
             if (timer.ElapsedTime < data.SpawnFrequency)
@@ -40,23 +44,25 @@ namespace OneBitRob.ECS
             SystemAPI.SetComponent(timerEnt, timer);
 
             // Find SpawnMarkers
-            List<Vector3> allySpawnCenter  = new();
+            List<Vector3> allySpawnCenter = new();
             List<Vector3> enemySpawnCenter = new();
 
             foreach (var (marker, ltw) in SystemAPI.Query<RefRO<SpawnerMarker>, RefRO<LocalTransform>>())
             {
                 switch (marker.ValueRO.Type)
                 {
-                    case SpawnerType.Ally:  allySpawnCenter.Add(ltw.ValueRO.Position);  break;
-                    case SpawnerType.Enemy: enemySpawnCenter.Add(ltw.ValueRO.Position); break;
+                    case SpawnerType.Ally:
+                        allySpawnCenter.Add(ltw.ValueRO.Position);
+                        break;
+                    case SpawnerType.Enemy:
+                        enemySpawnCenter.Add(ltw.ValueRO.Position);
+                        break;
                 }
             }
 
-            foreach (var pos in allySpawnCenter)
-                SpawnGroup(ref state, data.EntityPrefab, data.AllyPrefabs, data.UnitsSpawnCount, pos, data, GameConstants.ALLY_FACTION);
+            foreach (var pos in allySpawnCenter) SpawnGroup(ref state, data.EntityPrefab, data.AllyPrefabs, data.UnitsSpawnCount, pos, data, GameConstants.ALLY_FACTION);
 
-            foreach (var pos in enemySpawnCenter)
-                SpawnGroup(ref state, data.EntityPrefab, data.EnemyPrefabs, data.UnitsSpawnCount, pos, data, GameConstants.ENEMY_FACTION);
+            foreach (var pos in enemySpawnCenter) SpawnGroup(ref state, data.EntityPrefab, data.EnemyPrefabs, data.UnitsSpawnCount, pos, data, GameConstants.ENEMY_FACTION);
 
             EnigmaLogger.Log("Spawn Round Completed. Enabling Behaviour Trees", "INFO");
             BehaviorTree.EnableBakedBehaviorTreeSystem(World.DefaultGameObjectInjectionWorld);
@@ -67,7 +73,7 @@ namespace OneBitRob.ECS
             if (unitPrefabs == null || unitPrefabs.Length == 0) return;
 
             int totalUnits = count * unitPrefabs.Length;
-            var brains     = state.EntityManager.Instantiate(behaviorTreeEntityPrefab, totalUnits, Allocator.Temp);
+            var brains = state.EntityManager.Instantiate(behaviorTreeEntityPrefab, totalUnits, Allocator.Temp);
             int entityIndex = 0;
             var gpuiManager = SystemAPI.ManagedAPI.GetSingleton<GPUIManagerRef>().Value;
 
@@ -80,86 +86,120 @@ namespace OneBitRob.ECS
                     var e = brains[entityIndex++];
 
                     var rand = Unity.Mathematics.Random.CreateFromIndex((uint)Time.frameCount + (uint)e.Index);
-                    var pos  = GetRandomPositionInArea(data.SpawnAreaFrom, data.SpawnAreaTo, rand) + spawnCenter;
+                    var pos = GetRandomPositionInArea(data.SpawnAreaFrom, data.SpawnAreaTo, rand) + spawnCenter;
                     state.EntityManager.SetComponentData(e, LocalTransform.FromPositionRotationScale(pos, quaternion.identity, 1f));
 
                     // Visual (GPUI only)
-                    var go   = Object.Instantiate(bodyPrefab, pos, Quaternion.identity);
+                    var go = Object.Instantiate(bodyPrefab, pos, Quaternion.identity);
                     var gpui = go.GetComponent<GPUIPrefab>();
                     if (!gpui)
                     {
                         Debug.LogError($"GPUIPrefab missing on {bodyPrefab.name}");
                         continue;
                     }
+
                     GPUIPrefabAPI.AddPrefabInstanceImmediate(gpuiManager, gpui);
 
-                    // gameplay bindings (NO shared managed component)
                     var unitBrainMono = go.GetComponent<UnitBrain>();
                     unitBrainMono.SetEntity(e); // registers in UnitBrainRegistry
 
                     state.EntityManager.AddComponent(e, ComponentType.ReadOnly<AgentTag>());
                     state.EntityManager.AddComponentData(e, new SpatialHashComponents.SpatialHashTarget { Faction = faction });
 
-                    if (faction == GameConstants.ALLY_FACTION)
-                        state.EntityManager.AddComponent<AllyTag>(e);
-                    else if (faction == GameConstants.ENEMY_FACTION)
-                        state.EntityManager.AddComponent<EnemyTag>(e);
+                    if (faction == GameConstants.ALLY_FACTION)      state.EntityManager.AddComponent<AllyTag>(e);
+                    else if (faction == GameConstants.ENEMY_FACTION) state.EntityManager.AddComponent<EnemyTag>(e);
 
                     state.EntityManager.AddComponentData(e, new Target { Value = Entity.Null });
 
                     state.EntityManager.AddComponentData(e, new DesiredDestination { Position = float3.zero, HasValue = 0 });
-                    state.EntityManager.AddComponentData(e, new DesiredFacing     { TargetPosition = float3.zero, HasValue = 0 });
+                    state.EntityManager.AddComponentData(e, new DesiredFacing      { TargetPosition = float3.zero, HasValue = 0 });
 
-                    // Flags / state
                     state.EntityManager.AddComponentData(e, new InAttackRange { Value = 0, DistanceSq = float.PositiveInfinity });
-                    state.EntityManager.AddComponentData(e, new Alive { Value = 1 }); // spawn alive
+                    state.EntityManager.AddComponentData(e, new Alive { Value = 1 });
 
-                    // Mirror HP to ECS (for Burst-able lowest-HP targeting)
                     int hp = unitBrainMono.UnitDefinition != null ? unitBrainMono.UnitDefinition.health : 100;
                     state.EntityManager.AddComponentData(e, new HealthMirror { Current = hp, Max = hp });
 
-                    // Style based on weapon (1=melee, 2=ranged)
                     byte style = 1;
                     var weapon = unitBrainMono.UnitDefinition != null ? unitBrainMono.UnitDefinition.weapon : null;
                     if (weapon is RangedWeaponDefinition) style = 2;
                     state.EntityManager.AddComponentData(e, new CombatStyle { Value = style });
 
-                    state.EntityManager.AddComponentData(e, new SpellState { CanCast = 0, Ready = 0 });
+                    state.EntityManager.AddComponentData(e, new SpellState { CanCast = 1, Ready = 1 });
 
-                    // Attack / Cast plumbing
                     state.EntityManager.AddComponentData(e, new AttackRequest { Target = Entity.Null, HasValue = 0 });
                     state.EntityManager.AddComponentData(e, new AttackCooldown { NextTime = 0f });
                     state.EntityManager.AddComponentData(e, new AttackWindup { Active = 0, ReleaseTime = 0f });
-                    state.EntityManager.AddComponentData(e, new CastRequest
-                    {
-                        Kind        = CastKind.None,
-                        Target      = Entity.Null,
-                        AoEPosition = float3.zero,
-                        HasValue    = 0
-                    });
+                    state.EntityManager.AddComponentData(
+                        e, new CastRequest { Kind = CastKind.None, Target = Entity.Null, AoEPosition = float3.zero, HasValue = 0 });
 
-                    // Spell config (first spell only for now, KISS)
-                    if (unitBrainMono.UnitDefinition != null &&
-                        unitBrainMono.UnitDefinition.unitSpells != null &&
-                        unitBrainMono.UnitDefinition.unitSpells.Count > 0)
+                    // ─────────────────────────────────────────────────────────────
+                    // Spells (null-safe)
+                    var spells = unitBrainMono.UnitDefinition != null ? unitBrainMono.UnitDefinition.unitSpells : null;
+                    var hasSpell = spells != null && spells.Count > 0 && spells[0] != null;
+                    if (hasSpell)
                     {
-                        var spell = unitBrainMono.UnitDefinition.unitSpells[0];
+                        var spell = spells[0];
+
+                        int projHash  = SpellVisualRegistry.RegisterProjectile(spell.ProjectileId);
+                        int vfxHash   = SpellVisualRegistry.RegisterVfx(spell.EffectVfxId);
+                        int areaHash  = SpellVisualRegistry.RegisterVfx(spell.AreaVfxId);
+                        int summonHash = SpellVisualRegistry.RegisterSummon(spell.SummonPrefab);
+
                         state.EntityManager.AddComponentData(e, new SpellConfig
                         {
-                            TargetType           = spell.TargetType,
-                            EffectType           = spell.EffectType,
-                            Range                = spell.Range,
-                            RequiresLineOfSight  = (byte)(spell.RequiresLineOfSight ? 1 : 0),
-                            TargetLayerMask      = spell.TargetLayerMask.value,
-                            AreaRadius           = spell.AreaRadius,
-                            MaxTargets           = spell.MaxTargets,
-                            ChainJumpDelay       = spell.ChainJumpDelay,
-                            Strategy             = spell.TargetingStrategyType
+                            Kind               = spell.Kind,
+                            EffectType         = spell.EffectType,
+                            AcquireMode        = spell.AcquireMode,
+
+                            CastTime           = spell.CastTime,
+                            Cooldown           = spell.Cooldown,
+                            Range              = spell.Range,
+                            RequiresLineOfSight= (byte)(spell.RequiresLineOfSight ? 1 : 0),
+                            TargetLayerMask    = spell.TargetLayerMask.value,
+
+                            RequireFacing      = (byte)(spell.RequireFacing ? 1 : 0),
+                            FaceToleranceDeg   = spell.FaceToleranceDegrees,
+                            MaxExtraFaceDelay  = spell.MaxExtraFacingDelay,
+
+                            Amount             = spell.Amount,
+
+                            ProjectileSpeed    = spell.ProjectileSpeed,
+                            ProjectileMaxDistance = spell.ProjectileMaxDistance,
+                            ProjectileRadius   = spell.ProjectileRadius,
+                            ProjectileIdHash   = projHash,
+
+                            AreaRadius         = spell.AreaRadius,
+                            Duration           = spell.Duration,
+                            TickInterval       = spell.TickInterval,
+                            EffectVfxIdHash    = vfxHash,
+                            AreaVfxIdHash      = areaHash,
+
+                            ChainMaxTargets    = spell.ChainMaxTargets,
+                            ChainRadius        = spell.ChainRadius,
+                            ChainJumpDelay     = spell.ChainPerJumpDelay,
+
+                            SummonPrefabHash   = summonHash
                         });
+
                         state.EntityManager.AddComponentData(e, new SpellDecisionRequest { HasValue = 0 });
+                        state.EntityManager.AddComponentData(e, new SpellWindup { Active = 0, ReleaseTime = 0f });
+                        state.EntityManager.AddComponentData(e, new SpellCooldown { NextTime = 0f });
+
+                        // Pre-register summon id hash on the entity via a tag request when casting
+                        if (spell.Kind == SpellKind.Summon && summonHash != 0)
+                        {
+                            // nothing to add now; execution will create SummonRequest with prefab hash
+                        }
                     }
 
                     state.EntityManager.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
+                    state.EntityManager.AddComponentData(e, new RetargetAssist
+                    {
+                        LastPos = pos,
+                        LastDistSq = float.MaxValue,
+                        NoProgressTime = 0f
+                    });
                 }
             }
         }

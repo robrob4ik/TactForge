@@ -6,7 +6,6 @@
 [assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.RotateToTargetComponent, OneBitRob.AI.RotateToTargetTag>))]
 [assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.RotateToSpellTargetComponent, OneBitRob.AI.RotateToSpellTargetTag>))]
 [assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.FindTargetComponent, OneBitRob.AI.FindTargetTag>))]
-[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.FindSpellTargetComponent, OneBitRob.AI.FindSpellTargetTag>))]
 [assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.CanCastSpellComponent, OneBitRob.AI.CanCastSpellTag>))]
 [assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.IsTargetInAttackRangeComponent, OneBitRob.AI.IsTargetInAttackRangeTag>))]
 [assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.IsRangedComponent, OneBitRob.AI.IsRangedTag>))]

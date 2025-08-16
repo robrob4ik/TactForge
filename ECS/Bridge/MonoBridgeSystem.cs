@@ -1,9 +1,11 @@
-﻿// FILE: OneBitRob/Bridge/MonoBridgeSystem.cs
-
+﻿using GPUInstancerPro.PrefabModule;
+using Unity.Entities;
+using Unity.Mathematics;
+using UnityEngine;
 using OneBitRob.AI;
 using OneBitRob.ECS;
-using Unity.Entities;
-using UnityEngine;
+using OneBitRob.ECS.GPUI;
+using Unity.Transforms;
 
 namespace OneBitRob.Bridge
 {
@@ -13,6 +15,9 @@ namespace OneBitRob.Bridge
     {
         protected override void OnUpdate()
         {
+            var em = EntityManager;
+
+            // DesiredDestination -> Mono (navigation)
             foreach (var (dd, e) in SystemAPI.Query<RefRW<DesiredDestination>>().WithEntityAccess())
             {
                 if (dd.ValueRO.HasValue == 0) continue;
@@ -29,6 +34,7 @@ namespace OneBitRob.Bridge
                 dd.ValueRW = default;
             }
 
+            // DesiredFacing -> Mono (rotation)
             foreach (var (df, e) in SystemAPI.Query<RefRW<DesiredFacing>>().WithEntityAccess())
             {
                 if (df.ValueRO.HasValue == 0) continue;
@@ -44,6 +50,7 @@ namespace OneBitRob.Bridge
                 df.ValueRW = default;
             }
 
+            // Target (entity) -> Mono (GameObject)
             foreach (var (target, e) in SystemAPI.Query<RefRO<Target>>().WithEntityAccess())
             {
                 var brain = UnitBrainRegistry.Get(e);
@@ -56,6 +63,8 @@ namespace OneBitRob.Bridge
 #endif
             }
 
+            // ─────────────────────────────────────────────────────────────────
+            // WEAPON PROJECTILES (RANGED) — ECS -> Mono
             foreach (var (spawn, e) in SystemAPI.Query<RefRW<EcsProjectileSpawnRequest>>().WithEntityAccess())
             {
                 if (spawn.ValueRO.HasValue == 0) continue;
@@ -66,20 +75,120 @@ namespace OneBitRob.Bridge
                     var origin = (Vector3)spawn.ValueRO.Origin;
                     var dir    = ((Vector3)spawn.ValueRO.Direction).normalized;
 
+                    // IMPORTANT: pass layerMask as the 7th argument, then crit fields
+                    int layerMask = brain.GetDamageableLayerMask().value;
+
                     brain.CombatSubsystem.FireProjectile(
                         origin,
                         dir,
                         brain.gameObject,
                         spawn.ValueRO.Speed,
                         spawn.ValueRO.Damage,
-                        spawn.ValueRO.MaxDistance
+                        spawn.ValueRO.MaxDistance,
+                        layerMask,                           // <— added
+                        spawn.ValueRO.CritChance,            // keep if your struct has it
+                        spawn.ValueRO.CritMultiplier         // keep if your struct has it
                     );
+
 #if UNITY_EDITOR
                     Debug.DrawRay(origin, dir * 1.2f, Color.red, 0f, false);
 #endif
                 }
 
+                // consume
                 spawn.ValueRW = default;
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // SPELL PROJECTILES — ECS -> Mono (unchanged)
+            foreach (var (spawn, e) in SystemAPI.Query<RefRW<SpellProjectileSpawnRequest>>().WithEntityAccess())
+            {
+                if (spawn.ValueRO.HasValue == 0) continue;
+
+                var brain = UnitBrainRegistry.Get(e);
+                if (brain && brain.CombatSubsystem != null)
+                {
+                    var origin = (Vector3)spawn.ValueRO.Origin;
+                    var dir    = ((Vector3)spawn.ValueRO.Direction).normalized;
+                    string projId = SpellVisualRegistry.GetProjectileId(spawn.ValueRO.ProjectileIdHash);
+
+                    brain.CombatSubsystem.FireSpellProjectile(
+                        projId,
+                        origin,
+                        dir,
+                        brain.gameObject,
+                        spawn.ValueRO.Speed,
+                        spawn.ValueRO.Damage,
+                        spawn.ValueRO.MaxDistance,
+                        spawn.ValueRO.LayerMask,
+                        spawn.ValueRO.Radius,
+                        spawn.ValueRO.Pierce == 1
+                    );
+#if UNITY_EDITOR
+                    Debug.DrawRay(origin, dir * 1.2f, Color.magenta, 0f, false);
+#endif
+                }
+
+                spawn.ValueRW = default;
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // SUMMONS — ECS -> Mono (unchanged)
+            foreach (var (req, e) in SystemAPI.Query<RefRW<SummonRequest>>().WithEntityAccess())
+            {
+                if (req.ValueRO.HasValue == 0) continue;
+
+                var prefab = SpellVisualRegistry.GetSummonPrefab(req.ValueRO.PrefabIdHash);
+                if (prefab != null)
+                {
+                    var data   = SystemAPI.ManagedAPI.TryGetSingleton<SpawnerData>(out var found) ? SystemAPI.ManagedAPI.GetSingleton<SpawnerData>() : null;
+                    var gpuiMgr= SystemAPI.ManagedAPI.TryGetSingleton<GPUIManagerRef>(out var ok) ? SystemAPI.ManagedAPI.GetSingleton<GPUIManagerRef>().Value : null;
+
+                    if (data != null && gpuiMgr != null)
+                    {
+                        for (int i = 0; i < math.max(1, req.ValueRO.Count); i++)
+                        {
+                            var brainEnt = em.Instantiate(data.EntityPrefab);
+                            var pos = req.ValueRO.Position + new float3(UnityEngine.Random.Range(-0.5f, 0.5f), 0f, UnityEngine.Random.Range(-0.5f, 0.5f));
+                            em.SetComponentData(brainEnt, LocalTransform.FromPositionRotationScale(pos, quaternion.identity, 1f));
+
+                            var go = Object.Instantiate(prefab, (Vector3)pos, Quaternion.identity);
+                            var gpui = go.GetComponent<GPUIPrefab>();
+                            if (gpui) GPUIPrefabAPI.AddPrefabInstanceImmediate(gpuiMgr, gpui);
+
+                            var monoBrain = go.GetComponent<UnitBrain>();
+                            monoBrain?.SetEntity(brainEnt);
+
+                            em.AddComponent(brainEnt, ComponentType.ReadOnly<AgentTag>());
+                            em.AddComponentData(brainEnt, new SpatialHashComponents.SpatialHashTarget { Faction = req.ValueRO.Faction });
+                            if (req.ValueRO.Faction == OneBitRob.Constants.GameConstants.ALLY_FACTION) em.AddComponent<AllyTag>(brainEnt);
+                            else if (req.ValueRO.Faction == OneBitRob.Constants.GameConstants.ENEMY_FACTION) em.AddComponent<EnemyTag>(brainEnt);
+
+                            em.AddComponentData(brainEnt, new Target { Value = Entity.Null });
+                            em.AddComponentData(brainEnt, new DesiredDestination { Position = pos, HasValue = 0 });
+                            em.AddComponentData(brainEnt, new DesiredFacing { TargetPosition = float3.zero, HasValue = 0 });
+                            em.AddComponentData(brainEnt, new InAttackRange { Value = 0, DistanceSq = float.PositiveInfinity });
+                            em.AddComponentData(brainEnt, new Alive { Value = 1 });
+
+                            int hp = monoBrain != null && monoBrain.UnitDefinition != null ? monoBrain.UnitDefinition.health : 100;
+                            em.AddComponentData(brainEnt, new HealthMirror { Current = hp, Max = hp });
+
+                            byte style = 1;
+                            var weapon = monoBrain != null ? monoBrain.UnitDefinition?.weapon : null;
+                            if (weapon is RangedWeaponDefinition) style = 2;
+                            em.AddComponentData(brainEnt, new CombatStyle { Value = style });
+
+                            em.AddComponentData(brainEnt, new SpellState { CanCast = 1, Ready = 1 });
+                            em.AddComponentData(brainEnt, new AttackRequest { Target = Entity.Null, HasValue = 0 });
+                            em.AddComponentData(brainEnt, new AttackCooldown { NextTime = 0f });
+                            em.AddComponentData(brainEnt, new AttackWindup { Active = 0, ReleaseTime = 0f });
+                            em.AddComponentData(brainEnt, new CastRequest { Kind = CastKind.None, Target = Entity.Null, AoEPosition = float3.zero, HasValue = 0 });
+                            em.AddComponentData(brainEnt, new RetargetCooldown { NextTime = 0 });
+                        }
+                    }
+                }
+
+                req.ValueRW = default;
             }
         }
     }

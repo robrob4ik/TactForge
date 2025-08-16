@@ -1,30 +1,43 @@
-﻿
-using UnityEngine;
+﻿using UnityEngine;
+using Sirenix.OdinInspector;
 
 namespace OneBitRob.Constants
 {
-    [ExecuteInEditMode] // Allows script to run in Edit Mode
+    [ExecuteInEditMode]
+    [RequireComponent(typeof(Renderer))]
     public class SetObjectTiling : MonoBehaviour
     {
-        [SerializeField] private Vector2 tiling = new Vector2(1f, 1f); // Manual tiling override
+        [SerializeField] private Vector2 tiling = new Vector2(1f, 1f);
         private Renderer rend;
-   
+
         void OnEnable()
         {
             rend = GetComponent<Renderer>();
             ApplyTiling();
         }
 
-        void ApplyTiling()
+#if UNITY_EDITOR
+        void OnValidate()
         {
+            if (!Application.isPlaying)
+            {
+                ApplyTiling();
+            }
+        }
+#endif
+
+        [Button("Apply Tiling")]
+        public void ApplyTiling()
+        {
+            if (rend == null)
+                rend = GetComponent<Renderer>();
+
             if (rend == null) return;
 
             MaterialPropertyBlock block = new MaterialPropertyBlock();
             rend.GetPropertyBlock(block);
 
-            Vector2 finalTiling = tiling;
-
-            block.SetVector("_BaseMap_ST", new Vector4(finalTiling.x, finalTiling.y, 0f, 0f));
+            block.SetVector("_BaseMap_ST", new Vector4(tiling.x, tiling.y, 0f, 0f));
             rend.SetPropertyBlock(block);
         }
     }

@@ -2,6 +2,8 @@
 using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 using OneBitRob.ECS;
+using UnityEditor.Rendering;
+using UnityEngine;
 
 namespace OneBitRob.AI
 {
@@ -25,9 +27,11 @@ namespace OneBitRob.AI
     {
         protected override TaskStatus Execute(Entity e, UnitBrain _)
         {
-            var em = EntityManager;
-            if (!em.HasComponent<SpellState>(e)) return TaskStatus.Failure;
-            return em.GetComponentData<SpellState>(e).CanCast != 0 ? TaskStatus.Success : TaskStatus.Failure;
+            if (!EntityManager.HasComponent<SpellConfig>(e)) return TaskStatus.Failure;
+            if (!EntityManager.HasComponent<SpellState>(e)) return TaskStatus.Failure;
+
+            var ss = EntityManager.GetComponentData<SpellState>(e);
+            return ss.Ready != 0 ? TaskStatus.Success : TaskStatus.Failure;
         }
     }
 }

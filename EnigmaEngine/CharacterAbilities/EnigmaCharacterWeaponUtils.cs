@@ -12,7 +12,7 @@ namespace OneBitRob.EnigmaEngine
         public EnigmaWeapon CurrentWeapon;
 
         protected EnigmaCharacterHandleWeapon _characterHandleWeapon;
-        protected EnigmaCharacterCastSpell _characterCastSpell;
+      //  protected EnigmaCharacterCastSpell _characterCastSpell;
         
         protected const string _isAttackingAnimationParameterName = "Attacking";
         protected const string _isCastingAnimationParameterName = "Casting";
@@ -24,7 +24,7 @@ namespace OneBitRob.EnigmaEngine
         {
             base.Initialization();
             _characterHandleWeapon = this.gameObject.GetComponentInParent<EnigmaCharacter>()?.FindAbility<EnigmaCharacterHandleWeapon>();
-            _characterCastSpell = this.gameObject.GetComponentInParent<EnigmaCharacter>()?.FindAbility<EnigmaCharacterCastSpell>();
+           // _characterCastSpell = this.gameObject.GetComponentInParent<EnigmaCharacter>()?.FindAbility<EnigmaCharacterCastSpell>();
         }
 
         protected override void InitializeAnimatorParameters()
@@ -38,16 +38,9 @@ namespace OneBitRob.EnigmaEngine
             MMAnimatorExtensions.UpdateAnimatorBool(_animator, _isAttackingAnimationParameter,
                 (_characterHandleWeapon.CurrentWeapon.WeaponState.CurrentState != EnigmaWeapon.WeaponStates.WeaponIdle && _characterHandleWeapon.CurrentWeapon.WeaponState.CurrentState != EnigmaWeapon.WeaponStates.WeaponDelayBetweenUses),
                 _character._animatorParameters, _character.RunAnimatorSanityChecks);
-            if (_characterCastSpell.AbilityCasting)
-            {
-                Debug.Log("Updating animator");
-            }
-            else
-            {
-                Debug.Log("Not updating animator");
-            }
+    
             
-            MMAnimatorExtensions.UpdateAnimatorBool(_animator, _isCastingAnimationParameter, (_characterCastSpell.AbilityCasting), _character._animatorParameters, _character.RunAnimatorSanityChecks);
+            //MMAnimatorExtensions.UpdateAnimatorBool(_animator, _isCastingAnimationParameter, (_characterCastSpell.AbilityCasting), _character._animatorParameters, _character.RunAnimatorSanityChecks);
         }
     }
 }

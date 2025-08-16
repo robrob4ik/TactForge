@@ -1,14 +1,11 @@
-﻿// FILE: CombatSubsystem.cs
-// Changes applied:
-// - Removed any WeaponAim logic (already done earlier).
-// - Added projectile spawning API (FireProjectile) with a shared MMObjectPooler reference.
-
-using MoreMountains.Tools;
-using OneBitRob.AI;
-using OneBitRob.EnigmaEngine;
-using OneBitRob.ECS;
-using Unity.Entities;
+﻿using System.Collections.Generic;
 using UnityEngine;
+using MoreMountains.Tools;
+using OneBitRob; 
+using OneBitRob.AI;
+using OneBitRob.ECS;
+using OneBitRob.EnigmaEngine;
+using Unity.Entities;
 
 [TemporaryBakingType]
 [RequireComponent(typeof(EnigmaCharacter))]
@@ -16,90 +13,148 @@ public class CombatSubsystem : MonoBehaviour
 {
     private EnigmaCharacter _character;
     private EnigmaCharacterHandleWeapon _characterHandleWeapon;
-    private EnigmaCharacterOrientation3D _orientation3D;
     private Animator _anim;
+    private UnitBrain _brain;
 
     private int _nextMeleeIdx;
     private int _nextPrepareIdx;
     private int _nextFireIdx;
 
-    [Header("Fallback Animations (optional)")]
-    [SerializeField] private OneBitRob.AttackAnimationSet _fallbackMeleeAnimations;
-    [SerializeField] private OneBitRob.TwoStageAttackAnimationSet _fallbackRangedAnimations;
+    private MMObjectPooler _projectilePooler;
+    private string _projectileId; // from RangedWeaponDefinition (may be filled lazily now)
 
-    [Header("Projectile Spawning (shared pooler recommended)")]
-    [Tooltip("Scene-level pooler; do NOT put one per unit. Assign a shared pooler.")]
-    public MMObjectPooler ProjectilePooler;
-
-    [Tooltip("If true, use the TopDown handle weapon's mask when available.")]
-    public bool UseHandleWeaponLayerMask = false;
-
-    [Tooltip("If non-zero, overrides all other masks.")]
-    public LayerMask TargetMaskOverride;
-
-    private UnitBrain _brain;
+#if UNITY_EDITOR
+    private readonly HashSet<string> _missingParams = new();
+#endif
 
     private void Awake()
     {
         _character = GetComponent<EnigmaCharacter>();
         _characterHandleWeapon = _character.FindAbility<EnigmaCharacterHandleWeapon>();
-        _orientation3D = _character.FindAbility<EnigmaCharacterOrientation3D>();
         _anim = GetComponentInChildren<Animator>();
         _brain = GetComponent<UnitBrain>();
+
+        // Keep this initial read (fast‑path), but do NOT rely on it exclusively.
+        // We will lazily re-read if this was too early (order-of-exec).
+        var weapon = _brain != null ? _brain.UnitDefinition?.weapon : null;
+        if (weapon is RangedWeaponDefinition rw)
+            _projectileId = rw.projectileId;
     }
 
-    public bool IsAlive => _character != null && _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
-
-    // Legacy compatibility (kept)
-    public void Attack() => _characterHandleWeapon.ShootStart();
-    public void StopAttack() => _characterHandleWeapon.ShootStop();
+    public bool IsAlive =>
+        _character != null &&
+        _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
 
     public void PlayMeleeAttack(OneBitRob.AttackAnimationSet set)
     {
-        if (_anim == null) return;
-        var use = (set != null && set.HasEntries) ? set : _fallbackMeleeAnimations;
-        if (use == null || !use.HasEntries) return;
-
-        var param = use.SelectParameter(ref _nextMeleeIdx);
-        if (!string.IsNullOrEmpty(param))
-            _anim.SetTrigger(param);
+        if (_anim == null || set == null || !set.HasEntries) return;
+        var param = set.SelectParameter(ref _nextMeleeIdx);
+        if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
     }
 
-    public void PlayRangedPrepare(OneBitRob.TwoStageAttackAnimationSet set)
+    public void PlayRangedPrepare(TwoStageAttackAnimationSet set)
     {
-        if (_anim == null || set == null) return;
-        var use = set.HasPrepare ? set : _fallbackRangedAnimations;
-        if (use == null || !use.HasPrepare) return;
-
-        var param = use.SelectPrepare(ref _nextPrepareIdx);
-        if (!string.IsNullOrEmpty(param))
-            _anim.SetTrigger(param);
+        if (_anim == null || set == null || !set.HasPrepare) return;
+        var param = set.SelectPrepare(ref _nextPrepareIdx);
+        if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
     }
 
-    public void PlayRangedFire(OneBitRob.TwoStageAttackAnimationSet set)
+    public void PlayRangedFire(TwoStageAttackAnimationSet set)
     {
-        if (_anim == null || set == null) return;
-        var use = set.HasFire ? set : _fallbackRangedAnimations;
-        if (use == null || !use.HasFire) return;
+        if (_anim == null || set == null || !set.HasFire) return;
+        var param = set.SelectFire(ref _nextFireIdx);
+        if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
+    }
 
-        var param = use.SelectFire(ref _nextFireIdx);
-        if (!string.IsNullOrEmpty(param))
-            _anim.SetTrigger(param);
+    public void PlaySpellPrepare(TwoStageAttackAnimationSet set)
+    {
+        if (_anim == null || set == null || !set.HasPrepare) return;
+        var param = set.SelectPrepare(ref _nextPrepareIdx);
+        if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
+    }
+
+    public void PlaySpellFire(TwoStageAttackAnimationSet set)
+    {
+        if (_anim == null || set == null || !set.HasFire) return;
+        var param = set.SelectFire(ref _nextFireIdx);
+        if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
+    }
+
+#if UNITY_EDITOR
+    private bool AnimatorHasTrigger(string param)
+    {
+        if (_anim == null) return false;
+        for (int i = 0; i < _anim.parameterCount; i++)
+        {
+            var p = _anim.parameters[i];
+            if (p.type == AnimatorControllerParameterType.Trigger && p.name == param)
+                return true;
+        }
+        if (_missingParams.Add(param))
+            Debug.LogWarning($"[{name}] Animator missing Trigger parameter '{param}'. Check your TwoStageAttackAnimationSet.");
+        return false;
+    }
+#else
+    private bool AnimatorHasTrigger(string _) => true;
+#endif
+
+    /// <summary>
+    /// Quick check for sandbox: do we have a pooler for the current ranged weapon id?
+    /// Uses lazy id discovery to avoid Awake order issues.
+    /// </summary>
+    public bool HasRangedProjectileConfigured()
+    {
+        return ResolveProjectilePooler() != null;
     }
 
     /// <summary>
-    /// Spawns a pooled projectile and arms it with the proper data.
-    /// Use a shared (scene-level) MMObjectPooler; do NOT have one per unit.
+    /// Resolve and cache the projectile pooler for the current weapon id.
+    /// If the id wasn't known at Awake (due to init order), we lazily read it here.
     /// </summary>
-    public void FireProjectile(Vector3 origin, Vector3 direction, GameObject attacker, float speed, float damage, float maxDistance)
+    private MMObjectPooler ResolveProjectilePooler()
     {
-        if (ProjectilePooler == null) return;
+        if (_projectilePooler != null) return _projectilePooler;
 
-        var go = ProjectilePooler.GetPooledGameObject();
+        // Lazy fetch of projectile id if we missed it in Awake
+        if (string.IsNullOrEmpty(_projectileId) && _brain != null)
+        {
+            var w = _brain.UnitDefinition != null ? _brain.UnitDefinition.weapon : null;
+            if (w is RangedWeaponDefinition rw)
+                _projectileId = rw.projectileId;
+        }
+
+        if (string.IsNullOrEmpty(_projectileId))
+        {
+#if UNITY_EDITOR
+            Debug.LogWarning($"[{name}] No projectileId available yet (UnitDefinition/weapon not ready?). Will retry next call.");
+#endif
+            return null;
+        }
+
+        _projectilePooler = ProjectilePoolManager.Resolve(_projectileId);
+#if UNITY_EDITOR
+        if (_projectilePooler == null)
+            Debug.LogWarning($"[{name}] No projectile pooler found for id '{_projectileId}'. Add your ProjectilePools prefab to this scene or register the id.");
+#endif
+        return _projectilePooler;
+    }
+
+    // ───────────────────────────────────────────
+    // Ranged projectile (with crit)
+    public void FireProjectile(
+        Vector3 origin, Vector3 direction, GameObject attacker,
+        float speed, float damage, float maxDistance,
+        int layerMask,
+        float critChance = 0f, float critMultiplier = 1f)
+    {
+        var pooler = ResolveProjectilePooler();
+        if (pooler == null) return;
+
+        GameObject go = pooler.GetPooledGameObject();
         if (go == null) return;
 
         var poolable = go.GetComponent<MMPoolableObject>();
-        var proj = go.GetComponent<EcsProjectile>();
+        var proj = go.GetComponent<OneBitRob.ECS.EcsProjectile>();
 #if UNITY_EDITOR
         if (proj == null)
         {
@@ -108,26 +163,77 @@ public class CombatSubsystem : MonoBehaviour
         }
 #endif
         go.transform.position = origin;
-        go.transform.forward  = direction;
+        go.transform.forward  = (direction.sqrMagnitude < 1e-6f ? Vector3.forward : direction.normalized);
 
-        int layerMask = (TargetMaskOverride.value != 0)
-            ? TargetMaskOverride.value
-            : (UseHandleWeaponLayerMask && _characterHandleWeapon != null && _characterHandleWeapon.UseTargetLayerMask
-                ? _characterHandleWeapon.TargetLayerMask.value
-                : (_brain != null ? _brain.GetTargetLayerMask().value : ~0));
-
-        proj.Arm(new EcsProjectile.ArmData
+        proj.Arm(new OneBitRob.ECS.EcsProjectile.ArmData
         {
-            Attacker    = attacker,
-            Origin      = origin,
-            Direction   = direction,
-            Speed       = (speed > 0f ? speed : 60f),
-            Damage      = (damage > 0f ? damage : 10f),
-            MaxDistance = (maxDistance > 0f ? maxDistance : 40f),
-            LayerMask   = layerMask
+            Attacker       = attacker,
+            Origin         = origin,
+            Direction      = direction,
+            Speed          = (speed > 0f ? speed : 60f),
+            Damage         = damage,
+            MaxDistance    = (maxDistance > 0f ? maxDistance : 40f),
+            LayerMask      = (layerMask != 0 ? layerMask : (_brain != null ? _brain.GetDamageableLayerMask().value : ~0)),
+            CritChance     = Mathf.Clamp01(critChance),
+            CritMultiplier = Mathf.Max(1f, critMultiplier)
         });
 
         go.SetActive(true);
-        if (poolable != null) poolable.TriggerOnSpawnComplete();
+        poolable?.TriggerOnSpawnComplete();
+    }
+
+    // Legacy 6‑parameter overload still used by ECS path
+    public void FireProjectile(Vector3 origin, Vector3 direction, GameObject attacker,
+        float speed, float damage, float maxDistance)
+    {
+        int layerMask = (_brain != null ? _brain.GetDamageableLayerMask().value : ~0);
+        FireProjectile(origin, direction, attacker, speed, damage, maxDistance, layerMask, 0f, 1f);
+    }
+
+    // ───────────────────────────────────────────
+    // Spell projectile (unchanged)
+    public void FireSpellProjectile(string projectileId, Vector3 origin, Vector3 direction, GameObject attacker,
+        float speed, float damage, float maxDistance, int layerMask, float radius, bool pierce)
+    {
+        if (string.IsNullOrEmpty(projectileId)) return;
+        var pooler = ProjectilePoolManager.Resolve(projectileId);
+        if (pooler == null)
+        {
+#if UNITY_EDITOR
+            Debug.LogWarning($"[{name}] Spell projectile pool '{projectileId}' not found in this scene.");
+#endif
+            return;
+        }
+
+        GameObject go = pooler.GetPooledGameObject();
+        if (go == null) return;
+
+        var poolable = go.GetComponent<MMPoolableObject>();
+        var proj = go.GetComponent<EcsSpellProjectile>();
+#if UNITY_EDITOR
+        if (proj == null)
+        {
+            Debug.LogError($"[{name}] Spell projectile must have EcsSpellProjectile + MMPoolableObject.");
+            return;
+        }
+#endif
+        go.transform.position = origin;
+        go.transform.forward  = (direction.sqrMagnitude < 1e-6f ? Vector3.forward : direction.normalized);
+
+        proj.Arm(new EcsSpellProjectile.ArmData
+        {
+            Attacker   = attacker,
+            Origin     = origin,
+            Direction  = direction,
+            Speed      = speed > 0f ? speed : 60f,
+            Damage     = damage,
+            MaxDistance= maxDistance > 0f ? maxDistance : 20f,
+            LayerMask  = layerMask != 0 ? layerMask : (_brain != null ? _brain.GetDamageableLayerMask().value : ~0),
+            Radius     = Mathf.Max(0f, radius),
+            Pierce     = pierce
+        });
+
+        go.SetActive(true);
+        poolable?.TriggerOnSpawnComplete();
     }
 }

@@ -1,21 +1,14 @@
-﻿// FILE: OneBitRob/ECS/EcsProjectile.cs
-// Changes applied:
-// - Update() is now 'protected override' instead of 'private' to avoid CS0114 hiding warning.
-// - Calls base.Update() to preserve MMPoolableObject behavior.
-
+﻿using MoreMountains.Tools;
+using UnityEngine;
 using OneBitRob.AI;
+using OneBitRob.FX;
 
 namespace OneBitRob.ECS
 {
-    using MoreMountains.Tools;
-    using UnityEngine;
-
-    /// <summary>
     /// Minimal pooled projectile:
     /// - moves straight
     /// - single swept raycast per frame
-    /// - damages first UnitBrain hit, then despawns
-    /// </summary>
+    /// - damages first valid enemy UnitBrain hit (closest), then despawns
     [DisallowMultipleComponent]
     public class EcsProjectile : MMPoolableObject
     {
@@ -27,27 +20,47 @@ namespace OneBitRob.ECS
             public float Speed;
             public float Damage;
             public float MaxDistance;
-            public int LayerMask;       // targets
+            public int LayerMask;       // targets (damageable)
+
+            // NEW: crit support (optional)
+            public float CritChance;     // 0..1
+            public float CritMultiplier; // >= 1
         }
 
         private GameObject _attacker;
+        private UnitBrain  _attackerBrain;
+        private bool       _attackerIsEnemy;
+
         private Vector3 _dir;
         private float _speed;
-        private float _damage;
+        private float _baseDamage;
         private float _remaining;
         private int _mask;
+
+        private float _critChance;
+        private float _critMultiplier;
+
         private Vector3 _lastPos;
 
-        private readonly RaycastHit[] _hits = new RaycastHit[16];
+        // Slightly larger than before—busy scenes benefit from a few extra hits.
+        private static readonly RaycastHit[] s_Hits = new RaycastHit[32];
 
         public void Arm(ArmData data)
         {
-            _attacker   = data.Attacker;
-            _dir        = (data.Direction.sqrMagnitude < 1e-6f ? Vector3.forward : data.Direction.normalized);
-            _speed      = data.Speed;
-            _damage     = data.Damage;
-            _remaining  = data.MaxDistance;
-            _mask       = data.LayerMask;
+            _attacker      = data.Attacker;
+            _attackerBrain = _attacker ? _attacker.GetComponent<UnitBrain>() : null;
+            _attackerIsEnemy = _attackerBrain && _attackerBrain.UnitDefinition
+                             ? _attackerBrain.UnitDefinition.isEnemy
+                             : false;
+
+            _dir         = (data.Direction.sqrMagnitude < 1e-6f ? Vector3.forward : data.Direction.normalized);
+            _speed       = Mathf.Max(0.01f, data.Speed);
+            _baseDamage  = data.Damage;
+            _remaining   = Mathf.Max(0.01f, data.MaxDistance);
+            _mask        = data.LayerMask;
+
+            _critChance     = Mathf.Clamp01(data.CritChance);
+            _critMultiplier = Mathf.Max(1f, data.CritMultiplier <= 0f ? 1f : data.CritMultiplier);
 
             transform.position = data.Origin;
             transform.forward  = _dir;
@@ -60,22 +73,47 @@ namespace OneBitRob.ECS
             _lastPos = transform.position;
         }
 
-        // ← this was 'private void Update()' before; now it's an override
         protected override void Update()
         {
-            base.Update(); // keep any base-class logic (e.g., auto-despawn timers)
+            base.Update(); // preserve LifeTime auto‑despawn, etc.
 
             if (_remaining <= 0f) { Despawn(); return; }
 
             float stepLen = Mathf.Min(_speed * Time.deltaTime, _remaining);
-            int count = Physics.RaycastNonAlloc(_lastPos, _dir, _hits, stepLen, _mask, QueryTriggerInteraction.Ignore);
+
+            // Primary cast using provided mask
+            int maskToUse = (_mask == 0) ? ~0 : _mask;
+            int count = Physics.RaycastNonAlloc(
+                _lastPos,
+                _dir,
+                s_Hits,
+                stepLen,
+                maskToUse,
+                QueryTriggerInteraction.Collide
+            );
+
+            // Fallback: if mask produced no hits, try broad mask; we'll filter by faction below.
+            if (count == 0 && maskToUse != ~0)
+            {
+                count = Physics.RaycastNonAlloc(
+                    _lastPos,
+                    _dir,
+                    s_Hits,
+                    stepLen,
+                    ~0,
+                    QueryTriggerInteraction.Collide
+                );
+            }
 
             if (count > 0)
             {
-                int best = ClosestValidHit(count);
+                int best = ClosestValidEnemyHit(count);
                 if (best >= 0)
                 {
-                    var h = _hits[best];
+                    var h = s_Hits[best];
+#if UNITY_EDITOR
+                    Debug.DrawLine(_lastPos, _lastPos + _dir * h.distance, new Color(1f, 0.95f, 0.2f, 1f), 0.08f, false);
+#endif
                     OnImpact(h);
                     transform.position = _lastPos + _dir * h.distance;
                     Despawn();
@@ -83,31 +121,37 @@ namespace OneBitRob.ECS
                 }
             }
 
+            // advance
             transform.position = _lastPos + _dir * stepLen;
             _lastPos = transform.position;
             _remaining -= stepLen;
         }
 
-        private int ClosestValidHit(int count)
+        private int ClosestValidEnemyHit(int count)
         {
             float bestDist = float.MaxValue;
             int best = -1;
 
             for (int i = 0; i < count; i++)
             {
-                var col = _hits[i].collider;
+                var col = s_Hits[i].collider;
                 if (!col) continue;
 
-                if (_attacker != null && col.transform.root == _attacker.transform.root)
+                // Ignore hitting our own root
+                if (_attacker && col.transform.root == _attacker.transform.root)
                     continue;
 
                 var brain = col.GetComponentInParent<UnitBrain>();
-                if (brain == null || brain.Health == null || !brain.IsTargetAlive())
+                if (brain == null) continue;
+
+                // Faction filter (no friendly fire even if mask is broad)
+                bool targetIsEnemy = brain.UnitDefinition && brain.UnitDefinition.isEnemy;
+                if (targetIsEnemy == _attackerIsEnemy)
                     continue;
 
-                if (_hits[i].distance < bestDist)
+                if (s_Hits[i].distance < bestDist)
                 {
-                    bestDist = _hits[i].distance;
+                    bestDist = s_Hits[i].distance;
                     best = i;
                 }
             }
@@ -118,10 +162,22 @@ namespace OneBitRob.ECS
         private void OnImpact(RaycastHit hit)
         {
             var brain = hit.collider.GetComponentInParent<UnitBrain>();
-            if (brain != null && brain.Health != null && brain.Health.CanTakeDamageThisFrame())
+            if (brain != null && brain.Health != null)
             {
+                // Roll crit
+                bool isCrit = _critChance > 0f && Random.value < _critChance;
+                float dmg = isCrit ? _baseDamage * _critMultiplier : _baseDamage;
+
                 Vector3 dir = _dir;
-                brain.Health.Damage(_damage, _attacker, 0f, 0f, dir);
+                brain.Health.Damage(dmg, _attacker, 0f, 0f, dir);
+
+                DamageNumbersManager.Popup(new DamageNumbersParams
+                {
+                    Kind     = isCrit ? DamagePopupKind.CritDamage : DamagePopupKind.Damage,
+                    Position = hit.point,
+                    Follow   = brain.transform,
+                    Amount   = dmg
+                });
             }
         }
 

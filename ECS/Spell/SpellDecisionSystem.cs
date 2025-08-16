@@ -1,6 +1,8 @@
 ﻿// FILE: OneBitRob/AI/SpellDecisionSystem.cs
-// Change applied: removed UpdateAfter(CastSpellSystem); kept UpdateBefore(CastExecutionSystem).
-
+// CHANGES:
+// - Drive selection by SpellKind & SpellAcquireMode.
+// - SingleTarget kinds: select entity. AoE kinds: select position.
+// - Always consume requests.
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
@@ -8,12 +10,13 @@ using Unity.Mathematics;
 using Unity.Transforms;
 using OneBitRob;
 using OneBitRob.ECS;
+using UnityEngine;
 
 namespace OneBitRob.AI
 {
     [BurstCompile]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateBefore(typeof(CastExecutionSystem))]   // ensure cast sees our CastRequest
+    [UpdateBefore(typeof(SpellExecutionSystem))]
     public partial struct SpellDecisionSystem : ISystem
     {
         ComponentLookup<LocalTransform> _posRO;
@@ -35,6 +38,8 @@ namespace OneBitRob.AI
                     ComponentType.ReadOnly<SpellConfig>(),
                     ComponentType.ReadWrite<SpellDecisionRequest>(),
                     ComponentType.ReadWrite<CastRequest>(),
+                    ComponentType.ReadOnly<SpellWindup>(),
+                    ComponentType.ReadOnly<SpellCooldown>()
                 }
             });
 
@@ -49,27 +54,39 @@ namespace OneBitRob.AI
 
             var em   = state.EntityManager;
             var ents = _q.ToEntityArray(Allocator.Temp);
+            var now  = (float)SystemAPI.Time.ElapsedTime;
 
             for (int i = 0; i < ents.Length; i++)
             {
                 var e = ents[i];
 
                 var decide = em.GetComponentData<SpellDecisionRequest>(e);
-                if (decide.HasValue == 0) continue; // no BT request this frame → skip (1‑frame latency is fine)
+                if (decide.HasValue == 0) continue;
 
-                var cfg = em.GetComponentData<SpellConfig>(e);
+                var wind = em.GetComponentData<SpellWindup>(e);
+                var cool = em.GetComponentData<SpellCooldown>(e);
+
+                if (wind.Active != 0 || now < cool.NextTime)
+                {
+                    decide.HasValue = 0;
+                    em.SetComponentData(e, decide);
+                    continue;
+                }
+
+                var cfg  = em.GetComponentData<SpellConfig>(e);
                 var cast = em.GetComponentData<CastRequest>(e);
-                cast.HasValue = 0;
-                cast.Kind = CastKind.None;
-                cast.Target = Entity.Null;
+                cast.HasValue   = 0;
+                cast.Kind       = CastKind.None;
+                cast.Target     = Entity.Null;
                 cast.AoEPosition = float3.zero;
 
-                switch (cfg.TargetType)
+                switch (cfg.Kind)
                 {
-                    case SpellTargetType.SingleTarget:
-                    case SpellTargetType.MultiTarget: // fallback to single target for now
+                    case SpellKind.ProjectileLine:
+                    case SpellKind.EffectOverTimeTarget:
+                    case SpellKind.Chain:
                     {
-                        Entity tgt = SelectSingleTarget(e, cfg);
+                        var tgt = SelectSingleTarget(e, cfg);
                         if (tgt != Entity.Null)
                         {
                             cast.Kind   = CastKind.SingleTarget;
@@ -79,7 +96,7 @@ namespace OneBitRob.AI
                         break;
                     }
 
-                    case SpellTargetType.AreaOfEffect:
+                    case SpellKind.EffectOverTimeArea:
                     {
                         if (TrySelectAoE(e, cfg, out var point))
                         {
@@ -89,10 +106,23 @@ namespace OneBitRob.AI
                         }
                         break;
                     }
+
+                    case SpellKind.Summon:
+                    {
+                        // Summon at self or toward target if desired in future
+                        if (_posRO.HasComponent(e))
+                        {
+                            cast.Kind = CastKind.AreaOfEffect;
+                            cast.AoEPosition = _posRO[e].Position;
+                            cast.HasValue = 1;
+                        }
+                        break;
+                    }
                 }
 
                 em.SetComponentData(e, cast);
-                decide.HasValue = 0; // consume BT request
+
+                decide.HasValue = 0;
                 em.SetComponentData(e, decide);
             }
 
@@ -102,39 +132,32 @@ namespace OneBitRob.AI
         [BurstCompile]
         private Entity SelectSingleTarget(Entity self, in SpellConfig cfg)
         {
-            switch (cfg.Strategy)
+            switch (cfg.AcquireMode)
             {
-                case SpellTargetingStrategyType.LowestHealthAlly:
-                    return new LowestHealthAllyTargeting()
-                        .GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
-
-                case SpellTargetingStrategyType.ClosestEnemy:
+                case SpellAcquireMode.LowestHealthAlly:
+                    return new LowestHealthAllyTargeting().GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
+                case SpellAcquireMode.DensestEnemyCluster:
+                case SpellAcquireMode.ClosestEnemy:
                 default:
-                    return new ClosestEnemySpellTargeting()
-                        .GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
+                    return new ClosestEnemySpellTargeting().GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
             }
         }
 
         [BurstCompile]
         private bool TrySelectAoE(Entity self, in SpellConfig cfg, out float3 point)
         {
-            switch (cfg.Strategy)
+            switch (cfg.AcquireMode)
             {
-                case SpellTargetingStrategyType.DensestCluster:
-                    return new DensestEnemyClusterTargeting()
-                        .TryGetAOETargetPoint(self, in cfg, ref _posRO, ref _factRO, out point);
-
-                case SpellTargetingStrategyType.ClosestEnemy:
+                case SpellAcquireMode.DensestEnemyCluster:
+                    return new DensestEnemyClusterTargeting().TryGetAOETargetPoint(self, in cfg, ref _posRO, ref _factRO, out point);
+                case SpellAcquireMode.LowestHealthAlly:
+                case SpellAcquireMode.ClosestEnemy:
                 default:
-                    var tgt = new ClosestEnemySpellTargeting()
-                        .GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
+                    var tgt = new ClosestEnemySpellTargeting().GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
                     if (tgt != Entity.Null && _posRO.HasComponent(tgt))
-                    {
-                        point = _posRO[tgt].Position;
-                        return true;
-                    }
-                    point = default;
-                    return false;
+                    { point = _posRO[tgt].Position; return true; }
+                    if (_posRO.HasComponent(self)) { point = _posRO[self].Position; return true; } // fallback
+                    point = default; return false;
             }
         }
     }

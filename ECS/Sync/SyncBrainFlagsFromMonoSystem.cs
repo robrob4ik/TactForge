@@ -1,5 +1,4 @@
 ﻿// FILE: OneBitRob/ECS/Sync/SyncBrainFlagsFromMonoSystem.cs
-
 using OneBitRob.AI;
 using Unity.Entities;
 
@@ -24,12 +23,28 @@ namespace OneBitRob.ECS.Sync
                 alive.Value = (byte)(brain.CombatSubsystem != null && brain.CombatSubsystem.IsAlive ? 1 : 0);
                 em.SetComponentData(e, alive);
 
-                // Spell flags (if present)
+                // Spell flags derived from ECS (no Mono dependency)
                 if (em.HasComponent<SpellState>(e))
                 {
                     var ss = em.GetComponentData<SpellState>(e);
-                    ss.CanCast = (byte)(brain.CanCastSpell()     ? 1 : 0);
-                    ss.Ready   = (byte)(brain.ReadyToCastSpell() ? 1 : 0);
+
+                    if (em.HasComponent<SpellConfig>(e) && em.HasComponent<SpellCooldown>(e) && em.HasComponent<SpellWindup>(e))
+                    {
+                        var cd = em.GetComponentData<SpellCooldown>(e);
+                        var w  = em.GetComponentData<SpellWindup>(e);
+                        float now = (float)SystemAPI.Time.ElapsedTime;
+
+                        // CanCast: has config (always true here)
+                        ss.CanCast = 1;
+                        // Ready: not windup-active and not cooling down
+                        ss.Ready = (byte)((w.Active == 0 && now >= cd.NextTime) ? 1 : 0);
+                    }
+                    else
+                    {
+                        ss.CanCast = 0;
+                        ss.Ready = 0;
+                    }
+
                     em.SetComponentData(e, ss);
                 }
 

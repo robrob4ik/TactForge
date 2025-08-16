@@ -12,12 +12,17 @@ namespace OneBitRob.AI
     [NodeDescription("Sets DesiredDestination to current Target position")]
     public class MoveToTargetAction : AbstractTaskAction<MoveToTargetComponent, MoveToTargetTag, MoveToTargetSystem>, IAction
     {
-        protected override MoveToTargetComponent CreateBufferElement(ushort runtimeIndex)
-            => new MoveToTargetComponent { Index = runtimeIndex };
+        protected override MoveToTargetComponent CreateBufferElement(ushort runtimeIndex) => new MoveToTargetComponent { Index = runtimeIndex };
     }
 
-    public struct MoveToTargetComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }
-    public struct MoveToTargetTag       : IComponentData, IEnableableComponent { }
+    public struct MoveToTargetComponent : IBufferElementData, ITaskCommand
+    {
+        public ushort Index { get; set; }
+    }
+
+    public struct MoveToTargetTag : IComponentData, IEnableableComponent
+    {
+    }
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
@@ -29,7 +34,7 @@ namespace OneBitRob.AI
         protected override void OnCreate()
         {
             base.OnCreate();
-            _posRO  = GetComponentLookup<LocalTransform>(true);
+            _posRO = GetComponentLookup<LocalTransform>(true);
             _factRO = GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
         }
 
@@ -42,6 +47,8 @@ namespace OneBitRob.AI
 
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
         {
+            float dt = (float)SystemAPI.Time.DeltaTime;
+
             // No Target → stop and fail
             if (!EntityManager.HasComponent<Target>(e))
             {
@@ -67,14 +74,9 @@ namespace OneBitRob.AI
                 return TaskStatus.Failure;
             }
 
-            // ─────────────────────────────────────────────────────────────────────
             // Opportunistic retargeting — THROTTLED
-            // This is the expensive call (spatial search). Only do it when:
-            //  • retarget interval has elapsed, AND
-            //  • there’s at least a chance to improve (current target is not already great).
-            // ─────────────────────────────────────────────────────────────────────
             double now = SystemAPI.Time.ElapsedTime;
-            float  switchInterval = math.max(0f, brain.UnitDefinition.retargetCheckInterval);
+            float switchInterval = math.max(0f, brain.UnitDefinition.retargetCheckInterval);
 
             bool canCheck = true;
             if (switchInterval > 0f)
@@ -88,6 +90,53 @@ namespace OneBitRob.AI
                 }
             }
 
+            float3 selfPos = _posRO[e].Position;
+            float3 currPos = _posRO[target].Position;
+            float stop = brain.UnitDefinition.stoppingDistance;
+            float currDistSq = math.distancesq(selfPos, currPos);
+
+            // No-progress fallback: if we haven't closed the distance window for some time, force retarget
+            const float progressEpsilon = 0.05f; // ~7cm improvement threshold
+            const float stuckTime = 1.5f; // seconds without progress
+
+            if (EntityManager.HasComponent<OneBitRob.ECS.RetargetAssist>(e))
+            {
+                var ra = EntityManager.GetComponentData<OneBitRob.ECS.RetargetAssist>(e);
+
+                if (ra.LastDistSq <= currDistSq + progressEpsilon)
+                    ra.NoProgressTime += dt;
+                else
+                    ra.NoProgressTime = 0f;
+
+                ra.LastPos = selfPos;
+                ra.LastDistSq = currDistSq;
+                EntityManager.SetComponentData(e, ra);
+
+                if (ra.NoProgressTime > stuckTime)
+                {
+                    // hard retarget ignoring hysteresis
+                    var wanted = default(FixedList128Bytes<byte>);
+                    wanted.Add(brain.UnitDefinition.isEnemy ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION);
+
+                    float range = brain.UnitDefinition.targetDetectionRange > 0
+                        ? brain.UnitDefinition.targetDetectionRange
+                        : 100f;
+
+                    var candidate = SpatialHashSearch.GetClosest(selfPos, range, wanted, ref _posRO, ref _factRO);
+                    if (candidate != Entity.Null && candidate != target)
+                    {
+                        target = candidate;
+                        EntityManager.SetComponentData(e, new Target { Value = candidate });
+
+                        // reset assist timers upon switching
+                        ra.NoProgressTime = 0f;
+                        ra.LastDistSq = float.MaxValue;
+                        EntityManager.SetComponentData(e, ra);
+                    }
+                }
+            }
+
+            // Opportunistic check if not already forced by no-progress
             if (canCheck)
             {
                 var wanted = default(FixedList128Bytes<byte>);
@@ -98,23 +147,16 @@ namespace OneBitRob.AI
                     : 100f;
 
                 // Early-out: if current target is already very close, retargeting won’t help much.
-                float3 selfPos = _posRO[e].Position;
-                float3 currPos = _posRO[target].Position;
-                float  stop    = brain.UnitDefinition.stoppingDistance;
-                float  currDistSq = math.distancesq(selfPos, currPos);
-
-                // Don’t bother retargeting when you’re basically at the target.
-                if (currDistSq > (stop * stop * 4f)) // tweakable
+                if (currDistSq > (stop * stop * 4f))
                 {
                     var candidate = SpatialHashSearch.GetClosest(selfPos, range, wanted, ref _posRO, ref _factRO);
                     if (candidate != Entity.Null && candidate != target)
                     {
                         float minSwitch = math.max(0f, brain.UnitDefinition.autoTargetMinSwitchDistance);
-                        bool  shouldSwitch = true;
+                        bool shouldSwitch = true;
 
                         if (minSwitch > 0f)
                         {
-                            // Only pay two sqrts if we’re actually checking hysteresis.
                             float distCand = math.distance(_posRO[candidate].Position, selfPos);
                             float distCurr = math.sqrt(currDistSq);
                             shouldSwitch = (distCurr - distCand) >= minSwitch;
@@ -141,7 +183,6 @@ namespace OneBitRob.AI
             float stopDist = brain.UnitDefinition.stoppingDistance;
             if (math.distancesq(self, targetPos) <= stopDist * stopDist)
             {
-                // small stop to prevent drift
                 dd.Position = self;
                 dd.HasValue = 1;
                 EntityManager.SetComponentData(e, dd);

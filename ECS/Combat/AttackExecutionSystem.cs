@@ -1,10 +1,15 @@
 ﻿using OneBitRob.ECS;
-using Unity.Entities;
-using Unity.Mathematics;
-using Unity.Transforms;
 
 namespace OneBitRob.AI
 {
+    using Unity.Burst;
+    using Unity.Collections;
+    using Unity.Entities;
+    using Unity.Mathematics;
+    using Unity.Transforms;
+    using UnityEngine;
+    using static Unity.Mathematics.math;
+
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     [UpdateAfter(typeof(AttackTargetSystem))]
     public partial struct AttackExecutionSystem : ISystem
@@ -19,24 +24,22 @@ namespace OneBitRob.AI
             _attackQuery = state.GetEntityQuery(ComponentType.ReadWrite<AttackRequest>());
             _windupQuery = state.GetEntityQuery(ComponentType.ReadWrite<AttackWindup>());
 
-            state.RequireForUpdate(
-                state.GetEntityQuery(
-                    new EntityQueryDesc
-                    {
-                        Any = new[] { ComponentType.ReadOnly<AttackRequest>(), ComponentType.ReadOnly<AttackWindup>() }
-                    }
-                )
-            );
+            state.RequireForUpdate(state.GetEntityQuery(new EntityQueryDesc
+            {
+                Any = new[] { ComponentType.ReadOnly<AttackRequest>(), ComponentType.ReadOnly<AttackWindup>() }
+            }));
         }
 
         public void OnUpdate(ref SystemState state)
         {
             _posRO.Update(ref state);
             var now = (float)SystemAPI.Time.ElapsedTime;
-            var em = state.EntityManager;
+            var em  = state.EntityManager;
+
+            var ecb = new EntityCommandBuffer(Allocator.Temp);
 
             // 1) Release windups (ranged fire moment)
-            var windupEntities = _windupQuery.ToEntityArray(Unity.Collections.Allocator.Temp);
+            var windupEntities = _windupQuery.ToEntityArray(Allocator.Temp);
             for (int i = 0; i < windupEntities.Length; i++)
             {
                 var e = windupEntities[i];
@@ -44,195 +47,199 @@ namespace OneBitRob.AI
                 var w = em.GetComponentData<AttackWindup>(e);
                 if (w.Active == 0 || now < w.ReleaseTime) continue;
 
-                var brain = UnitBrainRegistry.Get(e);
-                if (brain == null)
+                var brain  = UnitBrainRegistry.Get(e);
+                var weapon = brain?.UnitDefinition?.weapon;
+
+                if (brain?.CombatSubsystem == null || !brain.CombatSubsystem.IsAlive || !_posRO.HasComponent(e))
                 {
                     w.Active = 0;
-                    em.SetComponentData(e, w);
-                    continue;
-                }
-
-                var weapon = brain.UnitDefinition ? brain.UnitDefinition.weapon : null;
-
-                if (brain.CombatSubsystem == null || !brain.CombatSubsystem.IsAlive)
-                {
-                    w.Active = 0;
-                    em.SetComponentData(e, w);
-                    continue;
-                }
-
-                if (!_posRO.HasComponent(e))
-                {
-                    w.Active = 0;
-                    em.SetComponentData(e, w);
+                    ecb.SetComponent(e, w);
                     continue;
                 }
 
                 float3 selfPos = _posRO[e].Position;
-                float3 forward = math.normalizesafe(math.mul(_posRO[e].Rotation, new float3(0, 0, 1)));
+                var rot = _posRO[e].Rotation;
+                float3 fwd   = math.normalizesafe(math.mul(rot, new float3(0, 0, 1)));
+                float3 up    = math.normalizesafe(math.mul(rot, new float3(0, 1, 0)));
+                float3 right = math.normalizesafe(math.mul(rot, new float3(1, 0, 0)));
 
                 if (weapon is RangedWeaponDefinition rw)
                 {
+                    // Compute muzzle origin first
+                    float3 origin = selfPos
+                                  + fwd   * math.max(0f, rw.muzzleForward)
+                                  + right * rw.muzzleLocalOffset.x
+                                  + up    * rw.muzzleLocalOffset.y
+                                  + fwd   * rw.muzzleLocalOffset.z;
+
+                    // Compute aim direction to current target (fallback to forward)
+                    float3 aimDir = fwd;
+                    if (em.HasComponent<Target>(e))
+                    {
+                        var tgt = em.GetComponentData<Target>(e).Value;
+                        if (tgt != Entity.Null && _posRO.HasComponent(tgt))
+                        {
+                            float3 tgtPos = _posRO[tgt].Position;
+                            float3 raw = tgtPos - origin;
+                            raw.y = 0; // keep topdown planar aiming
+                            aimDir = math.normalizesafe(raw, fwd);
+                        }
+                    }
+
+#if UNITY_EDITOR
+                    Debug.DrawRay((Vector3)origin, (Vector3)(aimDir * 1.25f), Color.red, 0.15f, false);
+#endif
+
                     var spawn = new EcsProjectileSpawnRequest
                     {
-                        Origin = selfPos + forward * math.max(0f, rw.muzzleForward),
-                        Direction = forward,
-                        Speed = math.max(0.01f, rw.projectileSpeed),
-                        Damage = math.max(0f, rw.attackDamage),
+                        Origin      = origin,
+                        Direction   = aimDir,
+                        Speed       = math.max(0.01f, rw.projectileSpeed),
+                        Damage      = math.max(0f, rw.attackDamage),
                         MaxDistance = math.max(0.1f, rw.projectileMaxDistance),
-                        HasValue = 1
+                        HasValue    = 1
                     };
-                    if (em.HasComponent<EcsProjectileSpawnRequest>(e))
-                        em.SetComponentData(e, spawn);
-                    else
-                        em.AddComponentData(e, spawn);
+
+                    if (em.HasComponent<EcsProjectileSpawnRequest>(e)) ecb.SetComponent(e, spawn);
+                    else                                             ecb.AddComponent(e, spawn);
 
                     brain.CombatSubsystem?.PlayRangedFire(rw.animations);
 
                     var cd = em.HasComponent<AttackCooldown>(e) ? em.GetComponentData<AttackCooldown>(e) : default;
-                    cd.NextTime = now + math.max(0.01f, rw.attackCooldown);
-                    if (em.HasComponent<AttackCooldown>(e))
-                        em.SetComponentData(e, cd);
-                    else
-                        em.AddComponentData(e, cd);
+                    float jitter = CalcJitter(rw.attackCooldownJitter, e, now);
+                    cd.NextTime = now + math.max(0.01f, rw.attackCooldown) + jitter;
 
-                    brain.NextAllowedAttackTime = UnityEngine.Time.time + rw.attackCooldown;
+                    if (em.HasComponent<AttackCooldown>(e)) ecb.SetComponent(e, cd);
+                    else                                   ecb.AddComponent(e, cd);
+
+                    brain.NextAllowedAttackTime = UnityEngine.Time.time + rw.attackCooldown + jitter;
                 }
                 else if (weapon is MeleeWeaponDefinition mw)
                 {
                     var hit = new MeleeHitRequest
                     {
-                        Origin = selfPos,
-                        Forward = forward,
-                        Range = math.max(0.01f, mw.attackRange),
-                        HalfAngleRad = math.radians(math.clamp(mw.halfAngleDeg, 0f, 179f)),
-                        Damage = math.max(1f, mw.attackDamage),
+                        Origin        = selfPos,
+                        Forward       = fwd,
+                        Range         = math.max(0.01f, mw.attackRange),
+                        HalfAngleRad  = math.radians(math.clamp(mw.halfAngleDeg, 0f, 179f)),
+                        Damage        = math.max(1f, mw.attackDamage),
                         Invincibility = math.max(0f, mw.invincibility),
-                        LayerMask = (UnitBrainRegistry.Get(e)?.GetTargetLayerMask().value) ?? ~0,
-                        MaxTargets = math.max(1, mw.maxTargets),
-                        HasValue = 1
+                        LayerMask     = (UnitBrainRegistry.Get(e)?.GetDamageableLayerMask().value) ?? ~0,
+                        MaxTargets    = math.max(1, mw.maxTargets),
+                        HasValue      = 1
                     };
-                    if (em.HasComponent<MeleeHitRequest>(e))
-                        em.SetComponentData(e, hit);
-                    else
-                        em.AddComponentData(e, hit);
+                    if (em.HasComponent<MeleeHitRequest>(e)) ecb.SetComponent(e, hit);
+                    else                                    ecb.AddComponent(e, hit);
 
                     brain.CombatSubsystem?.PlayMeleeAttack(mw.attackAnimations);
 
                     var cd = em.HasComponent<AttackCooldown>(e) ? em.GetComponentData<AttackCooldown>(e) : default;
-                    cd.NextTime = now + math.max(0.01f, mw.attackCooldown);
-                    if (em.HasComponent<AttackCooldown>(e))
-                        em.SetComponentData(e, cd);
-                    else
-                        em.AddComponentData(e, cd);
+                    float jitter = CalcJitter(mw.attackCooldownJitter, e, now);
+                    cd.NextTime = now + math.max(0.01f, mw.attackCooldown) + jitter;
 
-                    brain.NextAllowedAttackTime = UnityEngine.Time.time + mw.attackCooldown;
+                    if (em.HasComponent<AttackCooldown>(e)) ecb.SetComponent(e, cd);
+                    else                                   ecb.AddComponent(e, cd);
+
+                    brain.NextAllowedAttackTime = UnityEngine.Time.time + mw.attackCooldown + jitter;
                 }
 
                 w.Active = 0;
-                em.SetComponentData(e, w);
+                ecb.SetComponent(e, w);
             }
-
             windupEntities.Dispose();
 
-            // 2) Process incoming attack requests
-            var entities = _attackQuery.ToEntityArray(Unity.Collections.Allocator.Temp);
+            // 2) Process incoming attack requests (unchanged logic; ranged enters windup)
+            var entities = _attackQuery.ToEntityArray(Allocator.Temp);
             for (int i = 0; i < entities.Length; i++)
             {
-                var e = entities[i];
+                var e   = entities[i];
                 var req = em.GetComponentData<AttackRequest>(e);
-                if (req.HasValue == 0 || req.Target == Entity.Null) continue;
-
-                var brain = UnitBrainRegistry.Get(e);
-                if (brain == null)
+                if (req.HasValue == 0 || req.Target == Entity.Null)
                 {
-                    Consume(ref em, ref req, e);
+                    Consume(ref ecb, e);
                     continue;
                 }
 
-                var weapon = brain.UnitDefinition ? brain.UnitDefinition.weapon : null;
+                var brain  = UnitBrainRegistry.Get(e);
+                var weapon = brain?.UnitDefinition?.weapon;
 
                 var cd = em.HasComponent<AttackCooldown>(e) ? em.GetComponentData<AttackCooldown>(e) : default;
-                if (now < cd.NextTime)
-                {
-                    Consume(ref em, ref req, e);
-                    continue;
-                }
+                if (now < cd.NextTime) { Consume(ref ecb, e); continue; }
 
                 if (!_posRO.HasComponent(e) || !_posRO.HasComponent(req.Target))
-                {
-                    Consume(ref em, ref req, e);
-                    continue;
-                }
+                { Consume(ref ecb, e); continue; }
 
                 float3 selfPos = _posRO[e].Position;
-                float3 tgtPos = _posRO[req.Target].Position;
+                float3 tgtPos  = _posRO[req.Target].Position;
 
-                float range = math.max(0.01f, weapon != null ? weapon.attackRange : 1.5f);
+                float range   = math.max(0.01f, weapon != null ? weapon.attackRange : 1.5f);
                 float rangeSq = range * range;
                 if (math.lengthsq(selfPos - tgtPos) > rangeSq * 1.1f)
-                {
-                    Consume(ref em, ref req, e);
-                    continue;
-                }
+                { Consume(ref ecb, e); continue; }
 
-                float3 forward = math.normalizesafe(math.mul(_posRO[e].Rotation, new float3(0, 0, 1)));
+                float3 fwd = math.normalizesafe(math.mul(_posRO[e].Rotation, new float3(0, 0, 1)));
 
-                if (weapon is MeleeWeaponDefinition mw)
+                if (weapon is MeleeWeaponDefinition mw2)
                 {
                     var hit = new MeleeHitRequest
                     {
-                        Origin = selfPos,
-                        Forward = forward,
-                        Range = math.max(0.01f, mw.attackRange),
-                        HalfAngleRad = math.radians(math.clamp(mw.halfAngleDeg, 0f, 179f)),
-                        Damage = math.max(1f, mw.attackDamage),
-                        Invincibility = math.max(0f, mw.invincibility),
-                        LayerMask = brain.GetTargetLayerMask().value,
-                        MaxTargets = math.max(1, mw.maxTargets),
-                        HasValue = 1
+                        Origin        = selfPos,
+                        Forward       = fwd,
+                        Range         = math.max(0.01f, mw2.attackRange),
+                        HalfAngleRad  = math.radians(math.clamp(mw2.halfAngleDeg, 0f, 179f)),
+                        Damage        = math.max(1f, mw2.attackDamage),
+                        Invincibility = math.max(0f, mw2.invincibility),
+                        LayerMask     = brain.GetDamageableLayerMask().value,
+                        MaxTargets    = math.max(1, mw2.maxTargets),
+                        HasValue      = 1
                     };
-                    if (em.HasComponent<MeleeHitRequest>(e))
-                        em.SetComponentData(e, hit);
-                    else
-                        em.AddComponentData(e, hit);
+                    if (em.HasComponent<MeleeHitRequest>(e)) ecb.SetComponent(e, hit);
+                    else                                    ecb.AddComponent(e, hit);
 
-                    brain.CombatSubsystem?.PlayMeleeAttack(mw.attackAnimations);
+                    brain.CombatSubsystem?.PlayMeleeAttack(mw2.attackAnimations);
 
-                    cd.NextTime = now + math.max(0.01f, mw.attackCooldown);
-                    if (em.HasComponent<AttackCooldown>(e))
-                        em.SetComponentData(e, cd);
-                    else
-                        em.AddComponentData(e, cd);
+                    float jitter = CalcJitter(mw2.attackCooldownJitter, e, now);
+                    cd.NextTime = now + math.max(0.01f, mw2.attackCooldown) + jitter;
+                    if (em.HasComponent<AttackCooldown>(e)) ecb.SetComponent(e, cd);
+                    else                                   ecb.AddComponent(e, cd);
 
-                    brain.NextAllowedAttackTime = UnityEngine.Time.time + mw.attackCooldown;
+                    brain.NextAllowedAttackTime = UnityEngine.Time.time + mw2.attackCooldown + jitter;
                 }
-                else if (weapon is RangedWeaponDefinition rw)
+                else if (weapon is RangedWeaponDefinition rw2)
                 {
-                    if (!em.HasComponent<AttackWindup>(e)) em.AddComponentData(e, new AttackWindup { Active = 0, ReleaseTime = 0 });
+                    if (!em.HasComponent<AttackWindup>(e))
+                        ecb.AddComponent(e, new AttackWindup { Active = 0, ReleaseTime = 0 });
 
-                    var w = em.GetComponentData<AttackWindup>(e);
-                    if (w.Active == 0) // don't stack
+                    var w = em.HasComponent<AttackWindup>(e) ? em.GetComponentData<AttackWindup>(e) : default;
+                    if (w.Active == 0)
                     {
-                        w.Active = 1;
-                        w.ReleaseTime = now + math.max(0f, rw.windupSeconds);
-                        em.SetComponentData(e, w);
+                        w.Active      = 1;
+                        w.ReleaseTime = now + math.max(0f, rw2.windupSeconds);
+                        ecb.SetComponent(e, w);
 
-                        brain.CombatSubsystem?.PlayRangedPrepare(rw.animations);
+                        brain.CombatSubsystem?.PlayRangedPrepare(rw2.animations);
                     }
                 }
 
-                Consume(ref em, ref req, e);
+                Consume(ref ecb, e);
             }
-
             entities.Dispose();
+
+            ecb.Playback(em);
+            ecb.Dispose();
         }
 
-        private static void Consume(ref EntityManager em, ref AttackRequest req, Entity e)
+        private static void Consume(ref EntityCommandBuffer ecb, Entity e)
         {
-            req.HasValue = 0;
-            req.Target = Entity.Null;
-            em.SetComponentData(e, req);
+            ecb.SetComponent(e, new AttackRequest { HasValue = 0, Target = Entity.Null });
+        }
+
+        private static float CalcJitter(float range, Entity e, float now)
+        {
+            if (range <= 0f) return 0f;
+            uint h = math.hash(new float3(now, e.Index, e.Version));
+            float u = (h / (float)uint.MaxValue) * 2f - 1f;
+            return u * range;
         }
     }
 }

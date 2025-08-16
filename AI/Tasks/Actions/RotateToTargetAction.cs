@@ -2,7 +2,6 @@
 using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 using Unity.Transforms;
-using Unity.Mathematics;
 using OneBitRob.ECS;
 
 namespace OneBitRob.AI

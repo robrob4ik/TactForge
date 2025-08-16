@@ -6,15 +6,13 @@ using Unity.Transforms;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
-using UnityEngine;
 
 namespace OneBitRob.AI
 {
     [NodeDescription("Finds a valid target via SpatialHash and writes Target component")]
     public class FindTargetAction : AbstractTaskAction<FindTargetComponent, FindTargetTag, FindTargetSystem>, IAction
     {
-        protected override FindTargetComponent CreateBufferElement(ushort runtimeIndex)
-            => new FindTargetComponent { Index = runtimeIndex };
+        protected override FindTargetComponent CreateBufferElement(ushort runtimeIndex) => new FindTargetComponent { Index = runtimeIndex };
     }
 
     public struct FindTargetComponent : IBufferElementData, ITaskCommand
@@ -22,7 +20,9 @@ namespace OneBitRob.AI
         public ushort Index { get; set; }
     }
 
-    public struct FindTargetTag : IComponentData, IEnableableComponent { }
+    public struct FindTargetTag : IComponentData, IEnableableComponent
+    {
+    }
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
@@ -34,7 +34,7 @@ namespace OneBitRob.AI
         protected override void OnCreate()
         {
             base.OnCreate();
-            _posRO  = GetComponentLookup<LocalTransform>(true);
+            _posRO = GetComponentLookup<LocalTransform>(true);
             _factRO = GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
         }
 
@@ -46,7 +46,7 @@ namespace OneBitRob.AI
         }
 
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
-        {   
+        {
             FixedList128Bytes<byte> wanted = default;
             wanted.Add(brain.UnitDefinition.isEnemy ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION);
 
@@ -55,8 +55,7 @@ namespace OneBitRob.AI
 
             var selfPos = SystemAPI.GetComponent<LocalTransform>(e).Position;
             var closest = SpatialHashSearch.GetClosest(selfPos, range, wanted, ref _posRO, ref _factRO);
-            if (closest == Entity.Null)
-                return TaskStatus.Failure;
+            if (closest == Entity.Null) return TaskStatus.Failure;
 
             // Hysteresis: only replace an existing valid target if the new one is
             // at least autoTargetMinSwitchDistance units closer.
@@ -72,8 +71,7 @@ namespace OneBitRob.AI
                         float distCand = math.distance(_posRO[closest].Position, selfPos);
 
                         // If the candidate is not at least minSwitch units closer, keep current.
-                        if ((distCurr - distCand) < minSwitch)
-                            return TaskStatus.Success;
+                        if ((distCurr - distCand) < minSwitch) return TaskStatus.Success;
                     }
                 }
             }
