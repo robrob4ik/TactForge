@@ -12,5 +12,4 @@
 [assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.IsTargetAliveComponent, OneBitRob.AI.IsTargetAliveTag>))]
 [assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.IsMeleeComponent, OneBitRob.AI.IsMeleeTag>))]
 [assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.IsRangedComponent, OneBitRob.AI.IsRangedTag>))]
-[assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.ReadyToCastSpellComponent, OneBitRob.AI.ReadyToCastSpellTag>))]
 [assembly: RegisterGenericJobType(typeof(OneBitRob.AI.CollectRunningJob<OneBitRob.AI.SetupUnitComponent, OneBitRob.AI.SetupUnitTag>))]
