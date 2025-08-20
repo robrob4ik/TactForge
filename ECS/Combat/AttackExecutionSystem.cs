@@ -1,17 +1,17 @@
 ﻿using OneBitRob.ECS;
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Entities;
+using Unity.Mathematics;
+using Unity.Transforms;
+using UnityEngine;
+using static Unity.Mathematics.math;
 
 namespace OneBitRob.AI
 {
-    using Unity.Burst;
-    using Unity.Collections;
-    using Unity.Entities;
-    using Unity.Mathematics;
-    using Unity.Transforms;
-    using UnityEngine;
-    using static Unity.Mathematics.math;
-
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     [UpdateAfter(typeof(AttackTargetSystem))]
+    [UpdateAfter(typeof(SpellExecutionSystem))] // ← ensure spells finish before weapon attacks this frame
     public partial struct AttackExecutionSystem : ISystem
     {
         private ComponentLookup<LocalTransform> _posRO;
@@ -38,7 +38,7 @@ namespace OneBitRob.AI
 
             var ecb = new EntityCommandBuffer(Allocator.Temp);
 
-            // 1) Release windups (ranged fire moment)
+            // 1) Release windups (ranged fire moment) — DEFER IF SPELL CASTING
             var windupEntities = _windupQuery.ToEntityArray(Allocator.Temp);
             for (int i = 0; i < windupEntities.Length; i++)
             {
@@ -46,6 +46,14 @@ namespace OneBitRob.AI
                 if (!em.HasComponent<AttackWindup>(e)) continue;
                 var w = em.GetComponentData<AttackWindup>(e);
                 if (w.Active == 0 || now < w.ReleaseTime) continue;
+
+                // NEW: if spell cast is in progress, postpone release
+                if (em.HasComponent<SpellWindup>(e))
+                {
+                    var sw = em.GetComponentData<SpellWindup>(e);
+                    if (sw.Active != 0)
+                        continue; // keep weapon windup waiting until spell finishes
+                }
 
                 var brain  = UnitBrainRegistry.Get(e);
                 var weapon = brain?.UnitDefinition?.weapon;
@@ -148,13 +156,20 @@ namespace OneBitRob.AI
             }
             windupEntities.Dispose();
 
-            // 2) Process incoming attack requests (unchanged logic; ranged enters windup)
+            // 2) Process incoming attack requests — BLOCK WHILE CASTING
             var entities = _attackQuery.ToEntityArray(Allocator.Temp);
             for (int i = 0; i < entities.Length; i++)
             {
                 var e   = entities[i];
                 var req = em.GetComponentData<AttackRequest>(e);
                 if (req.HasValue == 0 || req.Target == Entity.Null)
+                {
+                    Consume(ref ecb, e);
+                    continue;
+                }
+
+                // NEW: if a spell is in progress, do not start weapon attacks (and don't play prepare anims)
+                if (em.HasComponent<SpellWindup>(e) && em.GetComponentData<SpellWindup>(e).Active != 0)
                 {
                     Consume(ref ecb, e);
                     continue;

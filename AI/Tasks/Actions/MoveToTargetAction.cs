@@ -26,6 +26,7 @@ namespace OneBitRob.AI
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateAfter(typeof(SpellExecutionSystem))] // ← ensure casting status is visible
     public partial class MoveToTargetSystem : TaskProcessorSystem<MoveToTargetComponent, MoveToTargetTag>
     {
         ComponentLookup<LocalTransform> _posRO;
@@ -48,6 +49,26 @@ namespace OneBitRob.AI
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
         {
             float dt = (float)SystemAPI.Time.DeltaTime;
+
+            // ─────────────────────────────────────────────
+            // MOVEMENT LOCK WHILE CASTING
+            if (EntityManager.HasComponent<SpellWindup>(e))
+            {
+                var sw = EntityManager.GetComponentData<SpellWindup>(e);
+                if (sw.Active != 0)
+                {
+                    // Park the unit at its current spot
+                    var here = SystemAPI.GetComponent<LocalTransform>(e).Position;
+                    var ddLock = EntityManager.GetComponentData<DesiredDestination>(e);
+                    ddLock.Position = here;
+                    ddLock.HasValue = 1;
+                    EntityManager.SetComponentData(e, ddLock);
+
+                    // Keep the BT node "alive" without progressing movement
+                    return TaskStatus.Running;
+                }
+            }
+            // ─────────────────────────────────────────────
 
             // No Target → stop and fail
             if (!EntityManager.HasComponent<Target>(e))

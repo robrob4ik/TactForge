@@ -18,6 +18,14 @@ namespace OneBitRob.AI
     {
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
         {
+            // NEW: do not issue weapon attack requests while a spell cast is in progress
+            if (EntityManager.HasComponent<SpellWindup>(e))
+            {
+                var sw = EntityManager.GetComponentData<SpellWindup>(e);
+                if (sw.Active != 0)
+                    return TaskStatus.Failure; // casting → skip attacking this frame
+            }
+
             if (!EntityManager.HasComponent<Target>(e)) return TaskStatus.Failure;
 
             var target = EntityManager.GetComponentData<Target>(e).Value;

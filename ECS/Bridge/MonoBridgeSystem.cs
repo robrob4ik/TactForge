@@ -1,11 +1,11 @@
 ﻿using GPUInstancerPro.PrefabModule;
-using Unity.Entities;
-using Unity.Mathematics;
-using UnityEngine;
 using OneBitRob.AI;
 using OneBitRob.ECS;
 using OneBitRob.ECS.GPUI;
+using Unity.Mathematics;
+using Unity.Entities;
 using Unity.Transforms;
+using UnityEngine;
 
 namespace OneBitRob.Bridge
 {
@@ -24,11 +24,18 @@ namespace OneBitRob.Bridge
                 var brain = UnitBrainRegistry.Get(e);
                 if (brain)
                 {
-                    var wanted = (Vector3)dd.ValueRO.Position;
+                    // ─── Movement lock while casting ────────────────────────────
+                    bool casting = em.HasComponent<SpellWindup>(e) && em.GetComponentData<SpellWindup>(e).Active != 0;
+
+                    Vector3 wanted = casting
+                        ? brain.transform.position                      // stop at current spot
+                        : (Vector3)dd.ValueRO.Position;                 // normal desired destination
+
                     if ((wanted - brain.CurrentTargetPosition).sqrMagnitude > 0.0004f)
                         brain.MoveToPosition(wanted);
+
 #if UNITY_EDITOR
-                    Debug.DrawLine(brain.transform.position, wanted, Color.cyan, 0f, false);
+                    Debug.DrawLine(brain.transform.position, wanted, casting ? new Color(1f, 0.6f, 0.1f, 0.9f) : Color.cyan, 0f, false);
 #endif
                 }
                 dd.ValueRW = default;
@@ -75,7 +82,6 @@ namespace OneBitRob.Bridge
                     var origin = (Vector3)spawn.ValueRO.Origin;
                     var dir    = ((Vector3)spawn.ValueRO.Direction).normalized;
 
-                    // IMPORTANT: pass layerMask as the 7th argument, then crit fields
                     int layerMask = brain.GetDamageableLayerMask().value;
 
                     brain.CombatSubsystem.FireProjectile(
@@ -85,9 +91,9 @@ namespace OneBitRob.Bridge
                         spawn.ValueRO.Speed,
                         spawn.ValueRO.Damage,
                         spawn.ValueRO.MaxDistance,
-                        layerMask,                           // <— added
-                        spawn.ValueRO.CritChance,            // keep if your struct has it
-                        spawn.ValueRO.CritMultiplier         // keep if your struct has it
+                        layerMask,
+                        spawn.ValueRO.CritChance,
+                        spawn.ValueRO.CritMultiplier
                     );
 
 #if UNITY_EDITOR
@@ -100,7 +106,7 @@ namespace OneBitRob.Bridge
             }
 
             // ─────────────────────────────────────────────────────────────────
-            // SPELL PROJECTILES — ECS -> Mono (unchanged)
+            // SPELL PROJECTILES — ECS -> Mono
             foreach (var (spawn, e) in SystemAPI.Query<RefRW<SpellProjectileSpawnRequest>>().WithEntityAccess())
             {
                 if (spawn.ValueRO.HasValue == 0) continue;
