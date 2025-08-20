@@ -31,12 +31,13 @@ namespace OneBitRob.AI
         public List<GameObject> CurrentSpellTargets { get; set; }
         public Vector3? CurrentSpellTargetPosition { get; set; }
         public float NextAllowedAttackTime { get; set; }
-        
+
 #if UNITY_EDITOR
         public string CurrentTaskName { get; set; } = "Idle";
 
         [Header("Debug")]
         public bool DebugDrawCombatGizmos = true;
+
         public bool DebugAlwaysDraw = false;
         public bool DebugDrawFacing = true;
         public bool DebugDrawSpell = true;
@@ -72,7 +73,7 @@ namespace OneBitRob.AI
                 Health.InitialHealth = UnitDefinition.health;
                 Health.CurrentHealth = UnitDefinition.health;
             }
-            
+
             CacheLayerMasks();
             if (HandleWeapon != null)
             {
@@ -81,10 +82,7 @@ namespace OneBitRob.AI
             }
         }
 
-        private void CacheLayerMasks()
-        {
-            _targetMask = _isEnemy ? GameLayers.AllyMask : GameLayers.EnemyMask;
-        }
+        private void CacheLayerMasks() { _targetMask = _isEnemy ? GameLayers.AllyMask : GameLayers.EnemyMask; }
 
         public void Setup() { }
 
@@ -100,7 +98,7 @@ namespace OneBitRob.AI
         }
 
         public LayerMask GetTargetLayerMask() => _targetMask;
-        
+
         public LayerMask GetDamageableLayerMask()
         {
             int layer = _isEnemy ? GameLayers.AllyDamageableLayer : GameLayers.EnemyDamageableLayer;
@@ -169,7 +167,7 @@ namespace OneBitRob.AI
         }
 
         public float RemainingDistance() => _navAgent ? _navAgent.Body.RemainingDistance : 0f;
-        
+
         internal class Baker : Baker<UnitBrain>
         {
             public override void Bake(UnitBrain authoring)
@@ -182,14 +180,12 @@ namespace OneBitRob.AI
 #if UNITY_EDITOR
         private void OnDrawGizmos()
         {
-            if (DebugDrawCombatGizmos && DebugAlwaysDraw)
-                DrawCombatGizmos();
+            if (DebugDrawCombatGizmos && DebugAlwaysDraw) DrawCombatGizmos();
         }
 
         private void OnDrawGizmosSelected()
         {
-            if (DebugDrawCombatGizmos)
-                DrawCombatGizmos();
+            if (DebugDrawCombatGizmos) DrawCombatGizmos();
         }
 
         private void DrawCombatGizmos()
@@ -220,7 +216,7 @@ namespace OneBitRob.AI
                 UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.stoppingDistance);
             }
 
-            // Retarget hysteresis (autoTargetMinSwitchDistance)
+            // Retarget hysteresis
             if (UnitDefinition != null && UnitDefinition.autoTargetMinSwitchDistance > 0f)
             {
                 Gizmos.color = new Color(0.35f, 0.6f, 1f, 0.5f);
@@ -251,7 +247,7 @@ namespace OneBitRob.AI
                 Gizmos.DrawRay(pos + Vector3.up * 0.05f, transform.forward * 0.9f);
             }
 
-            // Spell helpers
+            // Spell helpers (extended)
             if (DebugDrawSpell && UnitDefinition != null && UnitDefinition.unitSpells != null && UnitDefinition.unitSpells.Count > 0)
             {
                 var sd = UnitDefinition.unitSpells[0];
@@ -260,20 +256,46 @@ namespace OneBitRob.AI
                     // Cast range
                     if (sd.Range > 0f)
                     {
-                        Gizmos.color = new Color(0.8f, 0.2f, 1f, 0.5f);
+                        Gizmos.color = sd.DebugColor;
+                        Gizmos.color = new Color(sd.DebugColor.r, sd.DebugColor.g, sd.DebugColor.b, 0.35f);
                         UnityEditor.Handles.color = Gizmos.color;
                         UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, sd.Range);
                     }
 
                     // AoE radius (if area or we have an explicit target point)
                     var showAoE = sd.Kind == SpellKind.EffectOverTimeArea || CurrentSpellTargetPosition.HasValue;
-                    if (showAoE && sd.AreaRadius > 0f)
+                    if (showAoE && sd.Range > 0f)
                     {
                         Vector3 center = CurrentSpellTargetPosition.HasValue ? CurrentSpellTargetPosition.Value : pos;
-                        Gizmos.color = new Color(1f, 0f, 1f, 0.2f);
-                        UnityEditor.Handles.color = new Color(1f, 0f, 1f, 0.9f);
-                        UnityEditor.Handles.DrawWireDisc(center, Vector3.up, sd.AreaRadius);
+                        Gizmos.color = new Color(sd.DebugColor.r, 0f, sd.DebugColor.b, 0.2f);
+                        UnityEditor.Handles.color = new Color(sd.DebugColor.r, 0f, sd.DebugColor.b, 0.9f);
+                        UnityEditor.Handles.DrawWireDisc(center, Vector3.up, sd.Range);
                         Gizmos.DrawSphere(center, 0.05f);
+                    }
+
+                    // Muzzle & trajectory preview for projectile spells
+                    if (sd.Kind == SpellKind.ProjectileLine || sd.Kind == SpellKind.Chain)
+                    {
+                        Vector3 fwd = transform.forward;
+                        Vector3 up = transform.up;
+                        Vector3 right = transform.right;
+
+                        Vector3 origin = pos
+                                         + fwd * Mathf.Max(0f, sd.MuzzleForward)
+                                         + right * sd.MuzzleLocalOffset.x
+                                         + up * sd.MuzzleLocalOffset.y
+                                         + fwd * sd.MuzzleLocalOffset.z;
+
+                        Gizmos.color = Color.magenta;
+                        Gizmos.DrawSphere(origin, 0.06f);
+
+                        Vector3 aim = origin + fwd * 0.75f;
+                        if (CurrentSpellTarget)
+                            aim = CurrentSpellTarget.transform.position;
+                        else if (CurrentSpellTargetPosition.HasValue) aim = CurrentSpellTargetPosition.Value;
+
+                        aim.y = origin.y; // planar preview
+                        Gizmos.DrawLine(origin, aim);
                     }
                 }
             }
@@ -281,5 +303,7 @@ namespace OneBitRob.AI
 #endif
     }
 
-    public struct UnitBrainTag : IComponentData { }
+    public struct UnitBrainTag : IComponentData
+    {
+    }
 }

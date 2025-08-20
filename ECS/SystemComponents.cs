@@ -71,23 +71,27 @@ namespace OneBitRob.ECS
         public SpellEffectType EffectType;
         public SpellAcquireMode AcquireMode;
 
+        // NOTE: CastTime now represents "Fire Delay (s)" after triggering the cast animation.
         public float CastTime;
         public float Cooldown;
         public float Range;
         public byte RequiresLineOfSight;
         public int TargetLayerMask;
 
+        // Facing gate is disabled by default; kept for compatibility (ignored).
         public byte RequireFacing;
         public float FaceToleranceDeg;
         public float MaxExtraFaceDelay;
 
-        public float Amount; // damage or heal per hit/tick
+        public float Amount; // damage or heal per hit, OR DoT/HoT tick amount
 
         // Projectile
         public float ProjectileSpeed;
         public float ProjectileMaxDistance;
         public float ProjectileRadius;
         public int   ProjectileIdHash;
+        public float MuzzleForward;     // NEW
+        public float3 MuzzleLocalOffset;// NEW
 
         // AoE / Over-Time
         public float AreaRadius;
@@ -109,14 +113,14 @@ namespace OneBitRob.ECS
 
     public struct SpellWindup : IComponentData
     {
-        public float ReleaseTime;
+        public float ReleaseTime;  // when to fire the effect (Fire Delay)
         public byte Active;
 
         public float3 AimPoint;
         public Entity AimTarget;
         public byte HasAimPoint;
 
-        public float FacingDeadline;
+        public float FacingDeadline; // ignored (kept for compatibility)
     }
 
     public struct SpellCooldown : IComponentData { public float NextTime; }
@@ -168,7 +172,6 @@ namespace OneBitRob.ECS
         public int   LayerMask;      // who gets affected
     }
 
-    /// Tracks "no progress" toward current target to trigger retarget assist.
     public struct RetargetAssist : IComponentData
     {
         public float3 LastPos;

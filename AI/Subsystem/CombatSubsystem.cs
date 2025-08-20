@@ -19,6 +19,7 @@ public class CombatSubsystem : MonoBehaviour
     private int _nextMeleeIdx;
     private int _nextPrepareIdx;
     private int _nextFireIdx;
+    private int _nextSpellIdx; // NEW
 
     private MMObjectPooler _projectilePooler;
     private string _projectileId; // from RangedWeaponDefinition (may be filled lazily now)
@@ -34,8 +35,6 @@ public class CombatSubsystem : MonoBehaviour
         _anim = GetComponentInChildren<Animator>();
         _brain = GetComponent<UnitBrain>();
 
-        // Keep this initial read (fast‑path), but do NOT rely on it exclusively.
-        // We will lazily re-read if this was too early (order-of-exec).
         var weapon = _brain != null ? _brain.UnitDefinition?.weapon : null;
         if (weapon is RangedWeaponDefinition rw)
             _projectileId = rw.projectileId;
@@ -66,19 +65,16 @@ public class CombatSubsystem : MonoBehaviour
         if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
     }
 
-    public void PlaySpellPrepare(TwoStageAttackAnimationSet set)
+    // NEW: single-stage spell animation
+    public void PlaySpell(OneBitRob.AttackAnimationSet set)
     {
-        if (_anim == null || set == null || !set.HasPrepare) return;
-        var param = set.SelectPrepare(ref _nextPrepareIdx);
+        if (_anim == null || set == null || !set.HasEntries) return;
+        var param = set.SelectParameter(ref _nextSpellIdx);
         if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
     }
 
-    public void PlaySpellFire(TwoStageAttackAnimationSet set)
-    {
-        if (_anim == null || set == null || !set.HasFire) return;
-        var param = set.SelectFire(ref _nextFireIdx);
-        if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
-    }
+    public void PlaySpellPrepare(TwoStageAttackAnimationSet set) { /* legacy no-op */ }
+    public void PlaySpellFire(TwoStageAttackAnimationSet set) { /* legacy no-op */ }
 
 #if UNITY_EDITOR
     private bool AnimatorHasTrigger(string param)
@@ -91,13 +87,12 @@ public class CombatSubsystem : MonoBehaviour
                 return true;
         }
         if (_missingParams.Add(param))
-            Debug.LogWarning($"[{name}] Animator missing Trigger parameter '{param}'. Check your TwoStageAttackAnimationSet.");
+            Debug.LogWarning($"[{name}] Animator missing Trigger parameter '{param}'. Check your AttackAnimationSet.");
         return false;
     }
 #else
     private bool AnimatorHasTrigger(string _) => true;
 #endif
-
     /// <summary>
     /// Quick check for sandbox: do we have a pooler for the current ranged weapon id?
     /// Uses lazy id discovery to avoid Awake order issues.

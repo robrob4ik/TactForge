@@ -6,6 +6,7 @@ using Unity.Mathematics;
 using OneBitRob.AI;
 using OneBitRob.FX;
 using OneBitRob.ECS;
+using OneBitRob.Constants; // for GameLayers
 
 namespace OneBitRob.Tools
 {
@@ -126,7 +127,7 @@ namespace OneBitRob.Tools
 
         System.Collections.IEnumerator CoRangedFire(RangedWeaponDefinition rw)
         {
-            // ANIMATION: Prepare
+            // ANIMATION: Prepare (ranged still two-stage in your base)
             if (rw) self.CombatSubsystem?.PlayRangedPrepare(rw.animations);
 
             float windup = (rw ? Mathf.Max(0f, rw.windupSeconds) : 0f);
@@ -147,15 +148,6 @@ namespace OneBitRob.Tools
             float maxDist = rw ? Mathf.Max(0.1f, rw.projectileMaxDistance) : Mathf.Max(0.1f, RangedMaxDistance);
             float damage  = rw ? Mathf.Max(0f, rw.attackDamage)
                                : (self.UnitDefinition && self.UnitDefinition.weapon ? self.UnitDefinition.weapon.attackDamage : 10f);
-
-            // Check pooler presence (otherwise you won't see a projectile in sandbox)
-            bool hasPool = self.CombatSubsystem.HasRangedProjectileConfigured();
-            if (!hasPool)
-            {
-#if UNITY_EDITOR
-                Debug.LogWarning($"[UnitCombatTester] No projectile pooler for this weapon. Ensure your sandbox scene has the same ProjectilePools as the main scene. Weapon projectileId: {(rw ? rw.projectileId : "<override/no-id>")}");
-#endif
-            }
 
 #if UNITY_EDITOR
             if (DrawGizmos) Debug.DrawRay(origin, dir * 1.25f, Color.red, 0.5f, false);
@@ -182,26 +174,30 @@ namespace OneBitRob.Tools
 
         System.Collections.IEnumerator CoCastSpell(SpellDefinition spell)
         {
-            // ANIMATION: Prepare (two-stage)
-            self.CombatSubsystem?.PlaySpellPrepare(spell.animations);
+            // Single‑stage spell animation
+            self.CombatSubsystem?.PlaySpell(spell.animations);
 
-            float cast = Mathf.Max(0f, spell.CastTime);
-            if (cast > 0f) yield return new WaitForSeconds(cast);
+            float fireDelay = Mathf.Max(0f, spell.FireDelaySeconds);
+            if (fireDelay > 0f) yield return new WaitForSeconds(fireDelay);
 
             switch (spell.Kind)
             {
                 case SpellKind.ProjectileLine:
                 {
-                    // Compute origin/aim (projectile)
-                    ComputeRangedMuzzle(self, out var origin, out var fwd);
+                    // Compute origin/aim (spell muzzle)
+                    ComputeSpellMuzzle(self, spell, out var origin, out var fwd);
                     Vector3 dir = fwd;
                     Vector3 aim = target ? target.transform.position : (origin + fwd);
                     Vector3 to = aim - origin; to.y = 0f;
                     if (to.sqrMagnitude > 1e-6f) dir = to.normalized;
 
-                    float dmg = spell.EffectType == SpellEffectType.Negative ? Mathf.Max(0f, spell.Amount) : -Mathf.Max(0f, spell.Amount);
-                    int layer = spell.TargetLayerMask.value != 0 ? spell.TargetLayerMask.value : self.GetDamageableLayerMask().value;
+                    bool healProjectile = (spell.EffectType == SpellEffectType.Positive);
+                    float dmg = healProjectile ? -Mathf.Max(0f, spell.EffectAmount) : Mathf.Max(0f, spell.EffectAmount);
+                    int layer = GetLayerMaskForEffect(self, healProjectile);
 
+#if UNITY_EDITOR
+                    if (DrawGizmos) Debug.DrawRay(origin, dir * 1.25f, new Color(1f, 0.2f, 1f, 0.85f), 0.6f, false);
+#endif
                     self.CombatSubsystem.FireSpellProjectile(
                         spell.ProjectileId,
                         origin,
@@ -220,7 +216,7 @@ namespace OneBitRob.Tools
                 case SpellKind.EffectOverTimeTarget:
                 {
                     if (!target || !target.Health) { Debug.LogWarning("[UnitCombatTester] Need a valid target with Health."); break; }
-                    float amt = Mathf.Max(0f, spell.Amount);
+                    float amt = Mathf.Max(0f, spell.TickAmount);
                     bool isHot = spell.EffectType == SpellEffectType.Positive;
 
                     if (!SimulateOverTimeInSandbox)
@@ -244,17 +240,19 @@ namespace OneBitRob.Tools
                 case SpellKind.EffectOverTimeArea:
                 {
                     Vector3 center = target ? target.transform.position : transform.position + transform.forward * Mathf.Min(spell.Range, 6f);
-                    float radius = Mathf.Max(0.1f, spell.AreaRadius);
-                    float amt = Mathf.Max(0f, spell.Amount);
+                    float radius = Mathf.Max(0.1f, spell.Range); // Range = area radius for AoE spells
+                    float amt = Mathf.Max(0f, spell.TickAmount);
                     bool isHot = spell.EffectType == SpellEffectType.Positive;
+
+                    int layer = GetLayerMaskForEffect(self, isHot);
 
                     if (!SimulateOverTimeInSandbox)
                     {
-                        ApplyAreaTick(center, radius, amt, isHot, spell.TargetLayerMask.value != 0 ? spell.TargetLayerMask.value : ~0);
+                        ApplyAreaTick(center, radius, amt, isHot, layer);
                     }
                     else
                     {
-                        StartCoroutine(CoTicksArea(center, radius, amt, spell.TickInterval, spell.Duration, isHot, spell.TargetLayerMask.value != 0 ? spell.TargetLayerMask.value : ~0));
+                        StartCoroutine(CoTicksArea(center, radius, amt, spell.TickInterval, spell.Duration, isHot, layer));
                     }
 #if UNITY_EDITOR
                     if (DrawGizmos) DrawDisc(center, radius, new Color(0.2f, 1f, 0.2f, 0.75f), 1.5f);
@@ -269,7 +267,7 @@ namespace OneBitRob.Tools
                     float hopRadius = Mathf.Max(0.1f, spell.ChainRadius);
                     float delay = Mathf.Max(0f, spell.ChainPerJumpDelay);
                     bool heal = spell.EffectType == SpellEffectType.Positive;
-                    float amt = Mathf.Max(0f, spell.Amount);
+                    float amt = Mathf.Max(0f, spell.EffectAmount);
                     StartCoroutine(CoChain(target, hops, hopRadius, delay, heal, amt));
                     break;
                 }
@@ -279,12 +277,9 @@ namespace OneBitRob.Tools
                     Debug.Log("[UnitCombatTester] Summon/Other: test in main ECS scene (bridge handles spawning).");
                     break;
             }
-
-            // ANIMATION: Fire
-            self.CombatSubsystem?.PlaySpellFire(spell.animations);
         }
 
-        // ───────────────────────────────────────────────────────────── helpers (unchanged core)
+        // ───────────────────────────────────────────────────────────── helpers
         static void ComputeRangedMuzzle(UnitBrain brain, out Vector3 origin, out Vector3 forward)
         {
             var t = brain.transform;
@@ -304,6 +299,30 @@ namespace OneBitRob.Tools
                    + t.right   * muzzleLocal.x
                    + t.up      * muzzleLocal.y
                    + t.forward * muzzleLocal.z;
+        }
+
+        static void ComputeSpellMuzzle(UnitBrain brain, SpellDefinition spell, out Vector3 origin, out Vector3 forward)
+        {
+            var t = brain.transform;
+            forward = t.forward;
+
+            float muzzleForward = Mathf.Max(0f, spell ? spell.MuzzleForward : 0.6f);
+            Vector3 muzzleLocal = spell ? spell.MuzzleLocalOffset : Vector3.zero;
+
+            origin = t.position
+                   + t.forward * muzzleForward
+                   + t.right   * muzzleLocal.x
+                   + t.up      * muzzleLocal.y
+                   + t.forward * muzzleLocal.z;
+        }
+
+        static int GetLayerMaskForEffect(UnitBrain caster, bool isPositive)
+        {
+            bool selfIsEnemy = caster && caster.UnitDefinition && caster.UnitDefinition.isEnemy;
+            int layer = isPositive
+                ? (selfIsEnemy ? GameLayers.EnemyDamageableLayer : GameLayers.AllyDamageableLayer)  // heal allies
+                : (selfIsEnemy ? GameLayers.AllyDamageableLayer  : GameLayers.EnemyDamageableLayer); // damage enemies
+            return 1 << layer;
         }
 
         void RunMeleeHitMono(UnitBrain attacker, Vector3 origin, Vector3 fwd, float range, float halfAngleRad, float damage, float invuln, int layerMask, int maxTargets)
@@ -510,10 +529,10 @@ namespace OneBitRob.Tools
             Gizmos.DrawSphere(origin, 0.05f);
             Gizmos.DrawRay(origin, rfwd * 0.75f);
 
-            // Spell AoE preview
+            // Spell AoE preview (Range used as AoE radius in simplified model)
             if (SpellToTest && (SpellToTest.Kind == SpellKind.EffectOverTimeArea))
             {
-                float r = Mathf.Max(0.1f, SpellToTest.AreaRadius);
+                float r = Mathf.Max(0.1f, SpellToTest.Range);
                 UnityEditor.Handles.color = new Color(0.2f, 1f, 0.2f, 0.4f);
                 UnityEditor.Handles.DrawWireDisc(transform.position + transform.forward * Mathf.Min(SpellToTest.Range, 6f), Vector3.up, r);
             }

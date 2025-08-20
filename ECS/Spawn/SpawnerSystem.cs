@@ -1,20 +1,15 @@
-﻿// FILE: OneBitRob/ECS/SpawnerSystem.cs
-// CHANGES:
-// - Null-safe: units may have no spells or null entries.
-// - Build new SpellConfig from SpellDefinition.
-// - Register projectile/vfx/summon ids in SpellVisualRegistry.
+﻿using System.Collections.Generic;
+using GPUInstancerPro.PrefabModule;
+using OneBitRob.ECS.GPUI;
+using Opsive.BehaviorDesigner.Runtime;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
-using UnityEngine;
-using System.Collections.Generic;
-using GPUInstancerPro.PrefabModule;
-using OneBitRob; // weapon/spell SOs + enums
-using OneBitRob.AI;
-using OneBitRob.Constants;
-using OneBitRob.ECS.GPUI;
-using Opsive.BehaviorDesigner.Runtime;
 using Unity.Transforms;
+using UnityEngine;
+using static Unity.Mathematics.math;
+using float3 = Unity.Mathematics.float3;
+using quaternion = Unity.Mathematics.quaternion;
 
 namespace OneBitRob.ECS
 {
@@ -60,9 +55,8 @@ namespace OneBitRob.ECS
                 }
             }
 
-            foreach (var pos in allySpawnCenter) SpawnGroup(ref state, data.EntityPrefab, data.AllyPrefabs, data.UnitsSpawnCount, pos, data, GameConstants.ALLY_FACTION);
-
-            foreach (var pos in enemySpawnCenter) SpawnGroup(ref state, data.EntityPrefab, data.EnemyPrefabs, data.UnitsSpawnCount, pos, data, GameConstants.ENEMY_FACTION);
+            foreach (var pos in allySpawnCenter) SpawnGroup(ref state, data.EntityPrefab, data.AllyPrefabs, data.UnitsSpawnCount, pos, data, Constants.GameConstants.ALLY_FACTION);
+            foreach (var pos in enemySpawnCenter) SpawnGroup(ref state, data.EntityPrefab, data.EnemyPrefabs, data.UnitsSpawnCount, pos, data, Constants.GameConstants.ENEMY_FACTION);
 
             EnigmaLogger.Log("Spawn Round Completed. Enabling Behaviour Trees", "INFO");
             BehaviorTree.EnableBakedBehaviorTreeSystem(World.DefaultGameObjectInjectionWorld);
@@ -100,14 +94,14 @@ namespace OneBitRob.ECS
 
                     GPUIPrefabAPI.AddPrefabInstanceImmediate(gpuiManager, gpui);
 
-                    var unitBrainMono = go.GetComponent<UnitBrain>();
+                    var unitBrainMono = go.GetComponent<AI.UnitBrain>();
                     unitBrainMono.SetEntity(e); // registers in UnitBrainRegistry
 
                     state.EntityManager.AddComponent(e, ComponentType.ReadOnly<AgentTag>());
                     state.EntityManager.AddComponentData(e, new SpatialHashComponents.SpatialHashTarget { Faction = faction });
 
-                    if (faction == GameConstants.ALLY_FACTION)      state.EntityManager.AddComponent<AllyTag>(e);
-                    else if (faction == GameConstants.ENEMY_FACTION) state.EntityManager.AddComponent<EnemyTag>(e);
+                    if (faction == Constants.GameConstants.ALLY_FACTION)      state.EntityManager.AddComponent<AllyTag>(e);
+                    else if (faction == Constants.GameConstants.ENEMY_FACTION) state.EntityManager.AddComponent<EnemyTag>(e);
 
                     state.EntityManager.AddComponentData(e, new Target { Value = Entity.Null });
 
@@ -126,25 +120,28 @@ namespace OneBitRob.ECS
                     state.EntityManager.AddComponentData(e, new CombatStyle { Value = style });
 
                     state.EntityManager.AddComponentData(e, new SpellState { CanCast = 1, Ready = 1 });
-
                     state.EntityManager.AddComponentData(e, new AttackRequest { Target = Entity.Null, HasValue = 0 });
                     state.EntityManager.AddComponentData(e, new AttackCooldown { NextTime = 0f });
                     state.EntityManager.AddComponentData(e, new AttackWindup { Active = 0, ReleaseTime = 0f });
-                    state.EntityManager.AddComponentData(
-                        e, new CastRequest { Kind = CastKind.None, Target = Entity.Null, AoEPosition = float3.zero, HasValue = 0 });
+                    state.EntityManager.AddComponentData(e, new CastRequest { Kind = CastKind.None, Target = Entity.Null, AoEPosition = float3.zero, HasValue = 0 });
 
                     // ─────────────────────────────────────────────────────────────
-                    // Spells (null-safe)
+                    // Spells (null-safe) – uses ONLY the first spell just like before
                     var spells = unitBrainMono.UnitDefinition != null ? unitBrainMono.UnitDefinition.unitSpells : null;
                     var hasSpell = spells != null && spells.Count > 0 && spells[0] != null;
                     if (hasSpell)
                     {
                         var spell = spells[0];
 
-                        int projHash  = SpellVisualRegistry.RegisterProjectile(spell.ProjectileId);
-                        int vfxHash   = SpellVisualRegistry.RegisterVfx(spell.EffectVfxId);
-                        int areaHash  = SpellVisualRegistry.RegisterVfx(spell.AreaVfxId);
-                        int summonHash = SpellVisualRegistry.RegisterSummon(spell.SummonPrefab);
+                        int projHash    = SpellVisualRegistry.RegisterProjectile(spell.ProjectileId);
+                        int vfxHash     = SpellVisualRegistry.RegisterVfx(spell.EffectVfxId);
+                        int areaVfxHash = SpellVisualRegistry.RegisterVfx(spell.AreaVfxId);
+                        int summonHash  = SpellVisualRegistry.RegisterSummon(spell.SummonPrefab);
+
+                        // Map simplified authoring → ECS config
+                        float amount = (spell.Kind == SpellKind.EffectOverTimeArea || spell.Kind == SpellKind.EffectOverTimeTarget)
+                            ? spell.TickAmount
+                            : spell.EffectAmount;
 
                         state.EntityManager.AddComponentData(e, new SpellConfig
                         {
@@ -152,28 +149,30 @@ namespace OneBitRob.ECS
                             EffectType         = spell.EffectType,
                             AcquireMode        = spell.AcquireMode,
 
-                            CastTime           = spell.CastTime,
+                            CastTime           = spell.FireDelaySeconds,  // Fire Delay after animation trigger
                             Cooldown           = spell.Cooldown,
                             Range              = spell.Range,
-                            RequiresLineOfSight= (byte)(spell.RequiresLineOfSight ? 1 : 0),
-                            TargetLayerMask    = spell.TargetLayerMask.value,
+                            RequiresLineOfSight= 0,     // auto
+                            TargetLayerMask    = 0,     // auto from faction
 
-                            RequireFacing      = (byte)(spell.RequireFacing ? 1 : 0),
-                            FaceToleranceDeg   = spell.FaceToleranceDegrees,
-                            MaxExtraFaceDelay  = spell.MaxExtraFacingDelay,
+                            RequireFacing      = 0,     // disabled gate
+                            FaceToleranceDeg   = 0f,
+                            MaxExtraFaceDelay  = 0f,
 
-                            Amount             = spell.Amount,
+                            Amount             = amount,
 
                             ProjectileSpeed    = spell.ProjectileSpeed,
                             ProjectileMaxDistance = spell.ProjectileMaxDistance,
                             ProjectileRadius   = spell.ProjectileRadius,
                             ProjectileIdHash   = projHash,
+                            MuzzleForward      = spell.MuzzleForward,
+                            MuzzleLocalOffset  = new float3(spell.MuzzleLocalOffset.x, spell.MuzzleLocalOffset.y, spell.MuzzleLocalOffset.z),
 
-                            AreaRadius         = spell.AreaRadius,
+                            AreaRadius         = spell.Kind == SpellKind.EffectOverTimeArea ? spell.Range : 0f,
                             Duration           = spell.Duration,
                             TickInterval       = spell.TickInterval,
                             EffectVfxIdHash    = vfxHash,
-                            AreaVfxIdHash      = areaHash,
+                            AreaVfxIdHash      = areaVfxHash,
 
                             ChainMaxTargets    = spell.ChainMaxTargets,
                             ChainRadius        = spell.ChainRadius,
@@ -185,12 +184,6 @@ namespace OneBitRob.ECS
                         state.EntityManager.AddComponentData(e, new SpellDecisionRequest { HasValue = 0 });
                         state.EntityManager.AddComponentData(e, new SpellWindup { Active = 0, ReleaseTime = 0f });
                         state.EntityManager.AddComponentData(e, new SpellCooldown { NextTime = 0f });
-
-                        // Pre-register summon id hash on the entity via a tag request when casting
-                        if (spell.Kind == SpellKind.Summon && summonHash != 0)
-                        {
-                            // nothing to add now; execution will create SummonRequest with prefab hash
-                        }
                     }
 
                     state.EntityManager.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
@@ -207,9 +200,9 @@ namespace OneBitRob.ECS
         private Vector3 GetRandomPositionInArea(Vector3 from, Vector3 to, Unity.Mathematics.Random random)
         {
             return new Vector3(
-                random.NextFloat(math.min(from.x, to.x), math.max(from.x, to.x)),
-                random.NextFloat(math.min(from.y, to.y), math.max(from.y, to.y)),
-                random.NextFloat(math.min(from.z, to.z), math.max(from.z, to.z))
+                random.NextFloat(min(from.x, to.x), max(from.x, to.x)),
+                random.NextFloat(min(from.y, to.y), max(from.y, to.y)),
+                random.NextFloat(min(from.z, to.z), max(from.z, to.z))
             );
         }
     }
