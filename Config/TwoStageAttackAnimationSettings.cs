@@ -1,10 +1,11 @@
-﻿using System.Collections.Generic;
+﻿// Runtime/Combat/TwoStageAttackAnimationProfile.cs
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace OneBitRob
 {
-    [CreateAssetMenu(menuName = "SO/Combat/Two-Stage Attack Animation Set")]
-    public class TwoStageAttackAnimationSet : ScriptableObject
+    [CreateAssetMenu(menuName = "TactForge/Config/Profiles/Two-Stage Attack Animation Profile", fileName = "TwoStageAttackAnimationProfile")]
+    public class TwoStageAttackAnimationSettings : ScriptableObject
     {
         [Header("Prepare (windup)")]
         public AttackAnimationSelect prepareMode = AttackAnimationSelect.Sequential;

@@ -295,10 +295,14 @@ namespace OneBitRob.EnigmaEngine
 
             InterruptiblesDamageOverTimeCoroutine damageOverTime = new InterruptiblesDamageOverTimeCoroutine();
             damageOverTime.EnigmaDamageOverTimeType = enigmaDamageType;
-            damageOverTime.DamageOverTimeCoroutine = StartCoroutine(DamageOverTimeCo(damage, instigator,
-                flickerDuration,
-                invincibilityDuration, damageDirection, typedDamages, amountOfRepeats, durationBetweenRepeats,
-                interruptible));
+            damageOverTime.DamageOverTimeCoroutine = StartCoroutine(
+                DamageOverTimeCo(
+                    damage, instigator,
+                    flickerDuration,
+                    invincibilityDuration, damageDirection, typedDamages, amountOfRepeats, durationBetweenRepeats,
+                    interruptible
+                )
+            );
             _damageOverTimeCoroutines.Add(damageOverTime);
         }
 
@@ -353,15 +357,19 @@ namespace OneBitRob.EnigmaEngine
                         if (targetEnigmaDamageResistanceProcessor.isActiveAndEnabled)
                         {
                             bool checkResistance =
-                                targetEnigmaDamageResistanceProcessor.CheckPreventCharacterConditionChange(typedDamage
-                                    .AssociatedDamageType);
+                                targetEnigmaDamageResistanceProcessor.CheckPreventCharacterConditionChange(
+                                    typedDamage
+                                        .AssociatedDamageType
+                                );
                             if (checkResistance) { continue; }
                         }
                     }
 
-                    _character.ChangeCharacterConditionTemporarily(typedDamage.ForcedCondition,
+                    _character.ChangeCharacterConditionTemporarily(
+                        typedDamage.ForcedCondition,
                         typedDamage.ForcedConditionDuration, typedDamage.ResetControllerForces,
-                        typedDamage.DisableGravity);
+                        typedDamage.DisableGravity
+                    );
                 }
             }
         }
@@ -379,14 +387,18 @@ namespace OneBitRob.EnigmaEngine
                         if (targetEnigmaDamageResistanceProcessor.isActiveAndEnabled)
                         {
                             bool checkResistance =
-                                targetEnigmaDamageResistanceProcessor.CheckPreventMovementModifier(typedDamage
-                                    .AssociatedDamageType);
+                                targetEnigmaDamageResistanceProcessor.CheckPreventMovementModifier(
+                                    typedDamage
+                                        .AssociatedDamageType
+                                );
                             if (checkResistance) { continue; }
                         }
                     }
 
-                    _characterMovement?.ApplyMovementMultiplier(typedDamage.MovementMultiplier,
-                        typedDamage.MovementMultiplierDuration);
+                    _characterMovement?.ApplyMovementMultiplier(
+                        typedDamage.MovementMultiplier,
+                        typedDamage.MovementMultiplierDuration
+                    );
                 }
             }
         }
@@ -429,7 +441,6 @@ namespace OneBitRob.EnigmaEngine
             }
 
             SetHealth(0);
-
             StopAllDamageOverTime();
             DamageDisabled();
 
@@ -447,9 +458,9 @@ namespace OneBitRob.EnigmaEngine
 
                 if (DisableChildCollisionsOnDeath)
                 {
-                    foreach (Collider2D collider in this.gameObject.GetComponentsInChildren<Collider2D>()) { collider.enabled = false; }
+                    foreach (Collider2D collider in this.gameObject.GetComponentsInChildren<Collider2D>()) collider.enabled = false;
 
-                    foreach (Collider collider in this.gameObject.GetComponentsInChildren<Collider>()) { collider.enabled = false; }
+                    foreach (Collider collider in this.gameObject.GetComponentsInChildren<Collider>()) collider.enabled = false;
                 }
             }
 
@@ -468,17 +479,9 @@ namespace OneBitRob.EnigmaEngine
 
             if (DisableModelOnDeath && (Model != null)) { Model.SetActive(false); }
 
-            UnitBrain unitBrain = GetComponent<UnitBrain>();
-            if (unitBrain != null)
-            {
-                var world = World.DefaultGameObjectInjectionWorld;
-                var entityManager = world.EntityManager;
-                var entity = unitBrain.GetEntity();
-                entityManager.AddComponent<DestroyEntityTag>(entity);
-                entityManager.SetComponentEnabled<DestroyEntityTag>(entity, true);
-            }
+            // ❗ DO NOT perform ECS structural changes here. Sync system will tag the entity.
 
-            DestroyObject(); // Assuming you've removed the Destroy(toDestroy) line
+            DestroyObject();
         }
 
         public virtual void Revive()
@@ -525,12 +528,9 @@ namespace OneBitRob.EnigmaEngine
 
         protected virtual void DestroyObject()
         {
-            if (_healthBar != null)
-            {
-                _healthBar.DestroyBar();
-            }
-        //    GameObject toDestroy = (_character != null) ? _character.gameObject : gameObject;
-           // Destroy(toDestroy);
+            if (_healthBar != null) { _healthBar.DestroyBar(); }
+            //    GameObject toDestroy = (_character != null) ? _character.gameObject : gameObject;
+            // Destroy(toDestroy);
         }
 
         public virtual void SetHealth(float newValue)

@@ -1,4 +1,4 @@
-// Runtime/AI/Brain/UnitBrain.cs
+// FILE: Assets/PROJECT/Scripts/Runtime/AI/Brain/UnitBrain.cs
 using System.Collections.Generic;
 using OneBitRob.Config;
 using OneBitRob.EnigmaEngine;
@@ -25,6 +25,9 @@ namespace OneBitRob.AI
         private AgentAuthoring _navAgent;
 
         private LayerMask _targetMask;
+
+        [SerializeField, Tooltip("Set all child colliders to AllyDamageable/EnemyDamageable at Awake().")]
+        private bool autoAssignDamageableLayer = true;
 
         public GameObject CurrentTarget { get; set; }
         public Vector3 CurrentTargetPosition { get; private set; }
@@ -76,6 +79,9 @@ namespace OneBitRob.AI
 
             CacheLayerMasks();
 
+            if (autoAssignDamageableLayer)
+                ApplyDamageableLayerToChildren();
+
             if (HandleWeapon != null)
             {
                 HandleWeapon.SetTargetLayerMask(_targetMask);
@@ -96,6 +102,23 @@ namespace OneBitRob.AI
         private void CacheLayerMasks()
         {
             _targetMask = CombatLayers.TargetMaskFor(_isEnemy);
+        }
+
+        private void ApplyDamageableLayerToChildren()
+        {
+            int damageableLayer = CombatLayers.DamageableLayerFor(_isEnemy);
+            if (damageableLayer < 0 || damageableLayer > 31) return;
+
+            var cols = GetComponentsInChildren<Collider>(includeInactive: true);
+            for (int i = 0; i < cols.Length; i++)
+            {
+                var c = cols[i];
+                if (!c) continue;
+                c.gameObject.layer = damageableLayer;
+            }
+
+            if (Character && Character.CharacterModel)
+                Character.CharacterModel.layer = damageableLayer;
         }
 
         public void Setup() { }

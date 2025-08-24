@@ -43,36 +43,36 @@ namespace OneBitRob.AI
             _character != null &&
             _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
 
-        public void PlayMeleeAttack(OneBitRob.AttackAnimationSet set)
+        public void PlayMeleeAttack(OneBitRob.AttackAnimationSettings settings)
         {
-            if (_anim == null || set == null || !set.HasEntries) return;
-            var param = set.SelectParameter(ref _nextMeleeIdx);
+            if (_anim == null || settings == null || !settings.HasEntries) return;
+            var param = settings.SelectParameter(ref _nextMeleeIdx);
             if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
         }
 
-        public void PlayRangedPrepare(TwoStageAttackAnimationSet set)
+        public void PlayRangedPrepare(TwoStageAttackAnimationSettings settings)
         {
-            if (_anim == null || set == null || !set.HasPrepare) return;
-            var param = set.SelectPrepare(ref _nextPrepareIdx);
+            if (_anim == null || settings == null || !settings.HasPrepare) return;
+            var param = settings.SelectPrepare(ref _nextPrepareIdx);
             if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
         }
 
-        public void PlayRangedFire(TwoStageAttackAnimationSet set)
+        public void PlayRangedFire(TwoStageAttackAnimationSettings settings)
         {
-            if (_anim == null || set == null || !set.HasFire) return;
-            var param = set.SelectFire(ref _nextFireIdx);
+            if (_anim == null || settings == null || !settings.HasFire) return;
+            var param = settings.SelectFire(ref _nextFireIdx);
             if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
         }
 
-        public void PlaySpell(OneBitRob.AttackAnimationSet set)
+        public void PlaySpell(OneBitRob.AttackAnimationSettings settings)
         {
-            if (_anim == null || set == null || !set.HasEntries) return;
-            var param = set.SelectParameter(ref _nextSpellIdx);
+            if (_anim == null || settings == null || !settings.HasEntries) return;
+            var param = settings.SelectParameter(ref _nextSpellIdx);
             if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
         }
 
-        public void PlaySpellPrepare(TwoStageAttackAnimationSet set) { }
-        public void PlaySpellFire   (TwoStageAttackAnimationSet set) { }
+        public void PlaySpellPrepare(TwoStageAttackAnimationSettings settings) { }
+        public void PlaySpellFire   (TwoStageAttackAnimationSettings settings) { }
 
 #if UNITY_EDITOR
         private bool AnimatorHasTrigger(string param)

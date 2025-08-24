@@ -1,27 +1,16 @@
-﻿// FILE: OneBitRob/AI/SpellDecisionSystem.cs
-// CHANGES:
-// - Drive selection by SpellKind & SpellAcquireMode.
-// - SingleTarget kinds: select entity. AoE kinds: select position.
-// - Always consume requests.
-// - FIX: renamed 'ents' variables to avoid conflicts.
-// - FIX: EffectOverTimeTarget and EffectOverTimeArea now actually produce CastRequests.
-// - FIX: DesiredDestination nudge safely adds component if missing.
-
+﻿using OneBitRob.ECS;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using OneBitRob;
-using OneBitRob.ECS;
-using UnityEngine;
 
 namespace OneBitRob.AI
 {
     [BurstCompile]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateBefore(typeof(CastSpellSystem))]
     [UpdateBefore(typeof(SpellExecutionSystem))]
-    [UpdateAfter(typeof(CastSpellSystem))]   
     public partial struct SpellDecisionSystem : ISystem
     {
         ComponentLookup<LocalTransform> _posRO;
@@ -47,8 +36,7 @@ namespace OneBitRob.AI
                         ComponentType.ReadOnly<SpellWindup>(),
                         ComponentType.ReadOnly<SpellCooldown>()
                     }
-                }
-            );
+                });
 
             state.RequireForUpdate(_q);
         }
@@ -59,9 +47,9 @@ namespace OneBitRob.AI
             _factRO.Update(ref state);
             _hpRO.Update(ref state);
 
-            var em = state.EntityManager;
-            var spellEntities = _q.ToEntityArray(Allocator.Temp);
+            var em  = state.EntityManager;
             var now = (float)SystemAPI.Time.ElapsedTime;
+            var spellEntities = _q.ToEntityArray(Allocator.Temp);
 
             for (int i = 0; i < spellEntities.Length; i++)
             {
@@ -81,23 +69,23 @@ namespace OneBitRob.AI
                     continue;
                 }
 
-                var cfg = em.GetComponentData<SpellConfig>(e);
+                var cfg  = em.GetComponentData<SpellConfig>(e);
                 var cast = em.GetComponentData<CastRequest>(e);
-                cast.HasValue = 0;
-                cast.Kind = CastKind.None;
-                cast.Target = Entity.Null;
+                cast.HasValue  = 0;
+                cast.Kind      = CastKind.None;
+                cast.Target    = Entity.Null;
                 cast.AoEPosition = float3.zero;
 
                 switch (cfg.Kind)
                 {
-                    // ───────────────────────────────────────────────── Single-target kinds
+                    // Single-target
                     case SpellKind.ProjectileLine:
                     case SpellKind.Chain:
                     {
                         var tgt = SelectSingleTarget(e, cfg);
                         if (tgt != Entity.Null)
                         {
-                            cast.Kind = CastKind.SingleTarget;
+                            cast.Kind   = CastKind.SingleTarget;
                             cast.Target = tgt;
                             cast.HasValue = 1;
                         }
@@ -106,20 +94,19 @@ namespace OneBitRob.AI
 
                     case SpellKind.EffectOverTimeTarget:
                     {
-                        // First, try to actually select a target to cast on
                         var tgt = SelectSingleTarget(e, cfg);
                         if (tgt != Entity.Null)
                         {
-                            cast.Kind = CastKind.SingleTarget;
+                            cast.Kind   = CastKind.SingleTarget;
                             cast.Target = tgt;
                             cast.HasValue = 1;
                         }
                         else
                         {
-                            // If we failed (common when out of range), nudge toward lowest-health ally when applicable
-                            if (cfg.AcquireMode == SpellAcquireMode.LowestHealthAlly)
+                            // nudge toward lowest-health ally if configured
+                            if (cfg.AcquireMode == SpellAcquireMode.LowestHealthAlly && _posRO.HasComponent(e))
                             {
-                                var approach = new LowestHealthAllyTargeting().GetTarget(self: e, in cfg, ref _posRO, ref _factRO, ref _hpRO);
+                                var approach = new LowestHealthAllyTargeting().GetTarget(e, in cfg, ref _posRO, ref _factRO, ref _hpRO);
                                 if (approach != Entity.Null && _posRO.HasComponent(approach))
                                 {
                                     var dd = new DesiredDestination { Position = _posRO[approach].Position, HasValue = 1 };
@@ -131,64 +118,58 @@ namespace OneBitRob.AI
                         break;
                     }
 
-                    // ───────────────────────────────────────────────── AoE kinds
+                    // AoE
                     case SpellKind.EffectOverTimeArea:
                     {
-                        // Try to choose an AoE point first
                         if (TrySelectAoE(e, cfg, out var point))
                         {
                             cast.Kind = CastKind.AreaOfEffect;
                             cast.AoEPosition = point;
                             cast.HasValue = 1;
                         }
-                        else
+                        else if (cfg.AcquireMode == SpellAcquireMode.DensestEnemyCluster && _posRO.HasComponent(e))
                         {
-                            // Else nudge toward densest enemy cluster
-                            if (cfg.AcquireMode == SpellAcquireMode.DensestEnemyCluster && _posRO.HasComponent(e))
+                            // simple nudge heuristic
+                            var selfPos = _posRO[e].Position;
+
+                            byte enemyFaction =
+                                (_factRO.HasComponent(e) && _factRO[e].Faction == OneBitRob.Constants.GameConstants.ENEMY_FACTION)
+                                    ? OneBitRob.Constants.GameConstants.ALLY_FACTION
+                                    : OneBitRob.Constants.GameConstants.ENEMY_FACTION;
+
+                            var wanted = default(FixedList128Bytes<byte>); wanted.Add(enemyFaction);
+
+                            using var candidates = new NativeList<Entity>(Allocator.Temp);
+                            OneBitRob.ECS.SpatialHashSearch.CollectInSphere(selfPos, cfg.Range * 1.5f, wanted, candidates, ref _posRO, ref _factRO);
+
+                            float3 best = selfPos;
+                            float bestCount = 0;
+                            float r2 = math.max(0.1f, cfg.AreaRadius) * 2f;
+
+                            for (int ci = 0; ci < candidates.Length; ci++)
                             {
-                                var selfPos = _posRO[e].Position;
+                                var cpos = _posRO[candidates[ci]].Position;
+                                int count = 0;
+                                for (int cj = 0; cj < candidates.Length; cj++)
+                                    if (math.distance(cpos, _posRO[candidates[cj]].Position) <= r2)
+                                        count++;
 
-                                byte enemyFaction =
-                                    (_factRO.HasComponent(e) && _factRO[e].Faction == OneBitRob.Constants.GameConstants.ENEMY_FACTION)
-                                        ? OneBitRob.Constants.GameConstants.ALLY_FACTION
-                                        : OneBitRob.Constants.GameConstants.ENEMY_FACTION;
-
-                                var wanted = default(FixedList128Bytes<byte>);
-                                wanted.Add(enemyFaction);
-
-                                using var candidates = new NativeList<Entity>(Allocator.Temp);
-                                OneBitRob.ECS.SpatialHashSearch.CollectInSphere(selfPos, cfg.Range * 1.5f, wanted, candidates, ref _posRO, ref _factRO);
-
-                                float3 best = selfPos;
-                                float bestCount = 0;
-                                float r2 = math.max(0.1f, cfg.AreaRadius) * 2f;
-
-                                for (int ci = 0; ci < candidates.Length; ci++)
+                                if (count > bestCount)
                                 {
-                                    var cpos = _posRO[candidates[ci]].Position;
-                                    int count = 0;
-                                    for (int cj = 0; cj < candidates.Length; cj++)
-                                        if (math.distance(cpos, _posRO[candidates[cj]].Position) <= r2)
-                                            count++;
-
-                                    if (count > bestCount)
-                                    {
-                                        bestCount = count;
-                                        best = cpos;
-                                    }
+                                    bestCount = count;
+                                    best = cpos;
                                 }
-
-                                var dd = new DesiredDestination { Position = best, HasValue = 1 };
-                                if (em.HasComponent<DesiredDestination>(e)) em.SetComponentData(e, dd);
-                                else em.AddComponentData(e, dd);
                             }
+
+                            var dd = new DesiredDestination { Position = best, HasValue = 1 };
+                            if (em.HasComponent<DesiredDestination>(e)) em.SetComponentData(e, dd);
+                            else em.AddComponentData(e, dd);
                         }
                         break;
                     }
 
                     case SpellKind.Summon:
                     {
-                        // Summon at self (simple baseline)
                         if (_posRO.HasComponent(e))
                         {
                             cast.Kind = CastKind.AreaOfEffect;
@@ -201,7 +182,7 @@ namespace OneBitRob.AI
 
                 em.SetComponentData(e, cast);
 
-                // Always consume the decision request this frame
+                // Always consume decision request
                 decide.HasValue = 0;
                 em.SetComponentData(e, decide);
             }
@@ -217,7 +198,7 @@ namespace OneBitRob.AI
                 case SpellAcquireMode.LowestHealthAlly:
                     return new LowestHealthAllyTargeting().GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
 
-                case SpellAcquireMode.DensestEnemyCluster: // fall through to closest for single-target
+                case SpellAcquireMode.DensestEnemyCluster: // fallthrough: use closest for single-target
                 case SpellAcquireMode.ClosestEnemy:
                 default:
                     return new ClosestEnemySpellTargeting().GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
@@ -246,7 +227,7 @@ namespace OneBitRob.AI
                     {
                         point = _posRO[self].Position;
                         return true;
-                    } // fallback
+                    }
 
                     point = default;
                     return false;

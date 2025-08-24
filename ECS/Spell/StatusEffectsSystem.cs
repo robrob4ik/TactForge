@@ -1,7 +1,9 @@
-﻿using Unity.Collections;
+﻿// FILE: Assets/PROJECT/Scripts/ECS/Spell/StatusEffectsSystem.cs
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
+using static Unity.Mathematics.math;
 
 namespace OneBitRob.ECS
 {
@@ -51,7 +53,7 @@ namespace OneBitRob.ECS
                             Amount   = shownAmount
                         });
                     }
-                    d.NextTick = now + math.max(0.05f, d.Interval);
+                    d.NextTick = now + max(0.05f, d.Interval);
                 }
 
                 dot.ValueRW = d;
@@ -104,15 +106,20 @@ namespace OneBitRob.ECS
                     int count = Physics.OverlapSphereNonAlloc(
                         (Vector3)a.Position, a.Radius, s_Cols, a.LayerMask, QueryTriggerInteraction.Collide);
 
-                    bool isHot = a.Positive != 0;
-                    float shownAmount = Mathf.Abs(a.AmountPerTick);
-
 #if UNITY_EDITOR
                     if (count == 0)
                     {
-                        Debug.LogWarning($"[Spells] DoTArea tick at {a.Position} (r={a.Radius}) hit 0 colliders. LayerMask={a.LayerMask}");
+                        string maskNames = "";
+                        for (int l = 0; l < 32; l++)
+                            if (((1 << l) & a.LayerMask) != 0)
+                                maskNames += (maskNames.Length > 0 ? "," : "") + LayerMask.LayerToName(l);
+                        Debug.Log($"[Spells] DoTArea tick at {a.Position} (r={a.Radius}) hit 0 colliders. LayerMask={a.LayerMask} ({maskNames})");
                     }
 #endif
+
+                    bool isHot = a.Positive != 0;
+                    float shownAmount = Mathf.Abs(a.AmountPerTick);
+
                     for (int i = 0; i < count; i++)
                     {
                         var col = s_Cols[i];
@@ -132,7 +139,7 @@ namespace OneBitRob.ECS
                         });
                     }
 
-                    a.NextTick = now + math.max(0.05f, a.Interval);
+                    a.NextTick = now + max(0.05f, a.Interval);
                 }
 
                 area.ValueRW = a;

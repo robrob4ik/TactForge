@@ -1,9 +1,9 @@
-﻿// FILE: OneBitRob/RangedWeaponDefinition.cs
+﻿// Runtime/Combat/RangedWeaponDefinition.cs
 using UnityEngine;
 
 namespace OneBitRob
 {
-    [CreateAssetMenu(menuName = "SO/Combat/Weapon (Ranged)")]
+    [CreateAssetMenu(menuName = "TactForge/Definition/Weapon (Ranged)", fileName = "RangedWeaponDefinition")]
     public class RangedWeaponDefinition : WeaponDefinition
     {
         [Header("Muzzle")]
@@ -21,7 +21,7 @@ namespace OneBitRob
         [Min(0f)] public float windupSeconds = 0.15f;
 
         [Header("Animations (Two-Stage)")]
-        public TwoStageAttackAnimationSet animations;
+        public TwoStageAttackAnimationSettings animations;
 
         [Header("Projectile Pool Key")]
         [Tooltip("Key used to choose a scene pool in ProjectilePools (e.g. 'arrow', 'mage_orb').")]

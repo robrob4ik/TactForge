@@ -1,5 +1,7 @@
-﻿using DamageNumbersPro;
+﻿// Runtime/FX/DamageNumbersManager.cs
+using DamageNumbersPro;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace OneBitRob.FX
 {
@@ -16,23 +18,25 @@ namespace OneBitRob.FX
 
     /// <summary>
     /// Tiny, predictable Damage Numbers bridge:
-    /// - Finds a camera when needed (override -> Camera.main -> any camera).
-    /// - If no camera exists, spawns anyway (skips distance cull).
-    /// - No scene events, no asset-scene references.
+    /// - Optional explicit camera (SetCamera). Falls back to MainCamera / any camera.
+    /// - No Resources / magic paths. Profile is injected via GameConfigInstaller.
+    /// - Safe if profile isn't set (logs once, ignores popups).
     /// </summary>
     [DefaultExecutionOrder(-10000)]
     public sealed class DamageNumbersManager : MonoBehaviour
     {
         private static DamageNumbersManager _instance;
 
-        [SerializeField] private DamageNumbersProfile _profile;
+        [FormerlySerializedAs("settings")]
+        [FormerlySerializedAs("_profile")]
+        [SerializeField] private DamageNumbersSettings profile;
 
         private static Camera _overrideCamera;  // optional: set from your bootstrap
         private Camera _cachedCamera;           // last good camera
         private bool _warnedNoProfile;
         private bool _warnedNoCamera;
 
-        // ───────────────────────────────────────────────────────── Bootstrap
+        // Ensure a singleton object exists early (no prewarm here).
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap() => Ensure();
 
@@ -43,11 +47,6 @@ namespace OneBitRob.FX
             var go = new GameObject("[DamageNumbersManager]");
             DontDestroyOnLoad(go);
             _instance = go.AddComponent<DamageNumbersManager>();
-
-            if (_instance._profile == null)
-                _instance._profile = Resources.Load<DamageNumbersProfile>("DamageNumbersProfile");
-
-            _instance.TryPrewarm();
             return _instance;
         }
 
@@ -56,7 +55,8 @@ namespace OneBitRob.FX
             if (_instance && _instance != this) { Destroy(gameObject); return; }
             _instance = this;
             DontDestroyOnLoad(gameObject);
-            TryPrewarm();
+            // NOTE: Prewarm happens when a profile is injected (SetProfile) or if one was serialized already.
+            if (profile) TryPrewarm();
         }
 
         // Optional: let a system pick the camera explicitly (e.g., your camera bootstrap)
@@ -67,64 +67,74 @@ namespace OneBitRob.FX
             mgr._cachedCamera = cam;
         }
 
+        // Inject the profile (called by GameConfigInstaller). Triggers prewarm once.
+        public static void SetProfile(DamageNumbersSettings p)
+        {
+            var mgr = Ensure();
+            mgr.profile = p;
+            if (mgr.profile) mgr.TryPrewarm();
+        }
+
         // Public entry point
         public static void Popup(in DamageNumbersParams p) => Ensure().PopupInternal(in p);
 
         // ───────────────────────────────────────────────────────── Prewarm
         private void TryPrewarm()
         {
-            if (_profile == null)
+            if (profile == null)
             {
 #if UNITY_EDITOR
                 if (!_warnedNoProfile)
-                    Debug.LogWarning("[DamageNumbersManager] No profile assigned. Create one via Create ➜ SO/FX/Damage Numbers Profile, or put it at Resources/DamageNumbersProfile.");
+                    Debug.LogWarning("[DamageNumbersManager] No DamageNumbersProfile assigned. " +
+                                     "Assign via GameConfigInstaller or call DamageNumbersManager.SetProfile(profile).");
 #endif
                 _warnedNoProfile = true;
                 return;
             }
 
-            if (!_profile.prewarmOnStart) return;
+            if (!profile.prewarmOnStart) return;
 
             void Prewarm(DamageNumber dn)
             {
                 if (!dn) return;
                 dn.PrewarmPool();
-                for (int i = 0; i < _profile.extraPrewarmCalls; i++) dn.PrewarmPool();
+                for (int i = 0; i < profile.extraPrewarmCalls; i++) dn.PrewarmPool();
             }
 
-            Prewarm(_profile.damagePrefab);
-            Prewarm(_profile.critPrefab);
-            Prewarm(_profile.healPrefab);
-            Prewarm(_profile.dotPrefab);
-            Prewarm(_profile.hotPrefab);
-            Prewarm(_profile.blockPrefab);
-            Prewarm(_profile.missPrefab);
+            Prewarm(profile.damagePrefab);
+            Prewarm(profile.critPrefab);
+            Prewarm(profile.healPrefab);
+            Prewarm(profile.dotPrefab);
+            Prewarm(profile.hotPrefab);
+            Prewarm(profile.blockPrefab);
+            Prewarm(profile.missPrefab);
         }
 
         // ───────────────────────────────────────────────────────── Spawn
         private void PopupInternal(in DamageNumbersParams p)
         {
-            if (_profile == null)
+            if (profile == null)
             {
 #if UNITY_EDITOR
                 if (!_warnedNoProfile)
-                    Debug.LogWarning("[DamageNumbersManager] No profile set — ignoring popup.");
+                    Debug.LogWarning("[DamageNumbersManager] No DamageNumbersProfile set — ignoring popup. " +
+                                     "Assign via GameConfigInstaller or DamageNumbersManager.SetProfile(profile).");
 #endif
                 _warnedNoProfile = true;
                 return;
             }
 
             float abs = Mathf.Abs(p.Amount);
-            if (abs < _profile.minAbsoluteValue) return;
+            if (abs < profile.minAbsoluteValue) return;
 
             // Distance culling (best-effort). If no camera, don't cull (spawn anyway).
-            if (_profile.cullByCameraDistance)
+            if (profile.cullByCameraDistance)
             {
                 var pos = p.Follow ? p.Follow.position : p.Position;
                 var cam = GetCullCamera();
                 if (cam)
                 {
-                    float maxSq = _profile.maxSpawnDistance * _profile.maxSpawnDistance;
+                    float maxSq = profile.maxSpawnDistance * profile.maxSpawnDistance;
                     if ((cam.transform.position - pos).sqrMagnitude > maxSq)
                         return; // too far
                 }
@@ -134,19 +144,19 @@ namespace OneBitRob.FX
             if (!prefab)
             {
 #if UNITY_EDITOR
-                if (_profile.logMissingPrefabWarnings)
+                if (profile.logMissingPrefabWarnings)
                     Debug.LogWarning($"[DamageNumbersManager] Missing prefab for {p.Kind}.");
 #endif
                 return;
             }
 
             Vector3 spawnPos = p.Follow
-                ? p.Follow.position + Vector3.up * _profile.yOffset
-                : p.Position + Vector3.up * _profile.yOffset;
+                ? p.Follow.position + Vector3.up * profile.yOffset
+                : p.Position + Vector3.up * profile.yOffset;
 
             var dn = prefab.Spawn(spawnPos, abs);
 
-            if (_profile.followTargets && p.Follow) dn.SetFollowedTarget(p.Follow);
+            if (profile.followTargets && p.Follow) dn.SetFollowedTarget(p.Follow);
             if (p.OverrideColor.HasValue) dn.SetColor(p.OverrideColor.Value);
         }
 
@@ -154,14 +164,14 @@ namespace OneBitRob.FX
         {
             return kind switch
             {
-                DamagePopupKind.Damage     => _profile.damagePrefab ? _profile.damagePrefab : _profile.critPrefab,
-                DamagePopupKind.CritDamage => _profile.critPrefab   ? _profile.critPrefab   : _profile.damagePrefab,
-                DamagePopupKind.Heal       => _profile.healPrefab   ? _profile.healPrefab   : _profile.hotPrefab,
-                DamagePopupKind.Dot        => _profile.dotPrefab    ? _profile.dotPrefab    : _profile.damagePrefab,
-                DamagePopupKind.Hot        => _profile.hotPrefab    ? _profile.hotPrefab    : _profile.healPrefab,
-                DamagePopupKind.Block      => _profile.blockPrefab  ? _profile.blockPrefab  : _profile.damagePrefab,
-                DamagePopupKind.Miss       => _profile.missPrefab   ? _profile.missPrefab   : _profile.damagePrefab,
-                _                          => _profile.damagePrefab
+                DamagePopupKind.Damage     => profile.damagePrefab ? profile.damagePrefab : profile.critPrefab,
+                DamagePopupKind.CritDamage => profile.critPrefab   ? profile.critPrefab   : profile.damagePrefab,
+                DamagePopupKind.Heal       => profile.healPrefab   ? profile.healPrefab   : profile.hotPrefab,
+                DamagePopupKind.Dot        => profile.dotPrefab    ? profile.dotPrefab    : profile.damagePrefab,
+                DamagePopupKind.Hot        => profile.hotPrefab    ? profile.hotPrefab    : profile.healPrefab,
+                DamagePopupKind.Block      => profile.blockPrefab  ? profile.blockPrefab  : profile.damagePrefab,
+                DamagePopupKind.Miss       => profile.missPrefab   ? profile.missPrefab   : profile.damagePrefab,
+                _                          => profile.damagePrefab
             };
         }
 

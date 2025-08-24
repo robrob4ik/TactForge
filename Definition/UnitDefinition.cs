@@ -1,3 +1,4 @@
+// Runtime/Units/UnitDefinition.cs
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -12,7 +13,7 @@ namespace OneBitRob
     
     public enum AttackAnimationSelect { Random, Sequential }
 
-    [CreateAssetMenu(menuName = "SO/Units/Unit Definition")]
+    [CreateAssetMenu(menuName = "TactForge/Definition/Unit", fileName = "UnitDefinition")]
     public class UnitDefinition : ScriptableObject
     {
         [Header("Visual & Prefab")]

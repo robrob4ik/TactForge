@@ -1,14 +1,11 @@
-﻿// Runtime/ECS/Spell/SpellMovementLockSystem.cs
-
-using OneBitRob.AI;
+﻿using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
 
-namespace OneBitRob.ECS
+namespace OneBitRob.AI
 {
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     [UpdateAfter(typeof(OneBitRob.AI.SpellDecisionSystem))]
-    [UpdateBefore(typeof(OneBitRob.Bridge.MonoBridgeSystem))]
     public partial struct SpellMovementLockSystem : ISystem
     {
         private EntityQuery _q;
@@ -18,7 +15,7 @@ namespace OneBitRob.ECS
             _q = state.GetEntityQuery(
                 ComponentType.ReadOnly<SpellWindup>(),
                 ComponentType.ReadWrite<MovementLock>());
-            // We also want entities that *don’t* have MovementLock yet:
+
             state.RequireForUpdate(state.GetEntityQuery(new EntityQueryDesc
             {
                 Any = new[] { ComponentType.ReadOnly<SpellWindup>() }

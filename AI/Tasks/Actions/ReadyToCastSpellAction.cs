@@ -19,9 +19,8 @@ namespace OneBitRob.AI
     public struct ReadyToCastSpellComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }
     public struct ReadyToCastSpellTag       : IComponentData, IEnableableComponent { }
 
-    [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateBefore(typeof(SpellDecisionSystem))] // <-- ensure decision happens the same frame
+    [UpdateBefore(typeof(SpellDecisionSystem))] // <-- same frame, set decision request first
     public partial class ReadyToCastSpellSystem
         : TaskProcessorSystem<ReadyToCastSpellComponent, ReadyToCastSpellTag>
     {
@@ -32,7 +31,7 @@ namespace OneBitRob.AI
                 return TaskStatus.Failure;
 
             var req = em.GetComponentData<SpellDecisionRequest>(e);
-            req.HasValue = 1;                      // ask ECS to produce CastRequest now
+            req.HasValue = 1; // ask ECS to produce CastRequest now
             em.SetComponentData(e, req);
 
             return TaskStatus.Success;

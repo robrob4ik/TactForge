@@ -1,10 +1,13 @@
-﻿// CHANGED: masks, chain as runner, approach nudges
+﻿// FILE: Assets/PROJECT/Scripts/ECS/Spell/SpellExecutionSystem.cs
 
 using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
+using UnityEngine;
+using static Unity.Mathematics.math;
+using float3 = Unity.Mathematics.float3;
 
 namespace OneBitRob.AI
 {
@@ -52,7 +55,7 @@ namespace OneBitRob.AI
                 if (em.HasComponent<SpellCooldown>(e))
                 {
                     var cd = em.GetComponentData<SpellCooldown>(e);
-                    cd.NextTime = now + math.max(0f, cfg.Cooldown);
+                    cd.NextTime = now + max(0f, cfg.Cooldown);
                     ecb.SetComponent(e, cd);
                 }
 
@@ -75,7 +78,7 @@ namespace OneBitRob.AI
                 // Prepare windup
                 var w = em.HasComponent<SpellWindup>(e) ? em.GetComponentData<SpellWindup>(e) : default;
                 w.Active        = 1;
-                w.ReleaseTime   = (float)SystemAPI.Time.ElapsedTime + math.max(0f, cfg.CastTime);
+                w.ReleaseTime   = (float)SystemAPI.Time.ElapsedTime + max(0f, cfg.CastTime);
                 w.FacingDeadline = w.ReleaseTime;
 
                 float3 aimPos = float3.zero;
@@ -109,8 +112,6 @@ namespace OneBitRob.AI
                         break;
 
                     default:
-                        // No valid cast — small approach nudge for heal/AoE when OOR:
-                        // (handled in SpellDecisionSystem by setting DesiredDestination; kept here as no-op)
                         w.Active = 0;
                         break;
                 }
@@ -163,9 +164,9 @@ namespace OneBitRob.AI
             if (_posRO.HasComponent(e))
             {
                 var rot = _posRO[e].Rotation;
-                fwd   = math.normalizesafe(math.mul(rot, new float3(0,0,1)));
-                up    = math.normalizesafe(math.mul(rot, new float3(0,1,0)));
-                right = math.normalizesafe(math.mul(rot, new float3(1,0,0)));
+                fwd   = normalizesafe(mul(rot, new float3(0,0,1)));
+                up    = normalizesafe(mul(rot, new float3(0,1,0)));
+                right = normalizesafe(mul(rot, new float3(1,0,0)));
             }
 
             float3 aimPos = w.HasAimPoint != 0
@@ -177,12 +178,12 @@ namespace OneBitRob.AI
                 case SpellKind.ProjectileLine:
                 {
                     float3 origin = selfPos
-                        + fwd   * math.max(0f, cfg.MuzzleForward)
+                        + fwd   * max(0f, cfg.MuzzleForward)
                         + right * cfg.MuzzleLocalOffset.x
                         + up    * cfg.MuzzleLocalOffset.y
                         + fwd   * cfg.MuzzleLocalOffset.z;
 
-                    float3 dir = math.normalizesafe(aimPos - origin, fwd);
+                    float3 dir = normalizesafe(aimPos - origin, fwd);
                     dir.y = 0;
 
                     int mask = ~0;
@@ -195,13 +196,13 @@ namespace OneBitRob.AI
                     {
                         Origin      = origin,
                         Direction   = dir,
-                        Speed       = math.max(0.01f, cfg.ProjectileSpeed),
-                        Damage      = cfg.EffectType == SpellEffectType.Negative ? math.max(0f, cfg.Amount) : -math.max(0f, cfg.Amount),
-                        MaxDistance = math.max(0.1f, cfg.ProjectileMaxDistance),
-                        Radius      = math.max(0f, cfg.ProjectileRadius),
+                        Speed       = max(0.01f, cfg.ProjectileSpeed),
+                        Damage      = cfg.EffectType == SpellEffectType.Negative ? max(0f, cfg.Amount) : -max(0f, cfg.Amount),
+                        MaxDistance = max(0.1f, cfg.ProjectileMaxDistance),
+                        Radius      = max(0f, cfg.ProjectileRadius),
                         ProjectileIdHash = cfg.ProjectileIdHash,
                         LayerMask   = mask,
-                        Pierce      = 1, // line spells pierce by default
+                        Pierce      = 1,
                         HasValue    = 1
                     };
                     if (em.HasComponent<SpellProjectileSpawnRequest>(e)) ecb.SetComponent(e, req);
@@ -215,9 +216,9 @@ namespace OneBitRob.AI
                     var dot = new DotOnTarget
                     {
                         Target         = w.AimTarget,
-                        AmountPerTick  = math.max(0f, cfg.Amount),
-                        Interval       = math.max(0.05f, cfg.TickInterval),
-                        Remaining      = math.max(0f, cfg.Duration),
+                        AmountPerTick  = max(0f, cfg.Amount),
+                        Interval       = max(0.05f, cfg.TickInterval),
+                        Remaining      = max(0f, cfg.Duration),
                         NextTick       = 0f,
                         Positive       = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
                         EffectVfxIdHash= cfg.EffectVfxIdHash
@@ -235,13 +236,17 @@ namespace OneBitRob.AI
                             ? brain.GetFriendlyLayerMask().value
                             : brain.GetDamageableLayerMask().value;
 
+#if UNITY_EDITOR
+                    Debug.Log($"[Spells] DoTArea start: vfxHash={cfg.AreaVfxIdHash}, mask={mask}, pos={aimPos}, r={cfg.AreaRadius}, dur={cfg.Duration}");
+#endif
+
                     var area = new DoTArea
                     {
                         Position       = aimPos,
-                        Radius         = math.max(0f, cfg.AreaRadius),
-                        AmountPerTick  = math.max(0f, cfg.Amount),
-                        Interval       = math.max(0.05f, cfg.TickInterval),
-                        Remaining      = math.max(0f, cfg.Duration),
+                        Radius         = max(0f, cfg.AreaRadius),
+                        AmountPerTick  = max(0f, cfg.Amount),
+                        Interval       = max(0.05f, cfg.TickInterval),
+                        Remaining      = max(0f, cfg.Duration),
                         NextTick       = 0f,
                         Positive       = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
                         AreaVfxIdHash  = cfg.AreaVfxIdHash,
@@ -252,26 +257,24 @@ namespace OneBitRob.AI
                     break;
                 }
 
-             
                 case SpellKind.Chain:
                 {
-                    // Compute muzzle origin same as projectile line
                     float3 origin = selfPos
-                                    + fwd   * math.max(0f, cfg.MuzzleForward)
+                                    + fwd   * max(0f, cfg.MuzzleForward)
                                     + right * cfg.MuzzleLocalOffset.x
                                     + up    * cfg.MuzzleLocalOffset.y
                                     + fwd   * cfg.MuzzleLocalOffset.z;
 
                     var runner = new SpellChainRunner
                     {
-                        Remaining        = math.max(1, cfg.ChainMaxTargets),
-                        Radius           = math.max(0f, cfg.ChainRadius),
-                        JumpDelay        = math.max(0f, cfg.ChainJumpDelay),
-                        ProjectileSpeed  = math.max(0.01f, cfg.ProjectileSpeed),
-                        Amount           = math.max(0f, cfg.Amount),
+                        Remaining        = max(1, cfg.ChainMaxTargets),
+                        Radius           = max(0f, cfg.ChainRadius),
+                        JumpDelay        = max(0f, cfg.ChainJumpDelay),
+                        ProjectileSpeed  = max(0.01f, cfg.ProjectileSpeed),
+                        Amount           = max(0f, cfg.Amount),
                         Positive         = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
                         ProjectileIdHash = cfg.ProjectileIdHash,
-                        FromPos          = origin,    // ← muzzle origin
+                        FromPos          = origin,    // exact hop origin (includes height)
                         HasFromPos       = 1,
                         CurrentTarget    = w.AimTarget,
                         PreviousTarget   = Entity.Null,
@@ -299,7 +302,7 @@ namespace OneBitRob.AI
                         Position     = aimPos,
                         Count        = 1,
                         Faction      = _factRO.HasComponent(e) ? _factRO[e].Faction : (byte)0,
-                        HasValue     = (byte)(cfg.SummonPrefabHash != 0 ? 1 : 0)
+                        HasValue     = (cfg.SummonPrefabHash != 0 ? 1 : 0)
                     };
 
                     if (summon.HasValue != 0)

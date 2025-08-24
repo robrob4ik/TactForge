@@ -1,5 +1,4 @@
-﻿// FILE: OneBitRob/FX/SpellVfxPoolManager.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
 

@@ -1,4 +1,4 @@
-﻿// FILE: OneBitRob/SpellDefinition.cs
+﻿// Runtime/Spells/SpellDefinition.cs
 using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -28,7 +28,7 @@ namespace OneBitRob
         Negative = 1   // damage/debuff
     }
 
-    [CreateAssetMenu(menuName = "SO/Spells/Spell")]
+    [CreateAssetMenu(menuName = "TactForge/Definition/Spell", fileName = "SpellDefinition")]
     public class SpellDefinition : ScriptableObject
     {
         // ─────────────────────────────────────────────────────────── General
@@ -48,7 +48,7 @@ namespace OneBitRob
         public float Range = 12f;
 
         [FoldoutGroup("General"), LabelWidth(150), LabelText("Cast Animations")]
-        public AttackAnimationSet animations;
+        public AttackAnimationSettings animations;
 
         [FoldoutGroup("General"), LabelWidth(150), Min(0f), LabelText("Fire Delay (s)")]
         public float FireDelaySeconds = 0f;
@@ -138,16 +138,9 @@ namespace OneBitRob
         public Color DebugColor = new Color(0.8f, 0.2f, 1f, 0.5f);
 
         // ─────────────────────────────────────────────────────────── Advanced (hidden – auto)
-        [FoldoutGroup("Advanced"), HideInInspector]
-        public bool RequiresLineOfSight = false;
-
-        [FoldoutGroup("Advanced"), HideInInspector]
-        public bool RequireFacing = false;
-
-        [FoldoutGroup("Advanced"), HideInInspector]
-        public float FaceToleranceDegrees = 0f;
-
-        [FoldoutGroup("Advanced"), HideInInspector]
-        public float MaxExtraFacingDelay = 0f;
+        [FoldoutGroup("Advanced"), HideInInspector] public bool RequiresLineOfSight = false;
+        [FoldoutGroup("Advanced"), HideInInspector] public bool RequireFacing       = false;
+        [FoldoutGroup("Advanced"), HideInInspector] public float FaceToleranceDegrees = 0f;
+        [FoldoutGroup("Advanced"), HideInInspector] public float MaxExtraFacingDelay = 0f;
     }
 }

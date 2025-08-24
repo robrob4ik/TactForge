@@ -17,16 +17,20 @@ namespace OneBitRob.AI
     public class CastSpellAction
         : AbstractTaskAction<CastSpellComponent, CastSpellTag, CastSpellSystem>, IAction
     {
-        protected override CastSpellComponent CreateBufferElement(ushort runtimeIndex)
-            => new CastSpellComponent { Index = runtimeIndex };
+        protected override CastSpellComponent CreateBufferElement(ushort runtimeIndex) => new CastSpellComponent { Index = runtimeIndex };
     }
 
-    public struct CastSpellComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }
-    public struct CastSpellTag       : IComponentData, IEnableableComponent { }
+    public struct CastSpellComponent : IBufferElementData, ITaskCommand
+    {
+        public ushort Index { get; set; }
+    }
 
-    [DisableAutoCreation]
+    public struct CastSpellTag : IComponentData, IEnableableComponent
+    {
+    }
+
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellDecisionSystem))]   // decision ready…
+    [UpdateAfter(typeof(SpellDecisionSystem))] // decision ready…
     [UpdateBefore(typeof(SpellExecutionSystem))] // …before execution consumes it
     public partial class CastSpellSystem
         : TaskProcessorSystem<CastSpellComponent, CastSpellTag>
@@ -50,19 +54,16 @@ namespace OneBitRob.AI
             var em = EntityManager;
 
             // If we’re already mid‑cast, keep running until windup releases.
-            if (em.HasComponent<SpellWindup>(e) && em.GetComponentData<SpellWindup>(e).Active != 0)
-                return TaskStatus.Running;
+            if (em.HasComponent<SpellWindup>(e) && em.GetComponentData<SpellWindup>(e).Active != 0) return TaskStatus.Running;
 
-            if (!em.HasComponent<CastRequest>(e) || !em.HasComponent<SpellConfig>(e))
-                return TaskStatus.Failure;
+            if (!em.HasComponent<CastRequest>(e) || !em.HasComponent<SpellConfig>(e)) return TaskStatus.Failure;
 
-            var cr  = em.GetComponentData<CastRequest>(e);
-            if (cr.HasValue == 0)
-                return TaskStatus.Failure;
+            var cr = em.GetComponentData<CastRequest>(e);
+            if (cr.HasValue == 0) return TaskStatus.Failure;
 
             // Determine a facing point from the request.
             float3 aim = float3.zero;
-            bool   hasAim = false;
+            bool hasAim = false;
 
             if (cr.Kind == OneBitRob.ECS.CastKind.AreaOfEffect)
             {
@@ -78,22 +79,19 @@ namespace OneBitRob.AI
                 }
             }
 
-            // If we couldn't resolve a valid aim point, fail softly and let BT re‑evaluate.
-            if (!hasAim)
-                return TaskStatus.Failure;
+            if (!hasAim) return TaskStatus.Failure;
 
             // Face the aim immediately so visual rotation starts right away.
             var df = new OneBitRob.ECS.DesiredFacing { TargetPosition = aim, HasValue = 1 };
-            if (em.HasComponent<OneBitRob.ECS.DesiredFacing>(e)) em.SetComponentData(e, df);
-            else                                                 em.AddComponentData(e, df);
+            if (em.HasComponent<OneBitRob.ECS.DesiredFacing>(e))
+                em.SetComponentData(e, df);
+            else
+                em.AddComponentData(e, df);
 
 #if UNITY_EDITOR
-            if (brain)
-                Debug.DrawLine(brain.transform.position, (Vector3)aim, Color.yellow, 0f, false);
+            if (brain) Debug.DrawLine(brain.transform.position, (Vector3)aim, Color.yellow, 0f, false);
 #endif
-
             // Do NOT consume CastRequest here — SpellExecutionSystem will pick it up this frame.
-            // We return Success to let BT continue; casting will proceed via ECS windup/execution.
             return TaskStatus.Success;
         }
     }

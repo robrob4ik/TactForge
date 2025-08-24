@@ -1,10 +1,11 @@
-﻿using DamageNumbersPro;
+﻿// Runtime/FX/DamageNumbersProfile.cs
+using DamageNumbersPro;
 using UnityEngine;
 
 namespace OneBitRob.FX
 {
-    [CreateAssetMenu(menuName = "SO/FX/Damage Numbers Profile")]
-    public class DamageNumbersProfile : ScriptableObject
+    [CreateAssetMenu(menuName = "TactForge/Config/Profiles/Damage Numbers Profile", fileName = "DamageNumbersProfile")]
+    public class DamageNumbersSettings : ScriptableObject
     {
         [Header("Prefabs (Mesh / Worldspace)")]
         public DamageNumber damagePrefab;

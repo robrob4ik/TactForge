@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿// Runtime/Combat/WeaponDefinition.cs
+using UnityEngine;
 
 namespace OneBitRob
 {
