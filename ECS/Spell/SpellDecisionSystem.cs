@@ -10,7 +10,7 @@ namespace OneBitRob.AI
     [BurstCompile]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     [UpdateBefore(typeof(CastSpellSystem))]
-    [UpdateBefore(typeof(SpellExecutionSystem))]
+    [UpdateBefore(typeof(SpellWindupAndFireSystem))]
     public partial struct SpellDecisionSystem : ISystem
     {
         ComponentLookup<LocalTransform> _posRO;

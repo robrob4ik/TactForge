@@ -1,4 +1,4 @@
-﻿// FILE: Assets/PROJECT/Scripts/ECS/Spell/SpellChainRunnerSystem.cs
+﻿// Assets/PROJECT/Scripts/Runtime/AI/Combat/Spell/SpellChainHopSystem.cs
 
 using OneBitRob.ECS;
 using Unity.Collections;
@@ -11,9 +11,12 @@ using quaternion = Unity.Mathematics.quaternion;
 
 namespace OneBitRob.AI
 {
+    /// <summary>
+    /// Processes chain spells hop-by-hop by spawning a short projectile to the next target and scheduling the next hop.
+    /// </summary>
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellExecutionSystem))]
-    public partial struct SpellChainRunnerSystem : ISystem
+    [UpdateAfter(typeof(SpellWindupAndFireSystem))]
+    public partial struct SpellChainHopSystem : ISystem
     {
         ComponentLookup<LocalTransform> _posRO;
         ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
@@ -53,9 +56,8 @@ namespace OneBitRob.AI
                 if (now < run.NextTime) continue;
 
                 var cfg = _cfgRO.HasComponent(caster) ? _cfgRO[caster] : default;
-                float height = max(0.5f, cfg.MuzzleLocalOffset.y); // chest-level default
+                float height = max(0.5f, cfg.MuzzleLocalOffset.y);
 
-                // Caster transform
                 float3 selfPos = float3.zero;
                 quaternion rot = quaternion.identity;
                 if (_posRO.TryGetComponent(caster, out var ltCaster))
@@ -64,18 +66,13 @@ namespace OneBitRob.AI
                     rot     = ltCaster.Rotation;
                 }
 
-                // From position (carry over exact hop origin, no double height)
                 float3 from;
-                if (run.HasFromPos != 0)
-                {
-                    from = run.FromPos; // already includes height on previous hop
-                }
+                if (run.HasFromPos != 0) from = run.FromPos;
                 else
                 {
                     float3 fwd   = normalizesafe(mul(rot, new float3(0, 0, 1)));
                     float3 up    = normalizesafe(mul(rot, new float3(0, 1, 0)));
                     float3 right = normalizesafe(mul(rot, new float3(1, 0, 0)));
-
                     from = selfPos
                            + fwd   * max(0f, cfg.MuzzleForward)
                            + right * cfg.MuzzleLocalOffset.x
@@ -87,11 +84,10 @@ namespace OneBitRob.AI
                 { ecb.RemoveComponent<SpellChainRunner>(caster); continue; }
 
                 float3 groundTo = _posRO[run.CurrentTarget].Position;
-                float3 to = groundTo + new float3(0, height, 0);
-                float3 dir  = normalizesafe(to - from, new float3(0, 0, 1));
-                float dist = distance(to, from);
+                float3 to       = groundTo + new float3(0, height, 0);
+                float3 dir      = normalizesafe(to - from, new float3(0, 0, 1));
+                float  dist     = distance(to, from);
 
-                // Fire non-piercing projectile for this hop
                 var req = new SpellProjectileSpawnRequest
                 {
                     Origin      = from,
@@ -108,12 +104,11 @@ namespace OneBitRob.AI
                 if (em.HasComponent<SpellProjectileSpawnRequest>(caster)) ecb.SetComponent(caster, req);
                 else                                                      ecb.AddComponent(caster, req);
 
-                // Prepare next hop
                 run.Remaining--;
                 run.PreviousTarget = run.CurrentTarget;
-                run.FromPos        = to;      // store actual hop origin for next bounce (already includes height)
+                run.FromPos        = to;
                 run.HasFromPos     = 1;
-                run.CurrentTarget  = FindNextByCasterIntent(run);
+                run.CurrentTarget  = FindNextByCasterIntent(in run);
                 run.NextTime       = now + (dist / max(0.01f, run.ProjectileSpeed)) + run.JumpDelay;
 
                 if (run.Remaining <= 0 || run.CurrentTarget == Entity.Null)

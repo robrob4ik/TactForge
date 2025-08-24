@@ -31,7 +31,7 @@ namespace OneBitRob.AI
 
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     [UpdateAfter(typeof(SpellDecisionSystem))] // decision ready…
-    [UpdateBefore(typeof(SpellExecutionSystem))] // …before execution consumes it
+    [UpdateBefore(typeof(SpellWindupAndFireSystem))] // …before execution consumes it
     public partial class CastSpellSystem
         : TaskProcessorSystem<CastSpellComponent, CastSpellTag>
     {

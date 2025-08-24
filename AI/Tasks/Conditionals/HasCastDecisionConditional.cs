@@ -25,7 +25,7 @@ namespace OneBitRob.AI
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     [UpdateAfter(typeof(SpellDecisionSystem))]   // decision exists…
-    [UpdateBefore(typeof(SpellExecutionSystem))] // …before execution consumes it
+    [UpdateBefore(typeof(SpellWindupAndFireSystem))] // …before execution consumes it
     public partial class HasCastDecisionSystem
         : TaskProcessorSystem<HasCastDecisionComponent, HasCastDecisionTag>
     {

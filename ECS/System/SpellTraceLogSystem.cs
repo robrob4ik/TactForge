@@ -7,7 +7,7 @@ using OneBitRob.ECS;
 namespace OneBitRob.AI
 {
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellExecutionSystem))]
+    [UpdateAfter(typeof(SpellWindupAndFireSystem))]
     public partial struct SpellTraceLogSystem : ISystem
     {
         ComponentLookup<SpellConfig> _cfgRO;

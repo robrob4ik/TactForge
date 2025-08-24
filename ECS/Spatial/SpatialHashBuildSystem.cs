@@ -9,7 +9,7 @@ using static OneBitRob.ECS.SpatialHashComponents;
 namespace OneBitRob.ECS
 {
     [UpdateInGroup(typeof(SimulationSystemGroup))]
-    [UpdateAfter(typeof(OneBitRob.ECS.Sync.SyncBrainFromMonoSystem))]
+    [UpdateAfter(typeof(OneBitRob.ECS.MonoToEcsSyncGroup))]
     public partial struct SpatialHashBuildSystem : ISystem
     {
         public static NativeParallelMultiHashMap<int, Entity> Grid;

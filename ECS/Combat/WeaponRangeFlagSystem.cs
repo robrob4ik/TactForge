@@ -1,15 +1,19 @@
-﻿// FILE: OneBitRob/AI/AttackRangeFlagSystem.cs
-using OneBitRob.ECS;
+﻿// Assets/PROJECT/Scripts/Runtime/AI/Combat/Weapon/WeaponRangeFlagSystem.cs
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
+using OneBitRob.AI;
+using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    /// Updates InAttackRange based on distance to Target and the weapon's attackRange.
+    /// <summary>
+    /// Updates InAttackRange based on distance(self, target) vs weapon.attackRange.
+    /// Pure ECS; UnitBrain only used to read weapon stat.
+    /// </summary>
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    public partial struct AttackRangeFlagSystem : ISystem
+    public partial struct WeaponRangeFlagSystem : ISystem
     {
         private ComponentLookup<LocalTransform> _posRO;
         private EntityQuery _query;

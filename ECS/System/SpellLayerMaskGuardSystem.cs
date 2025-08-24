@@ -1,17 +1,21 @@
-﻿// Runtime/AI/Systems/SpellLayerSanitySystem.cs
-using Unity.Collections;
+﻿// Assets/PROJECT/Scripts/Runtime/AI/Combat/Spell/SpellLayerMaskGuardSystem.cs
 using Unity.Entities;
 using Unity.Mathematics;
+using UnityEngine;
+using OneBitRob.AI;
 using OneBitRob.AI.Debugging;
+using OneBitRob.Config;
 using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    /// Ensures spell layer masks are never 0 and are consistent with caster faction & spell polarity.
-    /// Also sanity-checks AoE radius vs cast range and logs helpful warnings (throttled).
+    /// <summary>
+    /// Ensures every SpellConfig has a valid TargetLayerMask derived from caster faction and spell polarity.
+    /// Also warns about odd AoE radius values.
+    /// </summary>
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateBefore(typeof(SpellExecutionSystem))]
-    public partial struct SpellLayerSanitySystem : ISystem
+    [UpdateBefore(typeof(SpellWindupAndFireSystem))]
+    public partial struct SpellLayerMaskGuardSystem : ISystem
     {
         ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
         ComponentLookup<SpellConfig> _cfgRW;
@@ -36,7 +40,6 @@ namespace OneBitRob.AI
                 var cfg = cfgRO.ValueRO;
                 bool changed = false;
 
-                // Fill TargetLayerMask if not set from authoring
                 if (cfg.TargetLayerMask == 0 && _factRO.HasComponent(e))
                 {
                     var faction = _factRO[e].Faction;
@@ -45,26 +48,24 @@ namespace OneBitRob.AI
                     int mask =
                         cfg.EffectType == SpellEffectType.Positive
                             ? (casterIsEnemy
-                                ? Config.CombatLayers.FriendlyLayerMaskFor(true).value     // enemy heals enemies
-                                : Config.CombatLayers.FriendlyLayerMaskFor(false).value)   // ally heals allies
+                                ? CombatLayers.FriendlyLayerMaskFor(true).value
+                                : CombatLayers.FriendlyLayerMaskFor(false).value)
                             : (casterIsEnemy
-                                ? Config.CombatLayers.DamageableLayerMaskFor(true).value   // enemy damages allies
-                                : Config.CombatLayers.DamageableLayerMaskFor(false).value);// ally damages enemies
+                                ? CombatLayers.DamageableLayerMaskFor(true).value
+                                : CombatLayers.DamageableLayerMaskFor(false).value);
 
                     cfg.TargetLayerMask = mask;
                     changed = true;
 
-                    if (SpellDebug.WarnOn)
-                        SpellDebug.LogVerbose($"[Spell] Filled TargetLayerMask={mask} for {e.Index}:{e.Version}", null);
+                    if (SpellDebug.Verbose)
+                        Debug.Log($"[Spell] Filled TargetLayerMask={mask} for {e.Index}:{e.Version}");
                 }
 
-                // Soft guard: AOE spells should use AreaRadius (not Range) to size the DoT circle
                 if (cfg.Kind == SpellKind.EffectOverTimeArea && (cfg.AreaRadius <= 0f || cfg.AreaRadius > cfg.Range * 4f))
                 {
                     SpellDebug.LogWarnThrottled(
                         $"aoe-radius-{e.Index}",
-                        $"[Spell] AOE AreaRadius looks odd (AreaRadius={cfg.AreaRadius}, CastRange={cfg.Range}). Ensure your SpellDefinition.AreaRadius is set.",
-                        null);
+                        $"[Spell] AOE AreaRadius looks odd (AreaRadius={cfg.AreaRadius}, CastRange={cfg.Range}). Ensure SpellDefinition.AreaRadius is set.");
                 }
 
                 if (changed) _cfgRW[e] = cfg;

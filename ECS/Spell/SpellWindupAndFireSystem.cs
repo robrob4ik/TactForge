@@ -1,19 +1,22 @@
-﻿// FILE: Assets/PROJECT/Scripts/ECS/Spell/SpellExecutionSystem.cs
-
-using OneBitRob.ECS;
+﻿// Assets/PROJECT/Scripts/Runtime/AI/Combat/Spell/SpellWindupAndFireSystem.cs
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using UnityEngine;
 using static Unity.Mathematics.math;
+using OneBitRob.AI;
+using OneBitRob.ECS;
 using float3 = Unity.Mathematics.float3;
 
 namespace OneBitRob.AI
 {
+    /// <summary>
+    /// Spell pipeline: consumes CastRequest, starts windup (with optional delay),
+    /// faces the aim point, and fires when windup releases (spawns projectiles / DoT / Chain / Summon).
+    /// Also sets cooldown.
+    /// </summary>
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellDecisionSystem))]
-    public partial struct SpellExecutionSystem : ISystem
+    public partial struct SpellWindupAndFireSystem : ISystem
     {
         private EntityQuery _castQuery;
         private EntityQuery _pendingQuery;
@@ -22,10 +25,10 @@ namespace OneBitRob.AI
 
         public void OnCreate(ref SystemState state)
         {
-            _castQuery   = state.GetEntityQuery(ComponentType.ReadWrite<CastRequest>(), ComponentType.ReadOnly<SpellConfig>());
-            _pendingQuery= state.GetEntityQuery(ComponentType.ReadWrite<SpellWindup>(), ComponentType.ReadOnly<SpellConfig>());
-            _posRO       = state.GetComponentLookup<LocalTransform>(true);
-            _factRO      = state.GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
+            _castQuery    = state.GetEntityQuery(ComponentType.ReadWrite<CastRequest>(), ComponentType.ReadOnly<SpellConfig>());
+            _pendingQuery = state.GetEntityQuery(ComponentType.ReadWrite<SpellWindup>(), ComponentType.ReadOnly<SpellConfig>());
+            _posRO        = state.GetComponentLookup<LocalTransform>(true);
+            _factRO       = state.GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
             state.RequireForUpdate(_castQuery);
         }
 
@@ -35,11 +38,10 @@ namespace OneBitRob.AI
             _factRO.Update(ref state);
 
             var em  = state.EntityManager;
-            var now = (float)SystemAPI.Time.ElapsedTime;
-
             var ecb = new EntityCommandBuffer(Allocator.Temp);
+            float now = (float)SystemAPI.Time.ElapsedTime;
 
-            // Release pending casts
+            // Release pending casts when windup timer finishes
             var wents = _pendingQuery.ToEntityArray(Allocator.Temp);
             for (int i = 0; i < wents.Length; i++)
             {
@@ -47,11 +49,9 @@ namespace OneBitRob.AI
                 var w = em.GetComponentData<SpellWindup>(e);
                 if (w.Active == 0 || now < w.ReleaseTime) continue;
 
-                var cfg = em.HasComponent<SpellConfig>(e) ? em.GetComponentData<SpellConfig>(e) : default;
-
+                var cfg = em.GetComponentData<SpellConfig>(e);
                 FireSpell(ref state, ref ecb, e, in cfg, in w);
 
-                // cooldown
                 if (em.HasComponent<SpellCooldown>(e))
                 {
                     var cd = em.GetComponentData<SpellCooldown>(e);
@@ -64,7 +64,7 @@ namespace OneBitRob.AI
             }
             wents.Dispose();
 
-            // Commit new casts (schedule fire with delay)
+            // Start new windups / set facing / play cast anims / consume CastRequest
             var ents = _castQuery.ToEntityArray(Allocator.Temp);
             for (int i = 0; i < ents.Length; i++)
             {
@@ -75,10 +75,9 @@ namespace OneBitRob.AI
                 var brain = UnitBrainRegistry.Get(e);
                 var cfg   = em.GetComponentData<SpellConfig>(e);
 
-                // Prepare windup
                 var w = em.HasComponent<SpellWindup>(e) ? em.GetComponentData<SpellWindup>(e) : default;
                 w.Active        = 1;
-                w.ReleaseTime   = (float)SystemAPI.Time.ElapsedTime + max(0f, cfg.CastTime);
+                w.ReleaseTime   = now + max(0f, cfg.CastTime);
                 w.FacingDeadline = w.ReleaseTime;
 
                 float3 aimPos = float3.zero;
@@ -87,8 +86,7 @@ namespace OneBitRob.AI
                     case CastKind.SingleTarget:
                         w.HasAimPoint = 0;
                         w.AimTarget   = req.Target;
-                        if (_posRO.HasComponent(req.Target))
-                            aimPos = _posRO[req.Target].Position;
+                        if (_posRO.HasComponent(req.Target)) aimPos = _posRO[req.Target].Position;
 
                         if (brain != null)
                         {
@@ -118,6 +116,7 @@ namespace OneBitRob.AI
 
                 if (w.Active != 0)
                 {
+                    // Face aim pos immediately
                     if (em.HasComponent<DesiredFacing>(e))
                     {
                         var df = em.GetComponentData<DesiredFacing>(e);
@@ -130,6 +129,7 @@ namespace OneBitRob.AI
                         ecb.AddComponent(e, new DesiredFacing { TargetPosition = aimPos, HasValue = 1 });
                     }
 
+                    // Trigger spell animation if any
                     if (brain != null && brain.UnitDefinition != null)
                     {
                         var spells = brain.UnitDefinition.unitSpells;
@@ -141,7 +141,7 @@ namespace OneBitRob.AI
                     else                                ecb.AddComponent(e, w);
                 }
 
-                // consume
+                // consume request
                 req.HasValue = 0;
                 ecb.SetComponent(e, req);
             }
@@ -158,8 +158,8 @@ namespace OneBitRob.AI
 
             float3 selfPos = _posRO.HasComponent(e) ? _posRO[e].Position : float3.zero;
 
-            float3 fwd = new float3(0,0,1);
-            float3 up  = new float3(0,1,0);
+            float3 fwd   = new float3(0,0,1);
+            float3 up    = new float3(0,1,0);
             float3 right = new float3(1,0,0);
             if (_posRO.HasComponent(e))
             {
@@ -183,8 +183,7 @@ namespace OneBitRob.AI
                         + up    * cfg.MuzzleLocalOffset.y
                         + fwd   * cfg.MuzzleLocalOffset.z;
 
-                    float3 dir = normalizesafe(aimPos - origin, fwd);
-                    dir.y = 0;
+                    float3 dir = normalizesafe(aimPos - origin, fwd); dir.y = 0;
 
                     int mask = ~0;
                     if (brain != null)
@@ -236,10 +235,6 @@ namespace OneBitRob.AI
                             ? brain.GetFriendlyLayerMask().value
                             : brain.GetDamageableLayerMask().value;
 
-#if UNITY_EDITOR
-                    Debug.Log($"[Spells] DoTArea start: vfxHash={cfg.AreaVfxIdHash}, mask={mask}, pos={aimPos}, r={cfg.AreaRadius}, dur={cfg.Duration}");
-#endif
-
                     var area = new DoTArea
                     {
                         Position       = aimPos,
@@ -274,14 +269,14 @@ namespace OneBitRob.AI
                         Amount           = max(0f, cfg.Amount),
                         Positive         = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
                         ProjectileIdHash = cfg.ProjectileIdHash,
-                        FromPos          = origin,    // exact hop origin (includes height)
+                        FromPos          = origin,
                         HasFromPos       = 1,
                         CurrentTarget    = w.AimTarget,
                         PreviousTarget   = Entity.Null,
-
-                        // Identity/masks
                         Caster           = e,
-                        CasterFaction    = _factRO.HasComponent(e) ? _factRO[e].Faction : (byte)OneBitRob.Constants.GameConstants.ALLY_FACTION,
+                        CasterFaction    = SystemAPI.HasComponent<SpatialHashComponents.SpatialHashTarget>(e)
+                            ? SystemAPI.GetComponent<SpatialHashComponents.SpatialHashTarget>(e).Faction
+                            : (byte)OneBitRob.Constants.GameConstants.ALLY_FACTION,
                         LayerMask        = (brain != null
                             ? (cfg.EffectType == SpellEffectType.Positive
                                 ? brain.GetFriendlyLayerMask().value
@@ -301,7 +296,9 @@ namespace OneBitRob.AI
                         PrefabIdHash = cfg.SummonPrefabHash,
                         Position     = aimPos,
                         Count        = 1,
-                        Faction      = _factRO.HasComponent(e) ? _factRO[e].Faction : (byte)0,
+                        Faction      = SystemAPI.HasComponent<SpatialHashComponents.SpatialHashTarget>(e)
+                            ? SystemAPI.GetComponent<SpatialHashComponents.SpatialHashTarget>(e).Faction
+                            : (byte)0,
                         HasValue     = (cfg.SummonPrefabHash != 0 ? 1 : 0)
                     };
 

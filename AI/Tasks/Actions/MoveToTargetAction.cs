@@ -29,7 +29,7 @@ namespace OneBitRob.AI
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellExecutionSystem))] // ← ensure casting status is visible
+    [UpdateAfter(typeof(SpellWindupAndFireSystem))] // ← ensure casting status is visible
     public partial class MoveToTargetSystem : TaskProcessorSystem<MoveToTargetComponent, MoveToTargetTag>
     {
         ComponentLookup<LocalTransform> _posRO;
