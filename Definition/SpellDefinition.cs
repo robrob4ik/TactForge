@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿// FILE: OneBitRob/SpellDefinition.cs
+using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -7,10 +8,10 @@ namespace OneBitRob
     public enum SpellKind : byte
     {
         Summon = 0,
-        ProjectileLine = 1, // fast projectile that pierces (radius optional)
-        EffectOverTimeTarget = 2, // DoT/HoT attached to a single unit
-        EffectOverTimeArea = 3, // DoT/HoT in a world-space area
-        Chain = 4 // chain lightning / chain heal
+        ProjectileLine = 1,           // fast projectile that may pierce
+        EffectOverTimeTarget = 2,     // DoT/HoT attached to a single unit
+        EffectOverTimeArea = 3,       // DoT/HoT in a world-space area (AOE)
+        Chain = 4                     // chain lightning / chain heal
     }
 
     public enum SpellAcquireMode : byte
@@ -23,9 +24,9 @@ namespace OneBitRob
 
     public enum SpellEffectType : byte
     {
-        Positive = 0,
-        Negative = 1
-    } // Positive = heal/buff, Negative = damage/debuff
+        Positive = 0,  // heal/buff
+        Negative = 1   // damage/debuff
+    }
 
     [CreateAssetMenu(menuName = "SO/Spells/Spell")]
     public class SpellDefinition : ScriptableObject
@@ -43,14 +44,13 @@ namespace OneBitRob
         [FoldoutGroup("General"), LabelWidth(150), EnumToggleButtons, LabelText("Acquire")]
         public SpellAcquireMode AcquireMode = SpellAcquireMode.ClosestEnemy;
 
-        [FoldoutGroup("General"), LabelWidth(150), Min(0f), LabelText("Range (m)")]
+        [FoldoutGroup("General"), LabelWidth(150), Min(0f), LabelText("Cast Range (m)")]
         public float Range = 12f;
 
         [FoldoutGroup("General"), LabelWidth(150), LabelText("Cast Animations")]
         public AttackAnimationSet animations;
 
-        [FoldoutGroup("General"), LabelWidth(150), Min(0f), LabelText("Fire Delay (s)"),
-         InfoBox("Gameplay effect is fired after this delay (sync with your cast animation).", InfoMessageType.None)]
+        [FoldoutGroup("General"), LabelWidth(150), Min(0f), LabelText("Fire Delay (s)")]
         public float FireDelaySeconds = 0f;
 
         [FoldoutGroup("General"), LabelWidth(150), Min(0f), LabelText("Cooldown (s)")]
@@ -73,6 +73,11 @@ namespace OneBitRob
         [FoldoutGroup("DoTHoT"), ShowIf("@Kind == SpellKind.EffectOverTimeTarget || Kind == SpellKind.EffectOverTimeArea"),
          LabelWidth(150), LabelText("Tick Every (s)"), Min(0.05f)]
         public float TickInterval = 0.25f;
+
+        // ─────────────────────────────────────────────────────────── AOE
+        [FoldoutGroup("AoE"), ShowIf("@Kind == SpellKind.EffectOverTimeArea"),
+         LabelWidth(150), LabelText("Area Radius (m)"), Min(0f)]
+        public float AreaRadius = 3f;
 
         // ─────────────────────────────────────────────────────────── Projectile
         [FoldoutGroup("Projectile"), ShowIf("@Kind == SpellKind.ProjectileLine || Kind == SpellKind.Chain"),
@@ -100,7 +105,8 @@ namespace OneBitRob
         public Vector3 MuzzleLocalOffset = Vector3.zero;
 
         // ─────────────────────────────────────────────────────────── VFX & AoE
-        [FoldoutGroup("VFX"), ShowIf("@Kind == SpellKind.EffectOverTimeTarget || Kind == SpellKind.EffectOverTimeArea"), LabelWidth(150), LabelText("Effect VFX Id")]
+        [FoldoutGroup("VFX"), ShowIf("@Kind == SpellKind.EffectOverTimeTarget || Kind == SpellKind.EffectOverTimeArea"),
+         LabelWidth(150), LabelText("Effect VFX Id")]
         public string EffectVfxId = "";
 
         [FoldoutGroup("VFX"), ShowIf("@Kind == SpellKind.EffectOverTimeArea"),
@@ -143,6 +149,5 @@ namespace OneBitRob
 
         [FoldoutGroup("Advanced"), HideInInspector]
         public float MaxExtraFacingDelay = 0f;
-        // TargetLayerMask removed from UI; resolved at runtime from the unit’s faction.
     }
 }

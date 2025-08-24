@@ -1,10 +1,10 @@
-﻿// FILE: OneBitRob/ECS/Sync/SyncBrainFlagsFromMonoSystem.cs
+﻿// CHANGED: auto-add HealthMirror if missing so healers can find allies reliably.
+
 using OneBitRob.AI;
 using Unity.Entities;
 
 namespace OneBitRob.ECS.Sync
 {
-    /// Mirrors Mono-side state into simple ECS flags so BT can stay pure ECS.
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateBefore(typeof(AITaskSystemGroup))]
     public partial class SyncBrainFlagsFromMonoSystem : SystemBase
@@ -15,15 +15,25 @@ namespace OneBitRob.ECS.Sync
 
             foreach (var e in SystemAPI.QueryBuilder().WithAll<AgentTag, Alive>().Build().ToEntityArray(Unity.Collections.Allocator.Temp))
             {
-                var brain = UnitBrainRegistry.Get(e);
+                var brain = OneBitRob.AI.UnitBrainRegistry.Get(e);
                 if (brain == null) continue;
 
-                // Alive
+                // Alive flag
                 var alive = em.GetComponentData<Alive>(e);
                 alive.Value = (byte)(brain.CombatSubsystem != null && brain.CombatSubsystem.IsAlive ? 1 : 0);
                 em.SetComponentData(e, alive);
 
-                // Spell flags derived from ECS (no Mono dependency)
+                // NEW: Ensure HealthMirror exists if we can mirror from Mono
+                if (brain.Health != null && !em.HasComponent<HealthMirror>(e))
+                {
+                    em.AddComponentData(e, new HealthMirror
+                    {
+                        Current = brain.Health.CurrentHealth,
+                        Max     = brain.Health.MaximumHealth
+                    });
+                }
+
+                // Mirror SpellState.Ready (unchanged)
                 if (em.HasComponent<SpellState>(e))
                 {
                     var ss = em.GetComponentData<SpellState>(e);
@@ -34,10 +44,8 @@ namespace OneBitRob.ECS.Sync
                         var w  = em.GetComponentData<SpellWindup>(e);
                         float now = (float)SystemAPI.Time.ElapsedTime;
 
-                        // CanCast: has config (always true here)
                         ss.CanCast = 1;
-                        // Ready: not windup-active and not cooling down
-                        ss.Ready = (byte)((w.Active == 0 && now >= cd.NextTime) ? 1 : 0);
+                        ss.Ready   = (byte)((w.Active == 0 && now >= cd.NextTime) ? 1 : 0);
                     }
                     else
                     {
@@ -48,7 +56,7 @@ namespace OneBitRob.ECS.Sync
                     em.SetComponentData(e, ss);
                 }
 
-                // Health mirror (if present)
+                // Health mirror update
                 if (em.HasComponent<HealthMirror>(e) && brain.Health != null)
                 {
                     var hm = em.GetComponentData<HealthMirror>(e);

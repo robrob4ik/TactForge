@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿// CHANGED: removed FillObjectPool() calls to avoid duplicate child pools.
+
+using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
 
@@ -27,8 +29,7 @@ namespace OneBitRob.ECS
             foreach (var p in Pools)
             {
                 if (p.Pooler == null || string.IsNullOrEmpty(p.Id)) continue;
-                // ensure pool exists in current scene (safe if already filled)
-                p.Pooler.FillObjectPool();
+                // DO NOT call p.Pooler.FillObjectPool() here; MM does that on its own.
                 _map[p.Id] = p.Pooler;
             }
         }

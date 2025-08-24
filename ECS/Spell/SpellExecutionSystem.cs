@@ -1,17 +1,10 @@
-﻿// FILE: OneBitRob/AI/CastExecutionSystem.cs
-// CHANGES:
-// - No “facing gate” (we still rotate, but non-blocking).
-// - Use CastTime as Fire Delay after animation trigger.
-// - Spell projectile origin uses MuzzleForward + MuzzleLocalOffset (same as ranged weapon).
-// - Single-stage cast animation via CombatSubsystem.PlaySpell(AttackAnimationSet).
+﻿// CHANGED: masks, chain as runner, approach nudges
 
-using OneBitRob;
 using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using UnityEngine;
 
 namespace OneBitRob.AI
 {
@@ -43,7 +36,7 @@ namespace OneBitRob.AI
 
             var ecb = new EntityCommandBuffer(Allocator.Temp);
 
-            // 1) Release pending casts (fire moment)
+            // Release pending casts
             var wents = _pendingQuery.ToEntityArray(Allocator.Temp);
             for (int i = 0; i < wents.Length; i++)
             {
@@ -55,7 +48,7 @@ namespace OneBitRob.AI
 
                 FireSpell(ref state, ref ecb, e, in cfg, in w);
 
-                // Start cooldown
+                // cooldown
                 if (em.HasComponent<SpellCooldown>(e))
                 {
                     var cd = em.GetComponentData<SpellCooldown>(e);
@@ -68,7 +61,7 @@ namespace OneBitRob.AI
             }
             wents.Dispose();
 
-            // 2) Commit new casts (schedule fire with delay, rotate towards aim)
+            // Commit new casts (schedule fire with delay)
             var ents = _castQuery.ToEntityArray(Allocator.Temp);
             for (int i = 0; i < ents.Length; i++)
             {
@@ -79,11 +72,11 @@ namespace OneBitRob.AI
                 var brain = UnitBrainRegistry.Get(e);
                 var cfg   = em.GetComponentData<SpellConfig>(e);
 
-                // Determine aim
+                // Prepare windup
                 var w = em.HasComponent<SpellWindup>(e) ? em.GetComponentData<SpellWindup>(e) : default;
                 w.Active        = 1;
-                w.ReleaseTime   = now + math.max(0f, cfg.CastTime); // Fire after delay
-                w.FacingDeadline = w.ReleaseTime; // unused
+                w.ReleaseTime   = (float)SystemAPI.Time.ElapsedTime + math.max(0f, cfg.CastTime);
+                w.FacingDeadline = w.ReleaseTime;
 
                 float3 aimPos = float3.zero;
                 switch (req.Kind)
@@ -91,13 +84,9 @@ namespace OneBitRob.AI
                     case CastKind.SingleTarget:
                         w.HasAimPoint = 0;
                         w.AimTarget   = req.Target;
-
                         if (_posRO.HasComponent(req.Target))
-                        {
                             aimPos = _posRO[req.Target].Position;
-                        }
 
-                        // Debug data for gizmos
                         if (brain != null)
                         {
                             brain.CurrentSpellTarget = UnitBrainRegistry.GetGameObject(req.Target);
@@ -118,35 +107,40 @@ namespace OneBitRob.AI
                             brain.CurrentSpellTargetPosition = req.AoEPosition;
                         }
                         break;
+
+                    default:
+                        // No valid cast — small approach nudge for heal/AoE when OOR:
+                        // (handled in SpellDecisionSystem by setting DesiredDestination; kept here as no-op)
+                        w.Active = 0;
+                        break;
                 }
 
-                // Push facing hint (unified with melee/ranged path via DesiredFacing + MonoBridge)
-                if (em.HasComponent<DesiredFacing>(e))
+                if (w.Active != 0)
                 {
-                    var df = em.GetComponentData<DesiredFacing>(e);
-                    df.TargetPosition = aimPos;
-                    df.HasValue = 1;
-                    ecb.SetComponent(e, df);
-                }
-                else
-                {
-                    ecb.AddComponent(e, new DesiredFacing { TargetPosition = aimPos, HasValue = 1 });
-                }
-
-                // Trigger single-stage cast animation
-                if (brain != null && brain.UnitDefinition != null)
-                {
-                    var spells = brain.UnitDefinition.unitSpells;
-                    if (spells != null && spells.Count > 0 && spells[0] != null)
+                    if (em.HasComponent<DesiredFacing>(e))
                     {
-                        brain.CombatSubsystem?.PlaySpell(spells[0].animations);
+                        var df = em.GetComponentData<DesiredFacing>(e);
+                        df.TargetPosition = aimPos;
+                        df.HasValue = 1;
+                        ecb.SetComponent(e, df);
                     }
+                    else
+                    {
+                        ecb.AddComponent(e, new DesiredFacing { TargetPosition = aimPos, HasValue = 1 });
+                    }
+
+                    if (brain != null && brain.UnitDefinition != null)
+                    {
+                        var spells = brain.UnitDefinition.unitSpells;
+                        if (spells != null && spells.Count > 0 && spells[0] != null)
+                            brain.CombatSubsystem?.PlaySpell(spells[0].animations);
+                    }
+
+                    if (em.HasComponent<SpellWindup>(e)) ecb.SetComponent(e, w);
+                    else                                ecb.AddComponent(e, w);
                 }
 
-                if (em.HasComponent<SpellWindup>(e)) ecb.SetComponent(e, w);
-                else                                ecb.AddComponent(e, w);
-
-                // consume request
+                // consume
                 req.HasValue = 0;
                 ecb.SetComponent(e, req);
             }
@@ -163,7 +157,6 @@ namespace OneBitRob.AI
 
             float3 selfPos = _posRO.HasComponent(e) ? _posRO[e].Position : float3.zero;
 
-            // Compute forward/right/up from entity rotation
             float3 fwd = new float3(0,0,1);
             float3 up  = new float3(0,1,0);
             float3 right = new float3(1,0,0);
@@ -183,7 +176,6 @@ namespace OneBitRob.AI
             {
                 case SpellKind.ProjectileLine:
                 {
-                    // Muzzle origin (same math as ranged weapons)
                     float3 origin = selfPos
                         + fwd   * math.max(0f, cfg.MuzzleForward)
                         + right * cfg.MuzzleLocalOffset.x
@@ -191,10 +183,13 @@ namespace OneBitRob.AI
                         + fwd   * cfg.MuzzleLocalOffset.z;
 
                     float3 dir = math.normalizesafe(aimPos - origin, fwd);
-                    dir.y = 0; // planar aim for topdown
-#if UNITY_EDITOR
-                    Debug.DrawRay((Vector3)origin, (Vector3)(dir * 1.25f), new Color(1f, 0.2f, 1f, 0.85f), 0.2f, false);
-#endif
+                    dir.y = 0;
+
+                    int mask = ~0;
+                    if (brain != null)
+                        mask = cfg.EffectType == SpellEffectType.Positive
+                            ? brain.GetFriendlyLayerMask().value
+                            : brain.GetDamageableLayerMask().value;
 
                     var req = new SpellProjectileSpawnRequest
                     {
@@ -205,8 +200,8 @@ namespace OneBitRob.AI
                         MaxDistance = math.max(0.1f, cfg.ProjectileMaxDistance),
                         Radius      = math.max(0f, cfg.ProjectileRadius),
                         ProjectileIdHash = cfg.ProjectileIdHash,
-                        LayerMask   = brain != null ? brain.GetDamageableLayerMask().value : ~0,
-                        Pierce      = 1,
+                        LayerMask   = mask,
+                        Pierce      = 1, // line spells pierce by default
                         HasValue    = 1
                     };
                     if (em.HasComponent<SpellProjectileSpawnRequest>(e)) ecb.SetComponent(e, req);
@@ -234,6 +229,12 @@ namespace OneBitRob.AI
 
                 case SpellKind.EffectOverTimeArea:
                 {
+                    int mask = ~0;
+                    if (brain != null)
+                        mask = cfg.EffectType == SpellEffectType.Positive
+                            ? brain.GetFriendlyLayerMask().value
+                            : brain.GetDamageableLayerMask().value;
+
                     var area = new DoTArea
                     {
                         Position       = aimPos,
@@ -244,38 +245,49 @@ namespace OneBitRob.AI
                         NextTick       = 0f,
                         Positive       = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
                         AreaVfxIdHash  = cfg.AreaVfxIdHash,
-                        LayerMask      = brain != null ? brain.GetDamageableLayerMask().value : ~0
+                        LayerMask      = mask
                     };
                     if (em.HasComponent<DoTArea>(e)) ecb.SetComponent(e, area);
                     else                              ecb.AddComponent(e, area);
                     break;
                 }
 
+             
                 case SpellKind.Chain:
                 {
-                    // Simple greedy chain (instant). For delayed per-jump chains, queue a runner entity.
-                    int remaining = math.max(1, cfg.ChainMaxTargets);
-                    float radius = math.max(0f, cfg.ChainRadius);
+                    // Compute muzzle origin same as projectile line
+                    float3 origin = selfPos
+                                    + fwd   * math.max(0f, cfg.MuzzleForward)
+                                    + right * cfg.MuzzleLocalOffset.x
+                                    + up    * cfg.MuzzleLocalOffset.y
+                                    + fwd   * cfg.MuzzleLocalOffset.z;
 
-                    var visited = new NativeHashMap<Entity, byte>(remaining * 2, Allocator.Temp);
-                    Entity current = w.AimTarget;
-
-                    while (current != Entity.Null && remaining-- > 0)
+                    var runner = new SpellChainRunner
                     {
-                        if (!visited.TryAdd(current, 1)) break;
+                        Remaining        = math.max(1, cfg.ChainMaxTargets),
+                        Radius           = math.max(0f, cfg.ChainRadius),
+                        JumpDelay        = math.max(0f, cfg.ChainJumpDelay),
+                        ProjectileSpeed  = math.max(0.01f, cfg.ProjectileSpeed),
+                        Amount           = math.max(0f, cfg.Amount),
+                        Positive         = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
+                        ProjectileIdHash = cfg.ProjectileIdHash,
+                        FromPos          = origin,    // ← muzzle origin
+                        HasFromPos       = 1,
+                        CurrentTarget    = w.AimTarget,
+                        PreviousTarget   = Entity.Null,
 
-                        var targetBrain = UnitBrainRegistry.Get(current);
-                        if (targetBrain != null && targetBrain.Health != null)
-                        {
-                            float amount = math.max(0f, cfg.Amount);
-                            if (cfg.EffectType == SpellEffectType.Positive) amount = -amount; // negative damage -> heal
-                            targetBrain.Health.Damage(amount, brain ? brain.gameObject : null, 0f, 0f, Vector3.zero);
-                        }
+                        // Identity/masks
+                        Caster           = e,
+                        CasterFaction    = _factRO.HasComponent(e) ? _factRO[e].Faction : (byte)OneBitRob.Constants.GameConstants.ALLY_FACTION,
+                        LayerMask        = (brain != null
+                            ? (cfg.EffectType == SpellEffectType.Positive
+                                ? brain.GetFriendlyLayerMask().value
+                                : brain.GetDamageableLayerMask().value)
+                            : ~0)
+                    };
 
-                        current = FindNextChainTarget(current, radius, cfg, ref state);
-                    }
-
-                    visited.Dispose();
+                    if (em.HasComponent<SpellChainRunner>(e)) ecb.SetComponent(e, runner);
+                    else                                      ecb.AddComponent(e, runner);
                     break;
                 }
 
@@ -298,38 +310,6 @@ namespace OneBitRob.AI
                     break;
                 }
             }
-        }
-
-        private Entity FindNextChainTarget(Entity from, float radius, in SpellConfig cfg, ref SystemState state)
-        {
-            var posRO  = _posRO;
-            var factRO = _factRO;
-            if (!posRO.HasComponent(from)) return Entity.Null;
-
-            var wanted = new Unity.Collections.FixedList128Bytes<byte>();
-            byte selfFaction = factRO[from].Faction;
-            byte ally = selfFaction;
-            byte enemy = (selfFaction == Constants.GameConstants.ENEMY_FACTION)
-                ? Constants.GameConstants.ALLY_FACTION
-                : Constants.GameConstants.ENEMY_FACTION;
-
-            if (cfg.EffectType == SpellEffectType.Positive) wanted.Add(ally);
-            else wanted.Add(enemy);
-
-            using var list = new NativeList<Entity>(Allocator.Temp);
-            SpatialHashSearch.CollectInSphere(
-                posRO[from].Position, radius, wanted, list, ref posRO, ref factRO);
-
-            Entity best = Entity.Null;
-            float bestDist = float.MaxValue;
-            for (int i = 0; i < list.Length; i++)
-            {
-                var e = list[i];
-                if (e == from) continue;
-                float d = math.distance(posRO[e].Position, posRO[from].Position);
-                if (d < bestDist) { bestDist = d; best = e; }
-            }
-            return best;
         }
     }
 }

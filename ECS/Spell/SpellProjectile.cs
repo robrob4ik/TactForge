@@ -1,11 +1,13 @@
-﻿using MoreMountains.Tools;
+﻿// CHANGED: Renamed to SpellProjectile; kept legacy alias EcsSpellProjectile for safety.
+
+using MoreMountains.Tools;
 using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    /// Spell projectile that can be a ray (radius=0) or thick cylinder, and optional piercing.
+    /// Spell projectile (damage or heal), optional thickness and piercing.
     [DisallowMultipleComponent]
-    public class EcsSpellProjectile : MMPoolableObject
+    public class SpellProjectile : MMPoolableObject
     {
         public struct ArmData
         {
@@ -100,7 +102,6 @@ namespace OneBitRob.ECS
             float invuln = 0f;
             brain.Health.Damage(_damage, _attacker, 0f, invuln, _dir);
 
-            // Popups: negative damage => heal
             OneBitRob.FX.DamageNumbersManager.Popup(new OneBitRob.FX.DamageNumbersParams
             {
                 Kind     = _damage < 0 ? OneBitRob.FX.DamagePopupKind.Heal : OneBitRob.FX.DamagePopupKind.Damage,

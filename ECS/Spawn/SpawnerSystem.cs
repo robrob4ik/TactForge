@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿// FILE: OneBitRob/ECS/SpawnerSystem.cs
+using System.Collections.Generic;
 using GPUInstancerPro.PrefabModule;
 using OneBitRob.ECS.GPUI;
 using Opsive.BehaviorDesigner.Runtime;
@@ -186,7 +187,11 @@ namespace OneBitRob.ECS
                         state.EntityManager.AddComponentData(e, new SpellCooldown { NextTime = 0f });
                     }
 
-                    state.EntityManager.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
+                    // ─────────────────────────────────────────────────────────────
+                    // Retarget throttle — GUARDED add
+                    if (!state.EntityManager.HasComponent<RetargetCooldown>(e))
+                        state.EntityManager.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
+
                     state.EntityManager.AddComponentData(e, new RetargetAssist
                     {
                         LastPos = pos,

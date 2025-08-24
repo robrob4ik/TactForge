@@ -1,16 +1,15 @@
-﻿using MoreMountains.Tools;
-using UnityEngine;
+﻿// CHANGED: Renamed to WeaponProjectile; kept legacy alias EcsProjectile for safety.
+
+using MoreMountains.Tools;
 using OneBitRob.AI;
 using OneBitRob.FX;
+using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    /// Minimal pooled projectile:
-    /// - moves straight
-    /// - single swept raycast per frame
-    /// - damages first valid enemy UnitBrain hit (closest), then despawns
+    /// Minimal pooled weapon projectile (bows, etc.)
     [DisallowMultipleComponent]
-    public class EcsProjectile : MMPoolableObject
+    public class WeaponProjectile : MMPoolableObject
     {
         public struct ArmData
         {
@@ -21,8 +20,6 @@ namespace OneBitRob.ECS
             public float Damage;
             public float MaxDistance;
             public int LayerMask;       // targets (damageable)
-
-            // NEW: crit support (optional)
             public float CritChance;     // 0..1
             public float CritMultiplier; // >= 1
         }
@@ -42,7 +39,6 @@ namespace OneBitRob.ECS
 
         private Vector3 _lastPos;
 
-        // Slightly larger than before—busy scenes benefit from a few extra hits.
         private static readonly RaycastHit[] s_Hits = new RaycastHit[32];
 
         public void Arm(ArmData data)
@@ -75,33 +71,21 @@ namespace OneBitRob.ECS
 
         protected override void Update()
         {
-            base.Update(); // preserve LifeTime auto‑despawn, etc.
+            base.Update();
 
             if (_remaining <= 0f) { Despawn(); return; }
 
             float stepLen = Mathf.Min(_speed * Time.deltaTime, _remaining);
 
-            // Primary cast using provided mask
             int maskToUse = (_mask == 0) ? ~0 : _mask;
             int count = Physics.RaycastNonAlloc(
-                _lastPos,
-                _dir,
-                s_Hits,
-                stepLen,
-                maskToUse,
-                QueryTriggerInteraction.Collide
+                _lastPos, _dir, s_Hits, stepLen, maskToUse, QueryTriggerInteraction.Collide
             );
 
-            // Fallback: if mask produced no hits, try broad mask; we'll filter by faction below.
             if (count == 0 && maskToUse != ~0)
             {
                 count = Physics.RaycastNonAlloc(
-                    _lastPos,
-                    _dir,
-                    s_Hits,
-                    stepLen,
-                    ~0,
-                    QueryTriggerInteraction.Collide
+                    _lastPos, _dir, s_Hits, stepLen, ~0, QueryTriggerInteraction.Collide
                 );
             }
 
@@ -121,7 +105,6 @@ namespace OneBitRob.ECS
                 }
             }
 
-            // advance
             transform.position = _lastPos + _dir * stepLen;
             _lastPos = transform.position;
             _remaining -= stepLen;
@@ -137,14 +120,12 @@ namespace OneBitRob.ECS
                 var col = s_Hits[i].collider;
                 if (!col) continue;
 
-                // Ignore hitting our own root
                 if (_attacker && col.transform.root == _attacker.transform.root)
                     continue;
 
                 var brain = col.GetComponentInParent<UnitBrain>();
                 if (brain == null) continue;
 
-                // Faction filter (no friendly fire even if mask is broad)
                 bool targetIsEnemy = brain.UnitDefinition && brain.UnitDefinition.isEnemy;
                 if (targetIsEnemy == _attackerIsEnemy)
                     continue;
@@ -164,7 +145,6 @@ namespace OneBitRob.ECS
             var brain = hit.collider.GetComponentInParent<UnitBrain>();
             if (brain != null && brain.Health != null)
             {
-                // Roll crit
                 bool isCrit = _critChance > 0f && Random.value < _critChance;
                 float dmg = isCrit ? _baseDamage * _critMultiplier : _baseDamage;
 

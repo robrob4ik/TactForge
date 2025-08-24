@@ -1,13 +1,16 @@
-﻿using OneBitRob.ECS;
+﻿// FILE: OneBitRob/AI/RotateToSpellTargetAction.cs (ECB-safe)
+using Unity.Collections;
+using Unity.Entities;
+using Unity.Mathematics;
+using Unity.Transforms;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
-using Unity.Entities;
-using Unity.Transforms;
 using UnityEngine;
+using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Rotating to spell target (writes DesiredFacing)")]
+    [NodeDescription("Rotate to planned spell aim (Target/AoE)")]
     public class RotateToSpellTargetAction
         : AbstractTaskAction<RotateToSpellTargetComponent, RotateToSpellTargetTag, RotateToSpellTargetSystem>, IAction
     {
@@ -20,10 +23,13 @@ namespace OneBitRob.AI
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateAfter(typeof(PlanSpellTargetSystem))]   // plan ready
+    [UpdateBefore(typeof(CastSpellSystem))]        // rotate before commit
     public partial class RotateToSpellTargetSystem
         : TaskProcessorSystem<RotateToSpellTargetComponent, RotateToSpellTargetTag>
     {
         ComponentLookup<LocalTransform> _posRO;
+        EntityCommandBuffer _ecb;
 
         protected override void OnCreate()
         {
@@ -34,40 +40,39 @@ namespace OneBitRob.AI
         protected override void OnUpdate()
         {
             _posRO.Update(this);
+            _ecb = new EntityCommandBuffer(Allocator.Temp);
+
             base.OnUpdate();
+
+            _ecb.Playback(EntityManager);
+            _ecb.Dispose();
         }
 
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
         {
-            // Prefer explicit spell point if we have it
-            Vector3? desiredPoint = brain.CurrentSpellTargetPosition;
+            var em = EntityManager;
 
-            // Else rotate toward the spell target GameObject if available
-            if (!desiredPoint.HasValue && brain.CurrentSpellTarget != null)
-                desiredPoint = brain.CurrentSpellTarget.transform.position;
+            Vector3? aim = null;
 
-            // Else fall back to normal target entity (via Target component)
-            if (!desiredPoint.HasValue && EntityManager.HasComponent<Target>(e))
+            if (em.HasComponent<PlannedCast>(e))
             {
-                var tgtEnt = EntityManager.GetComponentData<Target>(e).Value;
-                if (tgtEnt != Entity.Null && _posRO.HasComponent(tgtEnt))
-                    desiredPoint = _posRO[tgtEnt].Position;
+                var plan = em.GetComponentData<PlannedCast>(e);
+                if (plan.HasValue != 0)
+                {
+                    if (plan.Kind == CastKind.AreaOfEffect) aim = (Vector3)plan.AoEPosition;
+                    else if (plan.Kind == CastKind.SingleTarget && plan.Target != Entity.Null && _posRO.HasComponent(plan.Target))
+                        aim = (Vector3)_posRO[plan.Target].Position;
+                }
             }
 
-            if (!desiredPoint.HasValue) return TaskStatus.Failure;
+            if (!aim.HasValue) return TaskStatus.Failure;
 
-            if (!EntityManager.HasComponent<DesiredFacing>(e))
-                EntityManager.AddComponentData(e, new DesiredFacing { TargetPosition = desiredPoint.Value, HasValue = 1 });
-            else
-            {
-                var df = EntityManager.GetComponentData<DesiredFacing>(e);
-                df.TargetPosition = desiredPoint.Value;
-                df.HasValue = 1;
-                EntityManager.SetComponentData(e, df);
-            }
+            var df = new DesiredFacing { TargetPosition = (float3)aim.Value, HasValue = 1 };
+            if (em.HasComponent<DesiredFacing>(e)) _ecb.SetComponent(e, df);
+            else                                     _ecb.AddComponent(e, df);
 
 #if UNITY_EDITOR
-            Debug.DrawLine(brain.transform.position, desiredPoint.Value, Color.yellow, 0f, false);
+            Debug.DrawLine(brain.transform.position, aim.Value, Color.yellow, 0f, false);
 #endif
             return TaskStatus.Success;
         }

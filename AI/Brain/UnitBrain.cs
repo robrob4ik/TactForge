@@ -122,6 +122,13 @@ namespace OneBitRob.AI
                    && targetBrain.Character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
         }
 
+        public LayerMask GetFriendlyLayerMask()
+        {
+            // For an enemy unit, "friendly" are Enemies; for an ally unit, "friendly" are Allies.
+            int layer = _isEnemy ? GameLayers.EnemyDamageableLayer : GameLayers.AllyDamageableLayer;
+            return 1 << layer;
+        }
+        
         public bool IsTargetInAttackRange(GameObject target)
         {
             if (!target) return false;

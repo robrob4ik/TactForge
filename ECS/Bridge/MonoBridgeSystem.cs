@@ -1,4 +1,5 @@
-﻿using GPUInstancerPro.PrefabModule;
+﻿// FILE: OneBitRob/Bridge/MonoBridgeSystem.cs
+using GPUInstancerPro.PrefabModule;
 using OneBitRob.AI;
 using OneBitRob.ECS;
 using OneBitRob.ECS.GPUI;
@@ -24,12 +25,12 @@ namespace OneBitRob.Bridge
                 var brain = UnitBrainRegistry.Get(e);
                 if (brain)
                 {
-                    // ─── Movement lock while casting ────────────────────────────
+                    // Movement lock while casting
                     bool casting = em.HasComponent<SpellWindup>(e) && em.GetComponentData<SpellWindup>(e).Active != 0;
 
                     Vector3 wanted = casting
-                        ? brain.transform.position                      // stop at current spot
-                        : (Vector3)dd.ValueRO.Position;                 // normal desired destination
+                        ? brain.transform.position
+                        : (Vector3)dd.ValueRO.Position;
 
                     if ((wanted - brain.CurrentTargetPosition).sqrMagnitude > 0.0004f)
                         brain.MoveToPosition(wanted);
@@ -70,8 +71,7 @@ namespace OneBitRob.Bridge
 #endif
             }
 
-            // ─────────────────────────────────────────────────────────────────
-            // WEAPON PROJECTILES (RANGED) — ECS -> Mono
+            // WEAPON PROJECTILES — ECS -> Mono
             foreach (var (spawn, e) in SystemAPI.Query<RefRW<EcsProjectileSpawnRequest>>().WithEntityAccess())
             {
                 if (spawn.ValueRO.HasValue == 0) continue;
@@ -101,11 +101,9 @@ namespace OneBitRob.Bridge
 #endif
                 }
 
-                // consume
                 spawn.ValueRW = default;
             }
 
-            // ─────────────────────────────────────────────────────────────────
             // SPELL PROJECTILES — ECS -> Mono
             foreach (var (spawn, e) in SystemAPI.Query<RefRW<SpellProjectileSpawnRequest>>().WithEntityAccess())
             {
@@ -138,8 +136,7 @@ namespace OneBitRob.Bridge
                 spawn.ValueRW = default;
             }
 
-            // ─────────────────────────────────────────────────────────────────
-            // SUMMONS — ECS -> Mono (unchanged)
+            // SUMMONS — ECS -> Mono
             foreach (var (req, e) in SystemAPI.Query<RefRW<SummonRequest>>().WithEntityAccess())
             {
                 if (req.ValueRO.HasValue == 0) continue;
@@ -189,7 +186,17 @@ namespace OneBitRob.Bridge
                             em.AddComponentData(brainEnt, new AttackCooldown { NextTime = 0f });
                             em.AddComponentData(brainEnt, new AttackWindup { Active = 0, ReleaseTime = 0f });
                             em.AddComponentData(brainEnt, new CastRequest { Kind = CastKind.None, Target = Entity.Null, AoEPosition = float3.zero, HasValue = 0 });
-                            em.AddComponentData(brainEnt, new RetargetCooldown { NextTime = 0 });
+
+                            // 🔒 GUARDED add to avoid duplicate structural add errors
+                            if (!em.HasComponent<RetargetCooldown>(brainEnt))
+                                em.AddComponentData(brainEnt, new RetargetCooldown { NextTime = 0 });
+
+                            em.AddComponentData(brainEnt, new RetargetAssist
+                            {
+                                LastPos = pos,
+                                LastDistSq = float.MaxValue,
+                                NoProgressTime = 0f
+                            });
                         }
                     }
                 }

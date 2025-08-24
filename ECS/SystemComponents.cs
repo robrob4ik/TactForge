@@ -122,7 +122,37 @@ namespace OneBitRob.ECS
 
         public float FacingDeadline; // ignored (kept for compatibility)
     }
+    
+    public struct SpellChainRunner : IComponentData
+    {
+        public int   Remaining;
+        public float Radius;
+        public float JumpDelay;
+        public float ProjectileSpeed;
+        public float Amount;
+        public byte  Positive;
+        public int   ProjectileIdHash;
+        public int   LayerMask;
 
+        public Entity CurrentTarget;
+        public Entity PreviousTarget;
+
+        public float3 FromPos;
+        public byte   HasFromPos;
+        public float  NextTime;
+
+        // NEW
+        public Entity Caster;
+        public byte   CasterFaction;
+    }
+    
+    public struct PlannedCast : IComponentData
+    {
+        public CastKind Kind;        // SingleTarget or AreaOfEffect
+        public Entity   Target;      // when SingleTarget
+        public float3   AoEPosition; // when AreaOfEffect
+        public byte     HasValue;    // 1 = planned this frame
+    }
     public struct SpellCooldown : IComponentData { public float NextTime; }
 
     public struct SpellProjectileSpawnRequest : IComponentData
@@ -157,6 +187,12 @@ namespace OneBitRob.ECS
         public float NextTick;
         public byte  Positive;       // 1=heal, 0=damage
         public int   EffectVfxIdHash;
+    }
+    
+    public struct ActiveAreaVfx : IComponentData
+    {
+        public long Key;     // Persistent FX handle key
+        public int  IdHash;  // Which VFX id we spawned
     }
 
     public struct DoTArea : IComponentData

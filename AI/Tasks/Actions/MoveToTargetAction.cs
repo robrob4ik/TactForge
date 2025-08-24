@@ -1,4 +1,7 @@
-﻿using OneBitRob.Constants;
+﻿// FILE: OneBitRob/AI/Tasks/Actions/MoveToTargetAction.cs
+// Change: Avoid invalidating _posRO by deferring AddComponent (RetargetCooldown) with an EntityCommandBuffer.
+
+using OneBitRob.Constants;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
@@ -32,10 +35,13 @@ namespace OneBitRob.AI
         ComponentLookup<LocalTransform> _posRO;
         ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
 
+        // NEW: defer structural changes to end-of-system
+        private EntityCommandBuffer _ecb;
+
         protected override void OnCreate()
         {
             base.OnCreate();
-            _posRO = GetComponentLookup<LocalTransform>(true);
+            _posRO  = GetComponentLookup<LocalTransform>(true);
             _factRO = GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
         }
 
@@ -43,7 +49,15 @@ namespace OneBitRob.AI
         {
             _posRO.Update(this);
             _factRO.Update(this);
+
+            // begin ECB for this frame
+            _ecb = new EntityCommandBuffer(Allocator.Temp);
+
             base.OnUpdate();
+
+            // apply deferred structural changes after all Execute calls
+            _ecb.Playback(EntityManager);
+            _ecb.Dispose();
         }
 
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
@@ -102,12 +116,18 @@ namespace OneBitRob.AI
             bool canCheck = true;
             if (switchInterval > 0f)
             {
-                var cd = EntityManager.GetComponentData<RetargetCooldown>(e);
+                // SAFE: read if exists, otherwise defer the Add via ECB (no structural change mid-execute)
+                RetargetCooldown cd;
+                bool hadCd = EntityManager.HasComponent<RetargetCooldown>(e);
+                cd = hadCd ? EntityManager.GetComponentData<RetargetCooldown>(e)
+                           : new RetargetCooldown { NextTime = 0 };
+
                 canCheck = now >= cd.NextTime;
                 if (canCheck)
                 {
                     cd.NextTime = now + switchInterval;
-                    EntityManager.SetComponentData(e, cd);
+                    if (hadCd) EntityManager.SetComponentData(e, cd);
+                    else       _ecb.AddComponent(e, cd); // ← defer AddComponent (structural) to end of system
                 }
             }
 
