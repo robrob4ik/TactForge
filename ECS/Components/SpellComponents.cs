@@ -165,4 +165,16 @@ namespace OneBitRob.ECS
         public Entity Caster;
         public byte CasterFaction;
     }
+    
+    /// <summary>
+    /// Tracks a persistent target-attached VFX started by this entity (the caster)
+    /// for a Dot/Hot effect. We key by target+effect id so many casters can share
+    /// the same visual via reference counting in the manager.
+    /// </summary>
+    public struct ActiveTargetVfx : IComponentData
+    {
+        public long   Key;     // computed from target entity + effect id
+        public int    IdHash;  // VFX id hash
+        public Entity Target;  // current target
+    }
 }

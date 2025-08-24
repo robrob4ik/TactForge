@@ -1,4 +1,4 @@
-﻿// Runtime/Config/CombatLayersConfig.cs
+﻿// FILE: Assets/PROJECT/Scripts/Runtime/Config/CombatLayersConfig.cs
 using UnityEngine;
 
 namespace OneBitRob.Config
@@ -6,36 +6,40 @@ namespace OneBitRob.Config
     [CreateAssetMenu(menuName = "TactForge/Config/Combat Layers", fileName = "CombatLayersConfig")]
     public class CombatLayersConfig : ScriptableObject
     {
-        [Header("Damageable Physics Layers (indices)")]
-        [Tooltip("Layer index for Enemy damageable colliders")]
-        public int EnemyDamageableLayer = 11;
+        [Header("Physics Layers (indices)")]
+        [Tooltip("Layer index for the Player (castle/hero/etc).")]
+        public int PlayerLayer = 8;
 
-        [Tooltip("Layer index for Ally damageable colliders")]
-        public int AllyDamageableLayer = 12;
+        [Tooltip("Layer index for Allied units.")]
+        public int AllyLayer = 9;
 
-        [Header("Target Masks (LayerMask filters for auto-targeting)")]
-        [Tooltip("Used when an ENEMY searches for ALLIES")]
-        public LayerMask AllyMask;   // should include AllyDamageableLayer only
+        [Tooltip("Layer index for Enemy units.")]
+        public int EnemyLayer = 10;
 
-        [Tooltip("Used when an ALLY searches for ENEMIES")]
-        public LayerMask EnemyMask;  // should include EnemyDamageableLayer only
+        [Header("Single-bit Masks (auto-kept in sync with indices)")]
+        public LayerMask PlayerMask;
+        public LayerMask AllyMask;
+        public LayerMask EnemyMask;
 
 #if UNITY_EDITOR
         [ContextMenu("Fix Masks Now")]
         private void FixMasksNow()
         {
-            AllyMask  = 1 << Mathf.Clamp(AllyDamageableLayer,  0, 31);
-            EnemyMask = 1 << Mathf.Clamp(EnemyDamageableLayer, 0, 31);
+            PlayerMask = 1 << Mathf.Clamp(PlayerLayer, 0, 31);
+            AllyMask   = 1 << Mathf.Clamp(AllyLayer,   0, 31);
+            EnemyMask  = 1 << Mathf.Clamp(EnemyLayer,  0, 31);
             UnityEditor.EditorUtility.SetDirty(this);
         }
 
         private void OnValidate()
         {
-            int allyBit  = 1 << Mathf.Clamp(AllyDamageableLayer,  0, 31);
-            int enemyBit = 1 << Mathf.Clamp(EnemyDamageableLayer, 0, 31);
+            int p = 1 << Mathf.Clamp(PlayerLayer, 0, 31);
+            int a = 1 << Mathf.Clamp(AllyLayer,   0, 31);
+            int e = 1 << Mathf.Clamp(EnemyLayer,  0, 31);
 
-            if ((AllyMask.value  & allyBit)  != allyBit  || AllyMask.value  != allyBit)  AllyMask  = allyBit;
-            if ((EnemyMask.value & enemyBit) != enemyBit || EnemyMask.value != enemyBit) EnemyMask = enemyBit;
+            if (PlayerMask.value != p) PlayerMask = p;
+            if (AllyMask.value   != a) AllyMask   = a;
+            if (EnemyMask.value  != e) EnemyMask  = e;
         }
 #endif
     }

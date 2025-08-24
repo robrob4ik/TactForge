@@ -1,17 +1,28 @@
-﻿using OneBitRob.ECS;
+﻿// FILE: Assets/PROJECT/Scripts/Runtime/ECS/AI/SpellPlanSystem.cs
+//
+// Phase: PLAN — picks a cast (target or AoE point) and writes CastRequest.
+// Renamed from SpellDecisionSystem for consistency with Plan → Aim → Execute.
+//
+// Notes:
+// - Negative AoE: no self fallback. If no enemy point, no cast.
+// - Positive AoE (heals/buffs): may fallback to self.
+
+using OneBitRob.ECS;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
+using static Unity.Mathematics.math;
+using float3 = Unity.Mathematics.float3;
 
 namespace OneBitRob.AI
 {
     [BurstCompile]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateBefore(typeof(CastSpellSystem))]
-    [UpdateBefore(typeof(SpellWindupAndFireSystem))]
-    public partial struct SpellDecisionSystem : ISystem
+    [UpdateBefore(typeof(CastSpellSystem))]        // Aim happens after plan
+    [UpdateBefore(typeof(SpellWindupAndFireSystem))]  // Execute consumes the plan
+    public partial struct SpellPlanSystem : ISystem
     {
         ComponentLookup<LocalTransform> _posRO;
         ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
@@ -61,7 +72,7 @@ namespace OneBitRob.AI
                 var wind = em.GetComponentData<SpellWindup>(e);
                 var cool = em.GetComponentData<SpellCooldown>(e);
 
-                // Can't decide while winding up or cooling down
+                // Can't plan while winding up or cooling down
                 if (wind.Active != 0 || now < cool.NextTime)
                 {
                     decide.HasValue = 0;
@@ -71,10 +82,10 @@ namespace OneBitRob.AI
 
                 var cfg  = em.GetComponentData<SpellConfig>(e);
                 var cast = em.GetComponentData<CastRequest>(e);
-                cast.HasValue  = 0;
-                cast.Kind      = CastKind.None;
-                cast.Target    = Entity.Null;
-                cast.AoEPosition = float3.zero;
+                cast.HasValue   = 0;
+                cast.Kind       = CastKind.None;
+                cast.Target     = Entity.Null;
+                cast.AoEPosition= float3.zero;
 
                 switch (cfg.Kind)
                 {
@@ -101,20 +112,6 @@ namespace OneBitRob.AI
                             cast.Target = tgt;
                             cast.HasValue = 1;
                         }
-                        else
-                        {
-                            // nudge toward lowest-health ally if configured
-                            if (cfg.AcquireMode == SpellAcquireMode.LowestHealthAlly && _posRO.HasComponent(e))
-                            {
-                                var approach = new LowestHealthAllyTargeting().GetTarget(e, in cfg, ref _posRO, ref _factRO, ref _hpRO);
-                                if (approach != Entity.Null && _posRO.HasComponent(approach))
-                                {
-                                    var dd = new DesiredDestination { Position = _posRO[approach].Position, HasValue = 1 };
-                                    if (em.HasComponent<DesiredDestination>(e)) em.SetComponentData(e, dd);
-                                    else em.AddComponentData(e, dd);
-                                }
-                            }
-                        }
                         break;
                     }
 
@@ -126,44 +123,6 @@ namespace OneBitRob.AI
                             cast.Kind = CastKind.AreaOfEffect;
                             cast.AoEPosition = point;
                             cast.HasValue = 1;
-                        }
-                        else if (cfg.AcquireMode == SpellAcquireMode.DensestEnemyCluster && _posRO.HasComponent(e))
-                        {
-                            // simple nudge heuristic
-                            var selfPos = _posRO[e].Position;
-
-                            byte enemyFaction =
-                                (_factRO.HasComponent(e) && _factRO[e].Faction == OneBitRob.Constants.GameConstants.ENEMY_FACTION)
-                                    ? OneBitRob.Constants.GameConstants.ALLY_FACTION
-                                    : OneBitRob.Constants.GameConstants.ENEMY_FACTION;
-
-                            var wanted = default(FixedList128Bytes<byte>); wanted.Add(enemyFaction);
-
-                            using var candidates = new NativeList<Entity>(Allocator.Temp);
-                            OneBitRob.ECS.SpatialHashSearch.CollectInSphere(selfPos, cfg.Range * 1.5f, wanted, candidates, ref _posRO, ref _factRO);
-
-                            float3 best = selfPos;
-                            float bestCount = 0;
-                            float r2 = math.max(0.1f, cfg.AreaRadius) * 2f;
-
-                            for (int ci = 0; ci < candidates.Length; ci++)
-                            {
-                                var cpos = _posRO[candidates[ci]].Position;
-                                int count = 0;
-                                for (int cj = 0; cj < candidates.Length; cj++)
-                                    if (math.distance(cpos, _posRO[candidates[cj]].Position) <= r2)
-                                        count++;
-
-                                if (count > bestCount)
-                                {
-                                    bestCount = count;
-                                    best = cpos;
-                                }
-                            }
-
-                            var dd = new DesiredDestination { Position = best, HasValue = 1 };
-                            if (em.HasComponent<DesiredDestination>(e)) em.SetComponentData(e, dd);
-                            else em.AddComponentData(e, dd);
                         }
                         break;
                     }
@@ -181,9 +140,7 @@ namespace OneBitRob.AI
                 }
 
                 em.SetComponentData(e, cast);
-
-                // Always consume decision request
-                decide.HasValue = 0;
+                decide.HasValue = 0; // always consume the request
                 em.SetComponentData(e, decide);
             }
 
@@ -198,7 +155,7 @@ namespace OneBitRob.AI
                 case SpellAcquireMode.LowestHealthAlly:
                     return new LowestHealthAllyTargeting().GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
 
-                case SpellAcquireMode.DensestEnemyCluster: // fallthrough: use closest for single-target
+                case SpellAcquireMode.DensestEnemyCluster: // single-target fallback → use closest enemy
                 case SpellAcquireMode.ClosestEnemy:
                 default:
                     return new ClosestEnemySpellTargeting().GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
@@ -213,9 +170,11 @@ namespace OneBitRob.AI
                 case SpellAcquireMode.DensestEnemyCluster:
                     return new DensestEnemyClusterTargeting().TryGetAOETargetPoint(self, in cfg, ref _posRO, ref _factRO, out point);
 
+                // Default: try closest enemy; POSITIVE may fallback to self, NEGATIVE must skip.
                 case SpellAcquireMode.LowestHealthAlly:
                 case SpellAcquireMode.ClosestEnemy:
                 default:
+                {
                     var tgt = new ClosestEnemySpellTargeting().GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
                     if (tgt != Entity.Null && _posRO.HasComponent(tgt))
                     {
@@ -223,7 +182,7 @@ namespace OneBitRob.AI
                         return true;
                     }
 
-                    if (_posRO.HasComponent(self))
+                    if (cfg.EffectType == SpellEffectType.Positive && _posRO.HasComponent(self))
                     {
                         point = _posRO[self].Position;
                         return true;
@@ -231,6 +190,7 @@ namespace OneBitRob.AI
 
                     point = default;
                     return false;
+                }
             }
         }
     }

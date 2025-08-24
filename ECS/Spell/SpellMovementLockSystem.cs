@@ -5,7 +5,7 @@ using Unity.Entities;
 namespace OneBitRob.AI
 {
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(OneBitRob.AI.SpellDecisionSystem))]
+    [UpdateAfter(typeof(OneBitRob.AI.SpellPlanSystem))]
     public partial struct SpellMovementLockSystem : ISystem
     {
         private EntityQuery _q;

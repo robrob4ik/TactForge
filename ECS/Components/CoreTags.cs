@@ -9,4 +9,7 @@ namespace OneBitRob.ECS
 
     public struct Alive       : IComponentData { public byte Value; }
     public struct CombatStyle : IComponentData { public byte Value; } // 1=melee, 2=ranged (as in your code)
+    
+    public struct DestroyEntityTag : IComponentData { }
+    
 }

@@ -26,8 +26,8 @@ namespace OneBitRob.AI
 
         private LayerMask _targetMask;
 
-        [SerializeField, Tooltip("Set all child colliders to AllyDamageable/EnemyDamageable at Awake().")]
-        private bool autoAssignDamageableLayer = true;
+        [SerializeField, Tooltip("Set all child colliders to Ally/Enemy faction layer at Awake().")]
+        private bool autoAssignFactionLayer = true;
 
         public GameObject CurrentTarget { get; set; }
         public Vector3 CurrentTargetPosition { get; private set; }
@@ -79,13 +79,15 @@ namespace OneBitRob.AI
 
             CacheLayerMasks();
 
-            if (autoAssignDamageableLayer)
-                ApplyDamageableLayerToChildren();
+            if (autoAssignFactionLayer)
+                ApplyFactionLayerToChildren();
 
             if (HandleWeapon != null)
             {
+                // Use hostiles for scan/selection.
                 HandleWeapon.SetTargetLayerMask(_targetMask);
-                HandleWeapon.SetDamageableLayer(CombatLayers.DamageableLayerFor(_isEnemy));
+                // Put owner/hurtboxes on own faction layer for any internal filters.
+                HandleWeapon.SetDamageableLayer(CombatLayers.FactionLayerIndexFor(_isEnemy));
             }
         }
 
@@ -101,24 +103,24 @@ namespace OneBitRob.AI
 
         private void CacheLayerMasks()
         {
-            _targetMask = CombatLayers.TargetMaskFor(_isEnemy);
+            _targetMask = CombatLayers.TargetMaskFor(_isEnemy); // == Hostile
         }
 
-        private void ApplyDamageableLayerToChildren()
+        private void ApplyFactionLayerToChildren()
         {
-            int damageableLayer = CombatLayers.DamageableLayerFor(_isEnemy);
-            if (damageableLayer < 0 || damageableLayer > 31) return;
+            int factionLayer = CombatLayers.FactionLayerIndexFor(_isEnemy);
+            if (factionLayer < 0 || factionLayer > 31) return;
 
             var cols = GetComponentsInChildren<Collider>(includeInactive: true);
             for (int i = 0; i < cols.Length; i++)
             {
                 var c = cols[i];
                 if (!c) continue;
-                c.gameObject.layer = damageableLayer;
+                c.gameObject.layer = factionLayer;
             }
 
             if (Character && Character.CharacterModel)
-                Character.CharacterModel.layer = damageableLayer;
+                Character.CharacterModel.layer = factionLayer;
         }
 
         public void Setup() { }
@@ -131,11 +133,14 @@ namespace OneBitRob.AI
 
         public LayerMask GetTargetLayerMask() => _targetMask;
 
-        public LayerMask GetDamageableLayerMask() =>
-            CombatLayers.DamageableLayerMaskFor(_isEnemy);
+        /// <summary>Mask of hostiles relative to this brain’s faction.</summary>
+        public LayerMask GetHostileLayerMask() => CombatLayers.HostileMaskFor(_isEnemy);
 
-        public LayerMask GetFriendlyLayerMask() =>
-            CombatLayers.FriendlyLayerMaskFor(_isEnemy);
+        /// <summary>Mask of friendlies relative to this brain’s faction.</summary>
+        public LayerMask GetFriendlyLayerMask() => CombatLayers.FriendlyMaskFor(_isEnemy);
+
+        // ─── Compatibility (older systems call this name) ───────────────────
+        public LayerMask GetDamageableLayerMask() => GetHostileLayerMask();
 
         public GameObject FindTarget() => CurrentTarget;
 

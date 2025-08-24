@@ -13,11 +13,19 @@ namespace OneBitRob.ECS
     {
         protected override void OnUpdate()
         {
-            var ecb = new EntityCommandBuffer(Allocator.Temp);
+            var ecb       = new EntityCommandBuffer(Allocator.Temp);
             var toDestroy = new List<GameObject>();
 
-            foreach (var (tag, entity) in SystemAPI.Query<RefRO<DestroyEntityTag>>().WithEntityAccess())
+            foreach (var (destroyTag, entity) in SystemAPI.Query<RefRO<DestroyEntityTag>>().WithEntityAccess())
             {
+                // Release any target-attached VFX held by this entity (caster)
+                if (EntityManager.HasComponent<ActiveTargetVfx>(entity))
+                {
+                    var bind = EntityManager.GetComponentData<ActiveTargetVfx>(entity);
+                    OneBitRob.FX.SpellVfxPoolManager.EndPersistent(bind.Key);
+                    ecb.RemoveComponent<ActiveTargetVfx>(entity);
+                }
+
                 var brain = OneBitRob.AI.UnitBrainRegistry.Get(entity);
                 if (brain && brain.gameObject)
                 {
@@ -25,13 +33,15 @@ namespace OneBitRob.ECS
                     if (brain.TryGetComponent<GPUIPrefab>(out var gpuiPrefab))
                         GPUIPrefabAPI.RemovePrefabInstance(gpuiPrefab);
                 }
+
                 ecb.DestroyEntity(entity);
             }
 
             ecb.Playback(EntityManager);
             ecb.Dispose();
 
-            foreach (var go in toDestroy) GameObject.Destroy(go);
+            foreach (var go in toDestroy)
+                GameObject.Destroy(go);
         }
     }
 }

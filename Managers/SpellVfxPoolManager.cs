@@ -1,4 +1,15 @@
-﻿using System.Collections.Generic;
+﻿// FILE: Assets/PROJECT/Scripts/Runtime/FX/SpellVfxPoolManager.cs
+//
+// Changes vs prior version you have:
+// - Add refCount per persistent key
+// - BeginPersistentByHash increments the count and spawns/recovers once
+// - EndPersistent decrements; despawns when count hits 0
+// - MovePersistent(key, idHash, ...) re-acquires if instance was killed
+// - PreparePersistentInstance loops ParticleSystems and disables self-stop
+// - Optional Force Layer to avoid camera culling
+// - One-shot Play() unchanged (short-lived)
+
+using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
 
@@ -19,10 +30,27 @@ namespace OneBitRob.FX
         private static SpellVfxPoolManager _instance;
         private static Dictionary<string, MMObjectPooler> _map;
 
-        // NEW: persistent instances keyed by (entity index/version + vfx id hash)
-        private static Dictionary<long, GameObject> _activePersistent;
+        private struct PersistentEntry
+        {
+            public int        IdHash;
+            public string     Id;
+            public GameObject Go;
+        }
 
+        private static Dictionary<long, PersistentEntry> _activePersistent;
+        private static Dictionary<long, int>             _refCounts;
+
+        [Header("Debug")]
         public bool LogMissing = true;
+
+        [Header("Visibility")]
+        [Tooltip("If >= 0, forces the spawned VFX (and its children) to this layer (e.g., 0 = Default).")]
+        [SerializeField] private int _forceLayer = -1;
+
+        [Header("Persistent FX Behavior")]
+        [Tooltip("Force persistent ParticleSystem(s) to loop and not auto-despawn.")]
+        [SerializeField] private bool _loopPersistentParticles = true;
+
         private static readonly HashSet<string> _warned = new();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -35,7 +63,8 @@ namespace OneBitRob.FX
             DontDestroyOnLoad(go);
             _instance = go.AddComponent<SpellVfxPoolManager>();
             _instance.RebuildMap();
-            _activePersistent = new Dictionary<long, GameObject>(32);
+            _activePersistent = new Dictionary<long, PersistentEntry>(64);
+            _refCounts        = new Dictionary<long, int>(64);
             return _instance;
         }
 
@@ -45,7 +74,8 @@ namespace OneBitRob.FX
             _instance = this;
             DontDestroyOnLoad(gameObject);
             RebuildMap();
-            if (_activePersistent == null) _activePersistent = new Dictionary<long, GameObject>(32);
+            _activePersistent ??= new Dictionary<long, PersistentEntry>(64);
+            _refCounts        ??= new Dictionary<long, int>(64);
         }
 
         private void RebuildMap()
@@ -56,7 +86,8 @@ namespace OneBitRob.FX
                     _map[e.Id] = e.Pooler;
         }
 
-        // ────────────────────────────────────────── Legacy one-shot helper (still available)
+        // ─────────────────────────────── One-shots (unchanged)
+
         public static void PlayByHash(int idHash, Vector3 position, Transform follow = null)
         {
             if (idHash == 0) return;
@@ -64,7 +95,7 @@ namespace OneBitRob.FX
             if (string.IsNullOrEmpty(id))
             {
 #if UNITY_EDITOR
-                if (_instance.LogMissing && _warned.Add(idHash.ToString()))
+                if (_instance.LogMissing && _warned.Add($"hash:{idHash}"))
                     Debug.LogWarning($"[SpellFxManager] No VFX id registered for hash {idHash}.");
 #endif
                 return;
@@ -79,12 +110,177 @@ namespace OneBitRob.FX
             {
 #if UNITY_EDITOR
                 if (_instance.LogMissing && _warned.Add(id))
-                    Debug.LogWarning($"[SpellFxManager] No pool mapped for id '{id}'. Add it to SpellFxManager.Pools.");
+                    Debug.LogWarning($"[SpellFxManager] No pool mapped for id '{id}'. Add it to SpellVfxPoolManager.Pools.");
 #endif
                 return;
             }
 
             var go = pool.GetPooledGameObject();
+            if (!go) return;
+
+            _instance.PrepareOneShotInstance(go, position, follow);
+        }
+
+        private void PrepareOneShotInstance(GameObject go, Vector3 position, Transform follow)
+        {
+            if (follow)
+            {
+                go.transform.SetParent(follow, worldPositionStays: true);
+                go.transform.position = follow.position;
+            }
+            else
+            {
+                go.transform.SetParent(null, true);
+                go.transform.position = position;
+            }
+
+            if (_forceLayer >= 0) SetLayerRecursively(go, _forceLayer);
+
+            go.SetActive(true);
+            go.GetComponent<MMPoolableObject>()?.TriggerOnSpawnComplete();
+        }
+
+        // ─────────────────────────────── Persistent (ref-counted)
+
+        public static void BeginPersistentByHash(int idHash, long key, Vector3 position, Transform follow = null)
+        {
+            Ensure();
+            if (idHash == 0) return;
+
+            // bump ref count
+            _refCounts.TryGetValue(key, out var rc);
+            _refCounts[key] = rc + 1;
+
+            var id = OneBitRob.ECS.SpellVisualRegistry.GetVfxId(idHash);
+            if (string.IsNullOrEmpty(id))
+            {
+#if UNITY_EDITOR
+                if (_instance.LogMissing && _warned.Add($"hash:{idHash}"))
+                    Debug.LogWarning($"[SpellFxManager] No VFX id registered for hash {idHash}.");
+#endif
+                return;
+            }
+
+            // reuse / revive if present
+            if (_activePersistent.TryGetValue(key, out var entry) && entry.Go)
+            {
+                if (!entry.Go.activeInHierarchy)
+                    _instance.PreparePersistentInstance(entry.Go, position, follow);
+                else
+                    _instance.MoveInstance(entry.Go, position, follow);
+
+                // keep metadata fresh
+                entry.IdHash = idHash;
+                entry.Id     = id;
+                _activePersistent[key] = entry;
+                return;
+            }
+
+            // fresh spawn
+            var go = _instance.GetFromPool(id);
+            if (!go) return;
+
+            _instance.PreparePersistentInstance(go, position, follow);
+            _activePersistent[key] = new PersistentEntry { IdHash = idHash, Id = id, Go = go };
+        }
+
+        public static void MovePersistent(long key, int idHash, Vector3 position, Transform follow = null)
+        {
+            Ensure();
+
+            if (!_activePersistent.TryGetValue(key, out var entry) || entry.Go == null)
+            {
+                // If someone moved before a begin (or if instance got destroyed), re-acquire
+                var id = OneBitRob.ECS.SpellVisualRegistry.GetVfxId(idHash);
+                if (string.IsNullOrEmpty(id)) return;
+
+                var go = _instance.GetFromPool(id);
+                if (!go) return;
+
+                _instance.PreparePersistentInstance(go, position, follow);
+                _activePersistent[key] = new PersistentEntry { IdHash = idHash, Id = id, Go = go };
+                return;
+            }
+
+            if (!entry.Go.activeInHierarchy)
+                _instance.PreparePersistentInstance(entry.Go, position, follow);
+            else
+                _instance.MoveInstance(entry.Go, position, follow);
+
+            // keep idHash up to date (helps re-acquire later)
+            entry.IdHash = idHash;
+            _activePersistent[key] = entry;
+        }
+
+        public static void MovePersistent(long key, Vector3 position, Transform follow = null)
+        {
+            Ensure();
+            if (_activePersistent.TryGetValue(key, out var entry))
+                MovePersistent(key, entry.IdHash, position, follow);
+        }
+
+        public static void EndPersistent(long key)
+        {
+            Ensure();
+
+            if (_refCounts.TryGetValue(key, out var rc))
+            {
+                rc -= 1;
+                if (rc > 0) { _refCounts[key] = rc; return; }
+                _refCounts.Remove(key);
+            }
+
+            if (_activePersistent.TryGetValue(key, out var entry))
+            {
+                if (entry.Go)
+                {
+                    var poolable = entry.Go.GetComponent<MMPoolableObject>();
+                    if (poolable != null) poolable.Destroy(); else entry.Go.SetActive(false);
+                }
+                _activePersistent.Remove(key);
+            }
+        }
+
+        // ─────────────────────────────── Helpers
+
+        private GameObject GetFromPool(string id)
+        {
+            if (_map == null || !_map.TryGetValue(id, out var pool))
+            {
+#if UNITY_EDITOR
+                if (LogMissing && _warned.Add(id))
+                    Debug.LogWarning($"[SpellFxManager] No pool mapped for id '{id}'. Add it to SpellVfxPoolManager.Pools.");
+#endif
+                return null;
+            }
+
+            var go = pool.GetPooledGameObject();
+            if (!go)
+            {
+#if UNITY_EDITOR
+                if (LogMissing && _warned.Add($"{id}::empty"))
+                    Debug.LogWarning($"[SpellFxManager] Pool for '{id}' returned null. Increase pool size or check pool setup.");
+#endif
+                return null;
+            }
+            return go;
+        }
+
+        private void PreparePersistentInstance(GameObject go, Vector3 position, Transform follow)
+        {
+            MoveInstance(go, position, follow);
+
+            if (_forceLayer >= 0) SetLayerRecursively(go, _forceLayer);
+
+            go.SetActive(true);
+            go.GetComponent<MMPoolableObject>()?.TriggerOnSpawnComplete();
+
+            if (_loopPersistentParticles)
+                EnsureParticleLoop(go);
+        }
+
+        private void MoveInstance(GameObject go, Vector3 position, Transform follow)
+        {
             if (!go) return;
 
             if (follow)
@@ -97,90 +293,27 @@ namespace OneBitRob.FX
                 go.transform.SetParent(null, true);
                 go.transform.position = position;
             }
-
-            go.SetActive(true);
-            var poolable = go.GetComponent<MMPoolableObject>();
-            poolable?.TriggerOnSpawnComplete();
         }
 
-        // ────────────────────────────────────────── NEW persistent helpers
-        public static void BeginPersistentByHash(int idHash, long key, Vector3 position, Transform follow = null)
+        private static void EnsureParticleLoop(GameObject root)
         {
-            Ensure();
-            if (idHash == 0) return;
-            if (_activePersistent.TryGetValue(key, out var existing) && existing)
+            var ps = root.GetComponentsInChildren<ParticleSystem>(true);
+            for (int i = 0; i < ps.Length; i++)
             {
-                MovePersistent(key, position, follow);
-                return;
+                var p = ps[i];
+                var main = p.main;
+                main.loop = true;
+                main.stopAction = ParticleSystemStopAction.None;
+                if (!p.isPlaying) p.Play(true);
             }
+        }
 
-            var id = OneBitRob.ECS.SpellVisualRegistry.GetVfxId(idHash);
-            if (string.IsNullOrEmpty(id))
-            {
-#if UNITY_EDITOR
-                if (_instance.LogMissing && _warned.Add($"hash:{idHash}"))
-                    Debug.LogWarning($"[SpellFxManager] No VFX id registered for hash {idHash}.");
-#endif
-                return;
-            }
-
-            if (_map == null || !_map.TryGetValue(id, out var pool))
-            {
-#if UNITY_EDITOR
-                if (_instance.LogMissing && _warned.Add(id))
-                    Debug.LogWarning($"[SpellFxManager] No pool mapped for id '{id}'. Add it to SpellFxManager.Pools.");
-#endif
-                return;
-            }
-
-            var go = pool.GetPooledGameObject();
+        private static void SetLayerRecursively(GameObject go, int layer)
+        {
             if (!go) return;
-
-            if (follow)
-            {
-                go.transform.SetParent(follow, true);
-                go.transform.position = follow.position;
-            }
-            else
-            {
-                go.transform.SetParent(null, true);
-                go.transform.position = position;
-            }
-
-            go.SetActive(true);
-            go.GetComponent<MMPoolableObject>()?.TriggerOnSpawnComplete();
-            _activePersistent[key] = go;
+            go.layer = layer;
+            foreach (Transform t in go.transform)
+                SetLayerRecursively(t.gameObject, layer);
         }
-
-        public static void MovePersistent(long key, Vector3 position, Transform follow = null)
-        {
-            if (_activePersistent == null) return;
-            if (!_activePersistent.TryGetValue(key, out var go) || !go) return;
-
-            if (follow)
-            {
-                go.transform.SetParent(follow, true);
-                go.transform.position = follow.position;
-            }
-            else
-            {
-                go.transform.SetParent(null, true);
-                go.transform.position = position;
-            }
-        }
-
-        public static void EndPersistent(long key)
-        {
-            if (_activePersistent == null) return;
-            if (_activePersistent.TryGetValue(key, out var go) && go)
-            {
-                var poolable = go.GetComponent<MMPoolableObject>();
-                if (poolable != null) poolable.Destroy(); else go.SetActive(false);
-            }
-            _activePersistent.Remove(key);
-        }
-
-        public static bool HasPersistent(long key)
-            => _activePersistent != null && _activePersistent.ContainsKey(key);
     }
 }

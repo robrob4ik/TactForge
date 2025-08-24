@@ -20,7 +20,7 @@ namespace OneBitRob.AI
     public struct ReadyToCastSpellTag       : IComponentData, IEnableableComponent { }
 
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateBefore(typeof(SpellDecisionSystem))] // <-- same frame, set decision request first
+    [UpdateBefore(typeof(SpellPlanSystem))] // <-- same frame, set decision request first
     public partial class ReadyToCastSpellSystem
         : TaskProcessorSystem<ReadyToCastSpellComponent, ReadyToCastSpellTag>
     {
