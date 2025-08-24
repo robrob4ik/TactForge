@@ -1,3 +1,4 @@
+using System;
 using Unity.Entities;
 using Unity.Mathematics;
 using OneBitRob;
@@ -213,5 +214,19 @@ namespace OneBitRob.ECS
         public float3 LastPos;
         public float LastDistSq;
         public float NoProgressTime;
+    }
+    
+    [Flags]
+    public enum MovementLockFlags : byte
+    {
+        None    = 0,
+        Casting = 1 << 0,
+        Rooted  = 1 << 1,
+        Stunned = 1 << 2
+    }
+
+    public struct MovementLock : IComponentData
+    {
+        public MovementLockFlags Flags;
     }
 }

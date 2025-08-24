@@ -1,5 +1,6 @@
+// Runtime/AI/Brain/UnitBrain.cs
 using System.Collections.Generic;
-using OneBitRob.Constants;
+using OneBitRob.Config;
 using OneBitRob.EnigmaEngine;
 using ProjectDawn.Navigation.Hybrid;
 using Unity.Entities;
@@ -9,7 +10,7 @@ namespace OneBitRob.AI
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(UnitDefinitionProvider))]
-    public class UnitBrain : MonoBehaviour
+    public sealed partial class UnitBrain : MonoBehaviour
     {
         private Entity _entity;
 
@@ -37,7 +38,6 @@ namespace OneBitRob.AI
 
         [Header("Debug")]
         public bool DebugDrawCombatGizmos = true;
-
         public bool DebugAlwaysDraw = false;
         public bool DebugDrawFacing = true;
         public bool DebugDrawSpell = true;
@@ -60,12 +60,12 @@ namespace OneBitRob.AI
             UnitDefinition = defProvider.unitDefinition;
             _isEnemy = UnitDefinition.isEnemy;
 
-            Character = GetComponent<EnigmaCharacter>();
+            Character       = GetComponent<EnigmaCharacter>();
             CombatSubsystem = GetComponent<CombatSubsystem>();
-            HandleWeapon = Character ? Character.FindAbility<EnigmaCharacterHandleWeapon>() : null;
-            _navMove = Character ? Character.FindAbility<EnigmaCharacterAgentsNavigationMovement>() : null;
-            _navAgent = GetComponent<AgentAuthoring>();
-            Health = GetComponent<EnigmaHealth>();
+            HandleWeapon    = Character ? Character.FindAbility<EnigmaCharacterHandleWeapon>() : null;
+            _navMove        = Character ? Character.FindAbility<EnigmaCharacterAgentsNavigationMovement>() : null;
+            _navAgent       = GetComponent<AgentAuthoring>();
+            Health          = GetComponent<EnigmaHealth>();
 
             if (Health != null)
             {
@@ -75,14 +75,28 @@ namespace OneBitRob.AI
             }
 
             CacheLayerMasks();
+
             if (HandleWeapon != null)
             {
                 HandleWeapon.SetTargetLayerMask(_targetMask);
-                HandleWeapon.SetDamageableLayer(_isEnemy ? GameLayers.AllyDamageableLayer : GameLayers.EnemyDamageableLayer);
+                HandleWeapon.SetDamageableLayer(CombatLayers.DamageableLayerFor(_isEnemy));
             }
         }
 
-        private void CacheLayerMasks() { _targetMask = _isEnemy ? GameLayers.AllyMask : GameLayers.EnemyMask; }
+        private void OnDisable()
+        {
+            if (_entity != Entity.Null) UnitBrainRegistry.Unregister(_entity, gameObject);
+        }
+
+        private void OnDestroy()
+        {
+            if (_entity != Entity.Null) UnitBrainRegistry.Unregister(_entity, gameObject);
+        }
+
+        private void CacheLayerMasks()
+        {
+            _targetMask = CombatLayers.TargetMaskFor(_isEnemy);
+        }
 
         public void Setup() { }
 
@@ -92,18 +106,13 @@ namespace OneBitRob.AI
             UnitBrainRegistry.Register(entity, this);
         }
 
-        private void OnDestroy()
-        {
-            if (_entity != Entity.Null) UnitBrainRegistry.Unregister(_entity, gameObject);
-        }
-
         public LayerMask GetTargetLayerMask() => _targetMask;
 
-        public LayerMask GetDamageableLayerMask()
-        {
-            int layer = _isEnemy ? GameLayers.AllyDamageableLayer : GameLayers.EnemyDamageableLayer;
-            return 1 << layer;
-        }
+        public LayerMask GetDamageableLayerMask() =>
+            CombatLayers.DamageableLayerMaskFor(_isEnemy);
+
+        public LayerMask GetFriendlyLayerMask() =>
+            CombatLayers.FriendlyLayerMaskFor(_isEnemy);
 
         public GameObject FindTarget() => CurrentTarget;
 
@@ -122,13 +131,6 @@ namespace OneBitRob.AI
                    && targetBrain.Character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
         }
 
-        public LayerMask GetFriendlyLayerMask()
-        {
-            // For an enemy unit, "friendly" are Enemies; for an ally unit, "friendly" are Allies.
-            int layer = _isEnemy ? GameLayers.EnemyDamageableLayer : GameLayers.AllyDamageableLayer;
-            return 1 << layer;
-        }
-        
         public bool IsTargetInAttackRange(GameObject target)
         {
             if (!target) return false;
@@ -183,134 +185,7 @@ namespace OneBitRob.AI
                 AddComponent<UnitBrainTag>(e);
             }
         }
-
-#if UNITY_EDITOR
-        private void OnDrawGizmos()
-        {
-            if (DebugDrawCombatGizmos && DebugAlwaysDraw) DrawCombatGizmos();
-        }
-
-        private void OnDrawGizmosSelected()
-        {
-            if (DebugDrawCombatGizmos) DrawCombatGizmos();
-        }
-
-        private void DrawCombatGizmos()
-        {
-            var pos = transform.position;
-
-            // Target detection range
-            if (UnitDefinition != null && UnitDefinition.targetDetectionRange > 0f)
-            {
-                Gizmos.color = new Color(1f, 0.9f, 0.25f, 0.5f);
-                UnityEditor.Handles.color = Gizmos.color;
-                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.targetDetectionRange);
-            }
-
-            // Weapon attack range
-            if (UnitDefinition != null && UnitDefinition.weapon != null && UnitDefinition.weapon.attackRange > 0f)
-            {
-                Gizmos.color = new Color(1f, 0.25f, 0.25f, 0.7f);
-                UnityEditor.Handles.color = Gizmos.color;
-                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.weapon.attackRange);
-            }
-
-            // Stopping distance
-            if (UnitDefinition != null)
-            {
-                Gizmos.color = new Color(0.25f, 1f, 0.35f, 0.65f);
-                UnityEditor.Handles.color = Gizmos.color;
-                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.stoppingDistance);
-            }
-
-            // Retarget hysteresis
-            if (UnitDefinition != null && UnitDefinition.autoTargetMinSwitchDistance > 0f)
-            {
-                Gizmos.color = new Color(0.35f, 0.6f, 1f, 0.5f);
-                UnityEditor.Handles.color = Gizmos.color;
-                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.autoTargetMinSwitchDistance);
-            }
-
-            // Desired destination
-            if (CurrentTargetPosition != default)
-            {
-                Gizmos.color = Color.cyan;
-                Gizmos.DrawLine(pos, CurrentTargetPosition);
-                Gizmos.DrawSphere(CurrentTargetPosition, 0.08f);
-            }
-
-            // Current target
-            if (CurrentTarget)
-            {
-                Gizmos.color = Color.green;
-                Gizmos.DrawLine(pos, CurrentTarget.transform.position);
-                Gizmos.DrawSphere(CurrentTarget.transform.position, 0.07f);
-            }
-
-            // Facing
-            if (DebugDrawFacing)
-            {
-                Gizmos.color = Color.yellow;
-                Gizmos.DrawRay(pos + Vector3.up * 0.05f, transform.forward * 0.9f);
-            }
-
-            // Spell helpers (extended)
-            if (DebugDrawSpell && UnitDefinition != null && UnitDefinition.unitSpells != null && UnitDefinition.unitSpells.Count > 0)
-            {
-                var sd = UnitDefinition.unitSpells[0];
-                if (sd != null)
-                {
-                    // Cast range
-                    if (sd.Range > 0f)
-                    {
-                        Gizmos.color = sd.DebugColor;
-                        Gizmos.color = new Color(sd.DebugColor.r, sd.DebugColor.g, sd.DebugColor.b, 0.35f);
-                        UnityEditor.Handles.color = Gizmos.color;
-                        UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, sd.Range);
-                    }
-
-                    // AoE radius (if area or we have an explicit target point)
-                    var showAoE = sd.Kind == SpellKind.EffectOverTimeArea || CurrentSpellTargetPosition.HasValue;
-                    if (showAoE && sd.Range > 0f)
-                    {
-                        Vector3 center = CurrentSpellTargetPosition.HasValue ? CurrentSpellTargetPosition.Value : pos;
-                        Gizmos.color = new Color(sd.DebugColor.r, 0f, sd.DebugColor.b, 0.2f);
-                        UnityEditor.Handles.color = new Color(sd.DebugColor.r, 0f, sd.DebugColor.b, 0.9f);
-                        UnityEditor.Handles.DrawWireDisc(center, Vector3.up, sd.Range);
-                        Gizmos.DrawSphere(center, 0.05f);
-                    }
-
-                    // Muzzle & trajectory preview for projectile spells
-                    if (sd.Kind == SpellKind.ProjectileLine || sd.Kind == SpellKind.Chain)
-                    {
-                        Vector3 fwd = transform.forward;
-                        Vector3 up = transform.up;
-                        Vector3 right = transform.right;
-
-                        Vector3 origin = pos
-                                         + fwd * Mathf.Max(0f, sd.MuzzleForward)
-                                         + right * sd.MuzzleLocalOffset.x
-                                         + up * sd.MuzzleLocalOffset.y
-                                         + fwd * sd.MuzzleLocalOffset.z;
-
-                        Gizmos.color = Color.magenta;
-                        Gizmos.DrawSphere(origin, 0.06f);
-
-                        Vector3 aim = origin + fwd * 0.75f;
-                        if (CurrentSpellTarget)
-                            aim = CurrentSpellTarget.transform.position;
-                        else if (CurrentSpellTargetPosition.HasValue) aim = CurrentSpellTargetPosition.Value;
-
-                        aim.y = origin.y; // planar preview
-                        Gizmos.DrawLine(origin, aim);
-                    }
-                }
-            }
-        }
-#endif
     }
 
-    public struct UnitBrainTag : IComponentData
-    {
-    }
+    public struct UnitBrainTag : IComponentData { }
 }
