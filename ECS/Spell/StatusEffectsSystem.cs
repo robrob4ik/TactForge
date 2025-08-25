@@ -24,7 +24,7 @@ namespace OneBitRob.ECS
 
         public void OnUpdate(ref SystemState state)
         {
-            var em  = state.EntityManager;
+            var em = state.EntityManager;
             var ecb = new EntityCommandBuffer(Allocator.Temp);
             float now = (float)SystemAPI.Time.ElapsedTime;
 
@@ -40,9 +40,9 @@ namespace OneBitRob.ECS
                 //    Key = (target index/version) XOR vfx id hash (salted)
                 if (dot.EffectVfxIdHash != 0 && dot.Target != Entity.Null && tb != null)
                 {
-                    long salt   = unchecked((long)0x517CC1B727220A95UL);
-                    long tKey   = ((long)dot.Target.Index << 32) | (long)(uint)dot.Target.Version;
-                    long key    = tKey ^ (((long)dot.EffectVfxIdHash) << 1) ^ salt;
+                    long salt = unchecked((long)0x517CC1B727220A95UL);
+                    long tKey = ((long)dot.Target.Index << 32) | (long)(uint)dot.Target.Version;
+                    long key = tKey ^ (((long)dot.EffectVfxIdHash) << 1) ^ salt;
 
                     // Check if this caster already bound to this target visual
                     bool hasBind = em.HasComponent<ActiveTargetVfx>(caster);
@@ -63,7 +63,7 @@ namespace OneBitRob.ECS
 
                             long newKey = tKey ^ (((long)dot.EffectVfxIdHash) << 1) ^ salt;
                             OneBitRob.FX.SpellVfxPoolManager.BeginPersistentByHash(dot.EffectVfxIdHash, newKey, tb.transform.position, tb.transform);
-                            bind.Key    = newKey;
+                            bind.Key = newKey;
                             bind.IdHash = dot.EffectVfxIdHash;
                             bind.Target = dot.Target;
                             ecb.SetComponent(caster, bind);
@@ -100,14 +100,17 @@ namespace OneBitRob.ECS
                         float amt = isHot ? -shownAmount : shownAmount;
                         tb.Health.Damage(amt, tb.gameObject, 0f, 0f, Vector3.zero);
 
-                        OneBitRob.FX.DamageNumbersManager.Popup(new OneBitRob.FX.DamageNumbersParams
-                        {
-                            Kind     = isHot ? OneBitRob.FX.DamagePopupKind.Hot : OneBitRob.FX.DamagePopupKind.Dot,
-                            Follow   = tb.transform,
-                            Position = tb.transform.position,
-                            Amount   = shownAmount
-                        });
+                        OneBitRob.FX.DamageNumbersManager.Popup(
+                            new OneBitRob.FX.DamageNumbersParams
+                            {
+                                Kind = isHot ? OneBitRob.FX.DamagePopupKind.Hot : OneBitRob.FX.DamagePopupKind.Dot,
+                                Follow = tb.transform,
+                                Position = tb.transform.position,
+                                Amount = shownAmount
+                            }
+                        );
                     }
+
                     dot.NextTick = now + math.max(0.05f, dot.Interval);
                 }
 
@@ -120,12 +123,10 @@ namespace OneBitRob.ECS
                         OneBitRob.FX.SpellVfxPoolManager.EndPersistent(bind.Key);
                         ecb.RemoveComponent<ActiveTargetVfx>(caster);
                     }
+
                     ecb.RemoveComponent<DotOnTarget>(caster);
                 }
-                else
-                {
-                    dotRW.ValueRW = dot;
-                }
+                else { dotRW.ValueRW = dot; }
             }
 
             // ───────── Area DoT/HoT (persistent) — unchanged except MovePersistent now passes idHash
@@ -133,21 +134,21 @@ namespace OneBitRob.ECS
             {
                 var a = area.ValueRO;
 
+                // Persistent VFX — use visual offset on Y only
                 if (a.AreaVfxIdHash != 0)
                 {
-                    long salt   = unchecked((long)0x9E3779B97F4A7C15UL);
-                    long keyLo  = ((long)e.Index << 32) | (long)(uint)e.Version;
-                    long key    = keyLo ^ (((long)a.AreaVfxIdHash) << 1) ^ salt;
+                    long salt = unchecked((long)0x9E3779B97F4A7C15UL);
+                    long keyLo = ((long)e.Index << 32) | (long)(uint)e.Version;
+                    long key = keyLo ^ (((long)a.AreaVfxIdHash) << 1) ^ salt;
+
+                    var vfxPos = a.Position + new float3(0f, a.VfxYOffset, 0f);
 
                     if (!em.HasComponent<ActiveAreaVfx>(e))
                     {
-                        OneBitRob.FX.SpellVfxPoolManager.BeginPersistentByHash(a.AreaVfxIdHash, key, (Vector3)a.Position, null);
+                        OneBitRob.FX.SpellVfxPoolManager.BeginPersistentByHash(a.AreaVfxIdHash, key, (UnityEngine.Vector3)vfxPos, null);
                         ecb.AddComponent(e, new ActiveAreaVfx { Key = key, IdHash = a.AreaVfxIdHash });
                     }
-                    else
-                    {
-                        OneBitRob.FX.SpellVfxPoolManager.MovePersistent(key, a.AreaVfxIdHash, (Vector3)a.Position, null);
-                    }
+                    else { OneBitRob.FX.SpellVfxPoolManager.MovePersistent(key, a.AreaVfxIdHash, (UnityEngine.Vector3)vfxPos, null); }
                 }
                 else if (em.HasComponent<ActiveAreaVfx>(e))
                 {
@@ -156,6 +157,7 @@ namespace OneBitRob.ECS
                     ecb.RemoveComponent<ActiveAreaVfx>(e);
                 }
 
+                // Lifetime
                 a.Remaining -= SystemAPI.Time.DeltaTime;
                 if (a.Remaining <= 0f)
                 {
@@ -165,14 +167,17 @@ namespace OneBitRob.ECS
                         OneBitRob.FX.SpellVfxPoolManager.EndPersistent(av.Key);
                         ecb.RemoveComponent<ActiveAreaVfx>(e);
                     }
+
                     ecb.RemoveComponent<DoTArea>(e);
                     continue;
                 }
 
+                // Ticks (damage sampling at ground center)
                 if (a.NextTick <= now)
                 {
-                    int count = Physics.OverlapSphereNonAlloc(
-                        (Vector3)a.Position, a.Radius, s_Cols, a.LayerMask, QueryTriggerInteraction.Collide);
+                    int count = UnityEngine.Physics.OverlapSphereNonAlloc(
+                        (UnityEngine.Vector3)a.Position, a.Radius, s_Cols, a.LayerMask, UnityEngine.QueryTriggerInteraction.Collide
+                    );
 
                     bool isHot = a.Positive != 0;
                     float shownAmount = math.abs(a.AmountPerTick);
@@ -185,15 +190,17 @@ namespace OneBitRob.ECS
                         if (tb == null || tb.Health == null) continue;
 
                         float amt = isHot ? -shownAmount : shownAmount;
-                        tb.Health.Damage(amt, tb.gameObject, 0f, 0f, Vector3.zero);
+                        tb.Health.Damage(amt, tb.gameObject, 0f, 0f, UnityEngine.Vector3.zero);
 
-                        OneBitRob.FX.DamageNumbersManager.Popup(new OneBitRob.FX.DamageNumbersParams
-                        {
-                            Kind     = isHot ? OneBitRob.FX.DamagePopupKind.Hot : OneBitRob.FX.DamagePopupKind.Dot,
-                            Follow   = tb.transform,
-                            Position = tb.transform.position,
-                            Amount   = shownAmount
-                        });
+                        OneBitRob.FX.DamageNumbersManager.Popup(
+                            new OneBitRob.FX.DamageNumbersParams
+                            {
+                                Kind = isHot ? OneBitRob.FX.DamagePopupKind.Hot : OneBitRob.FX.DamagePopupKind.Dot,
+                                Follow = tb.transform,
+                                Position = tb.transform.position,
+                                Amount = shownAmount
+                            }
+                        );
                     }
 
                     a.NextTick = now + math.max(0.05f, a.Interval);
@@ -202,12 +209,13 @@ namespace OneBitRob.ECS
                 area.ValueRW = a;
             }
 
-            // Cleanup orphaned area FX if DoTArea was removed elsewhere (unchanged)
+            // Orphan area FX cleanup (unchanged)
             foreach (var (av, e) in SystemAPI.Query<RefRO<ActiveAreaVfx>>().WithNone<DoTArea>().WithEntityAccess())
             {
                 OneBitRob.FX.SpellVfxPoolManager.EndPersistent(av.ValueRO.Key);
                 ecb.RemoveComponent<ActiveAreaVfx>(e);
             }
+
 
             ecb.Playback(em);
             ecb.Dispose();

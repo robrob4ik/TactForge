@@ -1,6 +1,4 @@
-﻿// FILE: Assets/PROJECT/Scripts/Runtime/AI/Brain/UnitBrain.LayerAssign.cs
-// Part of UnitBrain (partial). Assigns own faction layer to all child colliders.
-using UnityEngine;
+﻿using UnityEngine;
 using OneBitRob.Config;
 
 namespace OneBitRob.AI
@@ -26,13 +24,7 @@ namespace OneBitRob.AI
             if (autoAssignFactionLayer && _reassignOnEnable)
                 AssignFactionLayers_Internal("OnEnable");
         }
-
-        public void ReapplyFactionLayers()
-        {
-            if (autoAssignFactionLayer)
-                AssignFactionLayers_Internal("Manual");
-        }
-
+        
         private void AssignFactionLayers_Internal(string reason)
         {
             if (!UnitDefinition) return;

@@ -21,4 +21,9 @@ namespace OneBitRob.ECS
     {
         public MovementLockFlags Flags;
     }
+    
+    public struct BehaviorYieldCooldown : IComponentData
+    {
+        public double NextTime;
+    }
 }

@@ -1,4 +1,4 @@
-// Runtime/Units/UnitDefinition.cs
+// FILE: Assets/PROJECT/Scripts/Runtime/Config/UnitDefinition.cs
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,11 +6,11 @@ namespace OneBitRob
 {
     public enum TargetingStrategyType { ClosestEnemy }
     public enum CombatStrategyType { Ranged, Melee }
-    
+
     public enum UnitTrait { Undead, Beast, Goblin, Human }
     public enum UnitClass { Warrior, Mage, Hunter, Assassin, }
     public enum MovementType { Normal = 0, Melee = 1, Brute = 2, }
-    
+
     public enum AttackAnimationSelect { Random, Sequential }
 
     [CreateAssetMenu(menuName = "TactForge/Definition/Unit", fileName = "UnitDefinition")]
@@ -39,6 +39,10 @@ namespace OneBitRob
         [Tooltip("units")] public float autoTargetMinSwitchDistance = 3f;
         [Tooltip("units")] public float targetDetectionRange = 10f;
         [Tooltip("secs")]  public float retargetCheckInterval = 1f;
+
+        [Header("AI")]
+        [Tooltip("While chasing, periodically return Failure from MoveToTarget to let BT re-evaluate (0 = off).")]
+        [Min(0f)] public float moveRecheckYieldInterval = 0.35f;
 
         [Header("Team")]
         public bool isEnemy = false;

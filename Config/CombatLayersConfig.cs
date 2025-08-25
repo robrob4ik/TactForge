@@ -8,13 +8,13 @@ namespace OneBitRob.Config
     {
         [Header("Physics Layers (indices)")]
         [Tooltip("Layer index for the Player (castle/hero/etc).")]
-        public int PlayerLayer = 8;
+        public int PlayerLayer = 10;
 
         [Tooltip("Layer index for Allied units.")]
-        public int AllyLayer = 9;
+        public int AllyLayer = 12;
 
         [Tooltip("Layer index for Enemy units.")]
-        public int EnemyLayer = 10;
+        public int EnemyLayer = 11;
 
         [Header("Single-bit Masks (auto-kept in sync with indices)")]
         public LayerMask PlayerMask;

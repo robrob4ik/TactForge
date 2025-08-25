@@ -1,14 +1,15 @@
-﻿// FILE: OneBitRob/AI/Tasks/Actions/MoveToTargetAction.cs
-// Change: Avoid invalidating _posRO by deferring AddComponent (RetargetCooldown) with an EntityCommandBuffer.
+﻿// FILE: Assets/PROJECT/Scripts/Runtime/AI/Brain/MoveToTargetAction.cs
 
 using OneBitRob.Constants;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
+using UnityEngine;
 
 namespace OneBitRob.AI
 {
@@ -23,19 +24,16 @@ namespace OneBitRob.AI
         public ushort Index { get; set; }
     }
 
-    public struct MoveToTargetTag : IComponentData, IEnableableComponent
-    {
-    }
+    public struct MoveToTargetTag : IComponentData, IEnableableComponent { }
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellWindupAndFireSystem))] // ← ensure casting status is visible
+    [UpdateAfter(typeof(SpellWindupAndFireSystem))] // ensure casting status is visible
     public partial class MoveToTargetSystem : TaskProcessorSystem<MoveToTargetComponent, MoveToTargetTag>
     {
         ComponentLookup<LocalTransform> _posRO;
         ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
 
-        // NEW: defer structural changes to end-of-system
         private EntityCommandBuffer _ecb;
 
         protected override void OnCreate()
@@ -50,12 +48,8 @@ namespace OneBitRob.AI
             _posRO.Update(this);
             _factRO.Update(this);
 
-            // begin ECB for this frame
             _ecb = new EntityCommandBuffer(Allocator.Temp);
-
             base.OnUpdate();
-
-            // apply deferred structural changes after all Execute calls
             _ecb.Playback(EntityManager);
             _ecb.Dispose();
         }
@@ -71,20 +65,17 @@ namespace OneBitRob.AI
                 var sw = EntityManager.GetComponentData<SpellWindup>(e);
                 if (sw.Active != 0)
                 {
-                    // Park the unit at its current spot
                     var here = SystemAPI.GetComponent<LocalTransform>(e).Position;
                     var ddLock = EntityManager.GetComponentData<DesiredDestination>(e);
                     ddLock.Position = here;
                     ddLock.HasValue = 1;
                     EntityManager.SetComponentData(e, ddLock);
-
-                    // Keep the BT node "alive" without progressing movement
                     return TaskStatus.Running;
                 }
             }
             // ─────────────────────────────────────────────
 
-            // No Target → stop and fail
+            // No target → stop and fail
             if (!EntityManager.HasComponent<Target>(e))
             {
                 var dd0 = EntityManager.GetComponentData<DesiredDestination>(e);
@@ -109,14 +100,13 @@ namespace OneBitRob.AI
                 return TaskStatus.Failure;
             }
 
-            // Opportunistic retargeting — THROTTLED
+            // Opportunistic retargeting (kept from your logic) …
             double now = SystemAPI.Time.ElapsedTime;
             float switchInterval = math.max(0f, brain.UnitDefinition.retargetCheckInterval);
 
             bool canCheck = true;
             if (switchInterval > 0f)
             {
-                // SAFE: read if exists, otherwise defer the Add via ECB (no structural change mid-execute)
                 RetargetCooldown cd;
                 bool hadCd = EntityManager.HasComponent<RetargetCooldown>(e);
                 cd = hadCd ? EntityManager.GetComponentData<RetargetCooldown>(e)
@@ -127,7 +117,7 @@ namespace OneBitRob.AI
                 {
                     cd.NextTime = now + switchInterval;
                     if (hadCd) EntityManager.SetComponentData(e, cd);
-                    else       _ecb.AddComponent(e, cd); // ← defer AddComponent (structural) to end of system
+                    else       _ecb.AddComponent(e, cd);
                 }
             }
 
@@ -136,9 +126,9 @@ namespace OneBitRob.AI
             float stop = brain.UnitDefinition.stoppingDistance;
             float currDistSq = math.distancesq(selfPos, currPos);
 
-            // No-progress fallback: if we haven't closed the distance window for some time, force retarget
-            const float progressEpsilon = 0.05f; // ~7cm improvement threshold
-            const float stuckTime = 1.5f; // seconds without progress
+            // No-progress fallback retained …
+            const float progressEpsilon = 0.05f;
+            const float stuckTime = 1.5f;
 
             if (EntityManager.HasComponent<OneBitRob.ECS.RetargetAssist>(e))
             {
@@ -155,7 +145,6 @@ namespace OneBitRob.AI
 
                 if (ra.NoProgressTime > stuckTime)
                 {
-                    // hard retarget ignoring hysteresis
                     var wanted = default(FixedList128Bytes<byte>);
                     wanted.Add(brain.UnitDefinition.isEnemy ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION);
 
@@ -168,8 +157,6 @@ namespace OneBitRob.AI
                     {
                         target = candidate;
                         EntityManager.SetComponentData(e, new Target { Value = candidate });
-
-                        // reset assist timers upon switching
                         ra.NoProgressTime = 0f;
                         ra.LastDistSq = float.MaxValue;
                         EntityManager.SetComponentData(e, ra);
@@ -177,17 +164,13 @@ namespace OneBitRob.AI
                 }
             }
 
-            // Opportunistic check if not already forced by no-progress
             if (canCheck)
             {
                 var wanted = default(FixedList128Bytes<byte>);
                 wanted.Add(brain.UnitDefinition.isEnemy ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION);
 
-                float range = brain.UnitDefinition.targetDetectionRange > 0
-                    ? brain.UnitDefinition.targetDetectionRange
-                    : 100f;
+                float range = brain.UnitDefinition.targetDetectionRange > 0 ? brain.UnitDefinition.targetDetectionRange : 100f;
 
-                // Early-out: if current target is already very close, retargeting won’t help much.
                 if (currDistSq > (stop * stop * 4f))
                 {
                     var candidate = SpatialHashSearch.GetClosest(selfPos, range, wanted, ref _posRO, ref _factRO);
@@ -219,7 +202,7 @@ namespace OneBitRob.AI
             dd.HasValue = 1;
             EntityManager.SetComponentData(e, dd);
 
-            // ECS distance check for completion
+            // Arrival check
             var self = _posRO[e].Position;
             float stopDist = brain.UnitDefinition.stoppingDistance;
             if (math.distancesq(self, targetPos) <= stopDist * stopDist)
@@ -229,6 +212,27 @@ namespace OneBitRob.AI
                 EntityManager.SetComponentData(e, dd);
                 return TaskStatus.Success;
             }
+
+            // ─────────────────────────────────────────────────────────────
+            // NEW: PERIODIC YIELD to force BT re-evaluation (casting, etc.)
+            float yieldInterval = math.max(0f, brain.UnitDefinition.moveRecheckYieldInterval);
+            if (yieldInterval > 0f)
+            {
+                var had = EntityManager.HasComponent<OneBitRob.ECS.BehaviorYieldCooldown>(e);
+                var y = had ? EntityManager.GetComponentData<OneBitRob.ECS.BehaviorYieldCooldown>(e)
+                            : new OneBitRob.ECS.BehaviorYieldCooldown { NextTime = 0 };
+
+                if (now >= y.NextTime)
+                {
+                    y.NextTime = now + yieldInterval;
+                    if (had) EntityManager.SetComponentData(e, y);
+                    else     _ecb.AddComponent(e, y);
+
+                    // Keep current destination but give the BT a chance to run other branches.
+                    return TaskStatus.Failure;
+                }
+            }
+            // ─────────────────────────────────────────────────────────────
 
             return TaskStatus.Running;
         }

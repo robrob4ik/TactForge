@@ -237,15 +237,16 @@ namespace OneBitRob.AI
 
                     var area = new DoTArea
                     {
-                        Position       = aimPos,
-                        Radius         = max(0f, cfg.AreaRadius),
-                        AmountPerTick  = max(0f, cfg.Amount),
-                        Interval       = max(0.05f, cfg.TickInterval),
-                        Remaining      = max(0f, cfg.Duration),
+                        Position       = w.HasAimPoint != 0 ? w.AimPoint : (_posRO.HasComponent(e) ? _posRO[e].Position : float3.zero),
+                        Radius         = math.max(0f, cfg.AreaRadius),
+                        AmountPerTick  = math.max(0f, cfg.Amount),
+                        Interval       = math.max(0.05f, cfg.TickInterval),
+                        Remaining      = math.max(0f, cfg.Duration),
                         NextTick       = 0f,
                         Positive       = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
                         AreaVfxIdHash  = cfg.AreaVfxIdHash,
-                        LayerMask      = mask
+                        LayerMask      = mask,
+                        VfxYOffset     = math.max(0f, cfg.AreaVfxYOffset) // <-- NEW
                     };
                     if (em.HasComponent<DoTArea>(e)) ecb.SetComponent(e, area);
                     else                              ecb.AddComponent(e, area);

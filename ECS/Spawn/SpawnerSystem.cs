@@ -1,4 +1,5 @@
 ﻿// FILE: OneBitRob/ECS/SpawnerSystem.cs
+
 using System.Collections.Generic;
 using GPUInstancerPro.PrefabModule;
 using OneBitRob.ECS.GPUI;
@@ -101,13 +102,14 @@ namespace OneBitRob.ECS
                     state.EntityManager.AddComponent(e, ComponentType.ReadOnly<AgentTag>());
                     state.EntityManager.AddComponentData(e, new SpatialHashComponents.SpatialHashTarget { Faction = faction });
 
-                    if (faction == Constants.GameConstants.ALLY_FACTION)      state.EntityManager.AddComponent<AllyTag>(e);
+                    if (faction == Constants.GameConstants.ALLY_FACTION)
+                        state.EntityManager.AddComponent<AllyTag>(e);
                     else if (faction == Constants.GameConstants.ENEMY_FACTION) state.EntityManager.AddComponent<EnemyTag>(e);
 
                     state.EntityManager.AddComponentData(e, new Target { Value = Entity.Null });
 
                     state.EntityManager.AddComponentData(e, new DesiredDestination { Position = float3.zero, HasValue = 0 });
-                    state.EntityManager.AddComponentData(e, new DesiredFacing      { TargetPosition = float3.zero, HasValue = 0 });
+                    state.EntityManager.AddComponentData(e, new DesiredFacing { TargetPosition = float3.zero, HasValue = 0 });
 
                     state.EntityManager.AddComponentData(e, new InAttackRange { Value = 0, DistanceSq = float.PositiveInfinity });
                     state.EntityManager.AddComponentData(e, new Alive { Value = 1 });
@@ -134,53 +136,56 @@ namespace OneBitRob.ECS
                     {
                         var spell = spells[0];
 
-                        int projHash    = SpellVisualRegistry.RegisterProjectile(spell.ProjectileId);
-                        int vfxHash     = SpellVisualRegistry.RegisterVfx(spell.EffectVfxId);
+                        int projHash = SpellVisualRegistry.RegisterProjectile(spell.ProjectileId);
+                        int vfxHash = SpellVisualRegistry.RegisterVfx(spell.EffectVfxId);
                         int areaVfxHash = SpellVisualRegistry.RegisterVfx(spell.AreaVfxId);
-                        int summonHash  = SpellVisualRegistry.RegisterSummon(spell.SummonPrefab);
+                        int summonHash = SpellVisualRegistry.RegisterSummon(spell.SummonPrefab);
 
-                        // Map simplified authoring → ECS config
                         float amount = (spell.Kind == SpellKind.EffectOverTimeArea || spell.Kind == SpellKind.EffectOverTimeTarget)
                             ? spell.TickAmount
                             : spell.EffectAmount;
 
-                        state.EntityManager.AddComponentData(e, new SpellConfig
-                        {
-                            Kind               = spell.Kind,
-                            EffectType         = spell.EffectType,
-                            AcquireMode        = spell.AcquireMode,
+                        state.EntityManager.AddComponentData(
+                            e, new SpellConfig
+                            {
+                                Kind = spell.Kind,
+                                EffectType = spell.EffectType,
+                                AcquireMode = spell.AcquireMode,
 
-                            CastTime           = spell.FireDelaySeconds,  // Fire Delay after animation trigger
-                            Cooldown           = spell.Cooldown,
-                            Range              = spell.Range,
-                            RequiresLineOfSight= 0,     // auto
-                            TargetLayerMask    = 0,     // auto from faction
+                                CastTime = spell.FireDelaySeconds,
+                                Cooldown = spell.Cooldown,
+                                Range = spell.Range,
+                                RequiresLineOfSight = 0,
+                                TargetLayerMask = 0,
 
-                            RequireFacing      = 0,     // disabled gate
-                            FaceToleranceDeg   = 0f,
-                            MaxExtraFaceDelay  = 0f,
+                                RequireFacing = 0,
+                                FaceToleranceDeg = 0f,
+                                MaxExtraFaceDelay = 0f,
 
-                            Amount             = amount,
+                                Amount = amount,
 
-                            ProjectileSpeed    = spell.ProjectileSpeed,
-                            ProjectileMaxDistance = spell.ProjectileMaxDistance,
-                            ProjectileRadius   = spell.ProjectileRadius,
-                            ProjectileIdHash   = projHash,
-                            MuzzleForward      = spell.MuzzleForward,
-                            MuzzleLocalOffset  = new float3(spell.MuzzleLocalOffset.x, spell.MuzzleLocalOffset.y, spell.MuzzleLocalOffset.z),
+                                ProjectileSpeed = spell.ProjectileSpeed,
+                                ProjectileMaxDistance = spell.ProjectileMaxDistance,
+                                ProjectileRadius = spell.ProjectileRadius,
+                                ProjectileIdHash = projHash,
+                                MuzzleForward = spell.MuzzleForward,
+                                MuzzleLocalOffset = new float3(spell.MuzzleLocalOffset.x, spell.MuzzleLocalOffset.y, spell.MuzzleLocalOffset.z),
 
-                            AreaRadius         = spell.Kind == SpellKind.EffectOverTimeArea ? spell.Range : 0f,
-                            Duration           = spell.Duration,
-                            TickInterval       = spell.TickInterval,
-                            EffectVfxIdHash    = vfxHash,
-                            AreaVfxIdHash      = areaVfxHash,
+                                // ✅ FIX: The AOE DAMAGE RADIUS must come from SpellDefinition.AreaRadius (NOT Range)
+                                AreaRadius = spell.Kind == SpellKind.EffectOverTimeArea ? spell.AreaRadius : 0f,
+                                Duration = spell.Duration,
+                                TickInterval = spell.TickInterval,
+                                EffectVfxIdHash = vfxHash,
+                                AreaVfxIdHash = areaVfxHash,
+                                AreaVfxYOffset = spell.AreaVfxYOffset, // NEW
 
-                            ChainMaxTargets    = spell.ChainMaxTargets,
-                            ChainRadius        = spell.ChainRadius,
-                            ChainJumpDelay     = spell.ChainPerJumpDelay,
+                                ChainMaxTargets = spell.ChainMaxTargets,
+                                ChainRadius = spell.ChainRadius,
+                                ChainJumpDelay = spell.ChainPerJumpDelay,
 
-                            SummonPrefabHash   = summonHash
-                        });
+                                SummonPrefabHash = summonHash
+                            }
+                        );
 
                         state.EntityManager.AddComponentData(e, new SpellDecisionRequest { HasValue = 0 });
                         state.EntityManager.AddComponentData(e, new SpellWindup { Active = 0, ReleaseTime = 0f });
@@ -189,15 +194,16 @@ namespace OneBitRob.ECS
 
                     // ─────────────────────────────────────────────────────────────
                     // Retarget throttle — GUARDED add
-                    if (!state.EntityManager.HasComponent<RetargetCooldown>(e))
-                        state.EntityManager.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
+                    if (!state.EntityManager.HasComponent<RetargetCooldown>(e)) state.EntityManager.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
 
-                    state.EntityManager.AddComponentData(e, new RetargetAssist
-                    {
-                        LastPos = pos,
-                        LastDistSq = float.MaxValue,
-                        NoProgressTime = 0f
-                    });
+                    state.EntityManager.AddComponentData(
+                        e, new RetargetAssist
+                        {
+                            LastPos = pos,
+                            LastDistSq = float.MaxValue,
+                            NoProgressTime = 0f
+                        }
+                    );
                 }
             }
         }
