@@ -18,10 +18,9 @@ namespace OneBitRob.ECS
         [Tooltip("Frequency of spawning units")]
         [SerializeField] protected int m_SpawningFrequency;
         [Tooltip("The From area that the entities should be spawned.")]
-        [SerializeField] protected Vector3 m_SpawnAreaFrom =new Vector3(-10, 0, -10);
+        [SerializeField] protected Vector3 m_SpawnAreaFrom = new Vector3(-10, 0, -10);
         [Tooltip("The To area that the entities should be spawned.")]
         [SerializeField] protected Vector3 m_SpawnAreaTo = new Vector3(10, 0, 10);
-      
 
         public GameObject[] AllyPrefabs => m_AllyPrefabs;
         public GameObject[] EnemyPrefabs => m_EnemyPrefabs;

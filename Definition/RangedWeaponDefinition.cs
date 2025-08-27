@@ -1,30 +1,47 @@
-﻿// Runtime/Combat/RangedWeaponDefinition.cs
+﻿// FILE: Runtime/Combat/RangedWeaponDefinition.cs
 using UnityEngine;
+using Sirenix.OdinInspector;
 
 namespace OneBitRob
 {
     [CreateAssetMenu(menuName = "TactForge/Definition/Weapon (Ranged)", fileName = "RangedWeaponDefinition")]
     public class RangedWeaponDefinition : WeaponDefinition
     {
-        [Header("Muzzle")]
-        [Tooltip("Forward offset in local Z. Keep 0 if you use muzzleLocalOffset.z instead.")]
-        [Min(0f)] public float muzzleForward = 0.60f;
+        // Muzzle
+        [BoxGroup("Muzzle")]
+        [LabelText("Muzzle Forward (Local Z)"), SuffixLabel("units", true)]
+        [InfoBox("Forward offset in local Z. Keep 0 if you use muzzleLocalOffset.z instead.", InfoMessageType.None)]
+        [MinValue(0f)]
+        public float muzzleForward = 0.60f;
 
-        [Tooltip("Local-space offset (X,Y,Z) from the character root/aim. X=right, Y=up, Z=forward.")]
+        [BoxGroup("Muzzle")]
+        [LabelText("Muzzle Local Offset (XYZ)")]
         public Vector3 muzzleLocalOffset = Vector3.zero;
 
-        [Header("Projectile")]
-        [Min(0.01f)] public float projectileSpeed       = 60f;
-        [Min(0.10f)] public float projectileMaxDistance = 40f;
+        // Projectile
+        [BoxGroup("Projectile")]
+        [LabelText("Speed"), SuffixLabel("units/s", true)]
+        [MinValue(0.01f)]
+        public float projectileSpeed = 60f;
 
-        [Header("Timing")]
-        [Min(0f)] public float windupSeconds = 0.15f;
+        [BoxGroup("Projectile")]
+        [LabelText("Max Distance"), SuffixLabel("units", true)]
+        [MinValue(0.10f)]
+        public float projectileMaxDistance = 40f;
 
-        [Header("Animations (Two-Stage)")]
+        // Timing
+        [BoxGroup("Timing")]
+        [LabelText("Windup"), SuffixLabel("s", true)]
+        [MinValue(0f)]
+        public float windupSeconds = 0.15f;
+
+        // Animations
+        [BoxGroup("Animations")]
         public TwoStageAttackAnimationSettings animations;
 
-        [Header("Projectile Pool Key")]
-        [Tooltip("Key used to choose a scene pool in ProjectilePools (e.g. 'arrow', 'mage_orb').")]
+        // Projectile Pool Key
+        [BoxGroup("Projectile Pool Key")]
+        [InfoBox("Key used to choose a scene pool in ProjectilePools (e.g. 'arrow', 'mage_orb').")]
         public string projectileId = "arrow";
     }
 }

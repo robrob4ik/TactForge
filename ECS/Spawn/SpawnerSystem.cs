@@ -57,8 +57,11 @@ namespace OneBitRob.ECS
                 }
             }
 
-            foreach (var pos in allySpawnCenter) SpawnGroup(ref state, data.EntityPrefab, data.AllyPrefabs, data.UnitsSpawnCount, pos, data, Constants.GameConstants.ALLY_FACTION);
-            foreach (var pos in enemySpawnCenter) SpawnGroup(ref state, data.EntityPrefab, data.EnemyPrefabs, data.UnitsSpawnCount, pos, data, Constants.GameConstants.ENEMY_FACTION);
+            foreach (var pos in allySpawnCenter)
+                SpawnGroup(ref state, data.EntityPrefab, data.AllyPrefabs, data.UnitsSpawnCount, pos, data, Constants.GameConstants.ALLY_FACTION);
+
+            foreach (var pos in enemySpawnCenter)
+                SpawnGroup(ref state, data.EntityPrefab, data.EnemyPrefabs, data.UnitsSpawnCount, pos, data, Constants.GameConstants.ENEMY_FACTION);
 
             EnigmaLogger.Log("Spawn Round Completed. Enabling Behaviour Trees", "INFO");
             BehaviorTree.EnableBakedBehaviorTreeSystem(World.DefaultGameObjectInjectionWorld);
@@ -99,111 +102,36 @@ namespace OneBitRob.ECS
                     var unitBrainMono = go.GetComponent<AI.UnitBrain>();
                     unitBrainMono.SetEntity(e); // registers in UnitBrainRegistry
 
+                    // ─────────────────────────────────────────────────────────────
+                    // Baseline tags & targeting membership (must exist immediately)
                     state.EntityManager.AddComponent(e, ComponentType.ReadOnly<AgentTag>());
                     state.EntityManager.AddComponentData(e, new SpatialHashComponents.SpatialHashTarget { Faction = faction });
 
                     if (faction == Constants.GameConstants.ALLY_FACTION)
                         state.EntityManager.AddComponent<AllyTag>(e);
-                    else if (faction == Constants.GameConstants.ENEMY_FACTION) state.EntityManager.AddComponent<EnemyTag>(e);
+                    else if (faction == Constants.GameConstants.ENEMY_FACTION)
+                        state.EntityManager.AddComponent<EnemyTag>(e);
 
+                    // Baseline AI shell (read by systems even before Setup runs)
                     state.EntityManager.AddComponentData(e, new Target { Value = Entity.Null });
-
                     state.EntityManager.AddComponentData(e, new DesiredDestination { Position = float3.zero, HasValue = 0 });
                     state.EntityManager.AddComponentData(e, new DesiredFacing { TargetPosition = float3.zero, HasValue = 0 });
 
                     state.EntityManager.AddComponentData(e, new InAttackRange { Value = 0, DistanceSq = float.PositiveInfinity });
                     state.EntityManager.AddComponentData(e, new Alive { Value = 1 });
 
-                    int hp = unitBrainMono.UnitDefinition != null ? unitBrainMono.UnitDefinition.health : 100;
-                    state.EntityManager.AddComponentData(e, new HealthMirror { Current = hp, Max = hp });
-
-                    byte style = 1;
-                    var weapon = unitBrainMono.UnitDefinition != null ? unitBrainMono.UnitDefinition.weapon : null;
-                    if (weapon is RangedWeaponDefinition) style = 2;
-                    state.EntityManager.AddComponentData(e, new CombatStyle { Value = style });
-
-                    state.EntityManager.AddComponentData(e, new SpellState { CanCast = 1, Ready = 1 });
+                    // Attack shell present at spawn
                     state.EntityManager.AddComponentData(e, new AttackRequest { Target = Entity.Null, HasValue = 0 });
                     state.EntityManager.AddComponentData(e, new AttackCooldown { NextTime = 0f });
                     state.EntityManager.AddComponentData(e, new AttackWindup { Active = 0, ReleaseTime = 0f });
+
+                    // Spell shell present at spawn (full SpellConfig comes in Setup)
+                    state.EntityManager.AddComponentData(e, new SpellState { CanCast = 1, Ready = 1 });
                     state.EntityManager.AddComponentData(e, new CastRequest { Kind = CastKind.None, Target = Entity.Null, AoEPosition = float3.zero, HasValue = 0 });
 
-                    // ─────────────────────────────────────────────────────────────
-                    // Spells (null-safe) – uses ONLY the first spell just like before
-                    var spells = unitBrainMono.UnitDefinition != null ? unitBrainMono.UnitDefinition.unitSpells : null;
-                    var hasSpell = spells != null && spells.Count > 0 && spells[0] != null;
-                    if (hasSpell)
-                    {
-                        var spell = spells[0];
-
-                        int projHash = SpellVisualRegistry.RegisterProjectile(spell.ProjectileId);
-                        int vfxHash = SpellVisualRegistry.RegisterVfx(spell.EffectVfxId);
-                        int areaVfxHash = SpellVisualRegistry.RegisterVfx(spell.AreaVfxId);
-                        int summonHash = SpellVisualRegistry.RegisterSummon(spell.SummonPrefab);
-
-                        float amount = (spell.Kind == SpellKind.EffectOverTimeArea || spell.Kind == SpellKind.EffectOverTimeTarget)
-                            ? spell.TickAmount
-                            : spell.EffectAmount;
-
-                        state.EntityManager.AddComponentData(
-                            e, new SpellConfig
-                            {
-                                Kind = spell.Kind,
-                                EffectType = spell.EffectType,
-                                AcquireMode = spell.AcquireMode,
-
-                                CastTime = spell.FireDelaySeconds,
-                                Cooldown = spell.Cooldown,
-                                Range = spell.Range,
-                                RequiresLineOfSight = 0,
-                                TargetLayerMask = 0,
-
-                                RequireFacing = 0,
-                                FaceToleranceDeg = 0f,
-                                MaxExtraFaceDelay = 0f,
-
-                                Amount = amount,
-
-                                ProjectileSpeed = spell.ProjectileSpeed,
-                                ProjectileMaxDistance = spell.ProjectileMaxDistance,
-                                ProjectileRadius = spell.ProjectileRadius,
-                                ProjectileIdHash = projHash,
-                                MuzzleForward = spell.MuzzleForward,
-                                MuzzleLocalOffset = new float3(spell.MuzzleLocalOffset.x, spell.MuzzleLocalOffset.y, spell.MuzzleLocalOffset.z),
-
-                                // ✅ FIX: The AOE DAMAGE RADIUS must come from SpellDefinition.AreaRadius (NOT Range)
-                                AreaRadius = spell.Kind == SpellKind.EffectOverTimeArea ? spell.AreaRadius : 0f,
-                                Duration = spell.Duration,
-                                TickInterval = spell.TickInterval,
-                                EffectVfxIdHash = vfxHash,
-                                AreaVfxIdHash = areaVfxHash,
-                                AreaVfxYOffset = spell.AreaVfxYOffset, // NEW
-
-                                ChainMaxTargets = spell.ChainMaxTargets,
-                                ChainRadius = spell.ChainRadius,
-                                ChainJumpDelay = spell.ChainPerJumpDelay,
-
-                                SummonPrefabHash = summonHash
-                            }
-                        );
-
-                        state.EntityManager.AddComponentData(e, new SpellDecisionRequest { HasValue = 0 });
-                        state.EntityManager.AddComponentData(e, new SpellWindup { Active = 0, ReleaseTime = 0f });
-                        state.EntityManager.AddComponentData(e, new SpellCooldown { NextTime = 0f });
-                    }
-
-                    // ─────────────────────────────────────────────────────────────
-                    // Retarget throttle — GUARDED add
-                    if (!state.EntityManager.HasComponent<RetargetCooldown>(e)) state.EntityManager.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
-
-                    state.EntityManager.AddComponentData(
-                        e, new RetargetAssist
-                        {
-                            LastPos = pos,
-                            LastDistSq = float.MaxValue,
-                            NoProgressTime = 0f
-                        }
-                    );
+                    // NOTE:
+                    // - HealthMirror, CombatStyle, SpellConfig, Spell* runtime, RetargetAssist/Cooldown
+                    //   are now initialized in AI/SetupUnitSystem after the brain is registered.
                 }
             }
         }

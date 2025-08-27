@@ -1,6 +1,7 @@
 ﻿// FILE: Assets/PROJECT/Scripts/Runtime/Config/SpellDefinition.cs
 using System.Collections.Generic;
 using UnityEngine;
+using Sirenix.OdinInspector;
 using static Unity.Mathematics.math;
 using OneBitRob.AI.Debugging;
 
@@ -28,57 +29,144 @@ namespace OneBitRob
     [CreateAssetMenu(menuName = "TactForge/Definition/Spell", fileName = "SpellDefinition")]
     public class SpellDefinition : ScriptableObject
     {
-        [Header("General")]
+        // General
+        [BoxGroup("General")]
+        [LabelText("Spell Name")]
         public string  SpellName = "Spell";
+
+        [BoxGroup("General")]
         public SpellKind Kind = SpellKind.ProjectileLine;
+
+        [BoxGroup("General")]
         public SpellEffectType EffectType = SpellEffectType.Negative;
+
+        [BoxGroup("General")]
         public SpellAcquireMode AcquireMode = SpellAcquireMode.ClosestEnemy;
-        [Min(0f)] public float Range = 12f;                     // cast distance
+
+        [BoxGroup("General")]
+        [LabelText("Range"), SuffixLabel("units", true)]
+        [MinValue(0f)]
+        public float Range = 12f; // cast distance
+
+        [BoxGroup("General")]
         public AttackAnimationSettings animations;
-        [Min(0f)] public float FireDelaySeconds = 0f;
-        [Min(0f)] public float Cooldown = 2f;
 
-        [Header("Damage / Heal (instant)")]
-        [Min(0f)] public float EffectAmount = 10f;
+        [BoxGroup("General")]
+        [LabelText("Fire Delay"), SuffixLabel("s", true)]
+        [MinValue(0f)]
+        public float FireDelaySeconds = 0f;
 
-        [Header("DoT / HoT")]
-        [Min(0f)] public float TickAmount = 5f;
-        [Min(0f)] public float Duration = 3f;
-        [Min(0.05f)] public float TickInterval = 0.25f;
+        [BoxGroup("General")]
+        [LabelText("Cooldown"), SuffixLabel("s", true)]
+        [MinValue(0f)]
+        public float Cooldown = 2f;
 
-        [Header("AOE")]
-        [Min(0f)] public float AreaRadius = 3f;
+        // Damage / Heal (instant)
+        [BoxGroup("Damage+Heal (instant)")]
+        [LabelText("Effect Amount")]
+        [MinValue(0f)]
+        public float EffectAmount = 10f;
 
-        [Header("Projectile")]
+        // DoT / HoT
+        [BoxGroup("DoT+HoT")]
+        [ShowIf("@Kind == SpellKind.EffectOverTimeTarget || Kind == SpellKind.EffectOverTimeArea")]
+        [LabelText("Tick Amount"), MinValue(0f)]
+        public float TickAmount = 5f;
+
+        [BoxGroup("DoT+HoT")]
+        [ShowIf("@Kind == SpellKind.EffectOverTimeTarget || Kind == SpellKind.EffectOverTimeArea")]
+        [LabelText("Duration"), SuffixLabel("s", true), MinValue(0f)]
+        public float Duration = 3f;
+
+        [BoxGroup("DoT+HoT")]
+        [ShowIf("@Kind == SpellKind.EffectOverTimeTarget || Kind == SpellKind.EffectOverTimeArea")]
+        [LabelText("Tick Interval"), SuffixLabel("s", true), MinValue(0.05f)]
+        public float TickInterval = 0.25f;
+
+        // AOE
+        [BoxGroup("AOE")]
+        [ShowIf("@Kind == SpellKind.EffectOverTimeArea")]
+        [LabelText("Area Radius"), SuffixLabel("units", true), MinValue(0f)]
+        public float AreaRadius = 3f;
+
+        // Projectile
+        [BoxGroup("Projectile")]
+        [ShowIf("@Kind == SpellKind.ProjectileLine")]
+        [LabelText("Projectile Id")]
         public string ProjectileId = "";
-        [Min(0.01f)] public float ProjectileSpeed = 60f;
-        [Min(0.1f)]  public float ProjectileMaxDistance = 20f;
-        [Min(0f)]    public float ProjectileRadius = 0f;
 
-        [Header("Projectile/Muzzle")]
-        [Min(0f)] public float MuzzleForward = 0.60f;
+        [BoxGroup("Projectile")]
+        [ShowIf("@Kind == SpellKind.ProjectileLine")]
+        [LabelText("Speed"), SuffixLabel("units/s", true), MinValue(0.01f)]
+        public float ProjectileSpeed = 60f;
+
+        [BoxGroup("Projectile")]
+        [ShowIf("@Kind == SpellKind.ProjectileLine")]
+        [LabelText("Max Distance"), SuffixLabel("units", true), MinValue(0.1f)]
+        public float ProjectileMaxDistance = 20f;
+
+        [BoxGroup("Projectile")]
+        [ShowIf("@Kind == SpellKind.ProjectileLine")]
+        [LabelText("Radius"), SuffixLabel("units", true), MinValue(0f)]
+        public float ProjectileRadius = 0f;
+
+        // Muzzle (Projectile)
+        [BoxGroup("Projectile Muzzle")]
+        [ShowIf("@Kind == SpellKind.ProjectileLine")]
+        [LabelText("Muzzle Forward (Local Z)"), SuffixLabel("units", true), MinValue(0f)]
+        public float MuzzleForward = 0.60f;
+
+        [BoxGroup("Projectile Muzzle")]
+        [ShowIf("@Kind == SpellKind.ProjectileLine")]
+        [LabelText("Muzzle Local Offset (XYZ)")]
         public Vector3 MuzzleLocalOffset = Vector3.zero;
 
-        [Header("VFX & AOE Visuals")]
+        // VFX & AOE Visuals
+        [BoxGroup("VFX & AOE Visuals")]
+        [LabelText("Effect VFX Id")]
         public string EffectVfxId = "";
+
+        [BoxGroup("VFX & AOE Visuals")]
+        [LabelText("Area VFX Id")]
         public string AreaVfxId = "";
-        [Tooltip("Vertical offset for the AOE VFX only (damage center remains at ground).")]
-        [Min(0f)] public float AreaVfxYOffset = 0.04f;
 
-        [Header("Chain")]
-        [Min(1)] public int   ChainMaxTargets = 3;
-        [Min(0f)] public float ChainRadius = 6f;
-        [Min(0f)] public float ChainPerJumpDelay = 0.05f;
+        [BoxGroup("VFX & AOE Visuals")]
+        [LabelText("Area VFX Y Offset"), SuffixLabel("units", true), MinValue(0f)]
+        [InfoBox("Vertical offset for the AOE VFX only (damage center remains at ground).")]
+        public float AreaVfxYOffset = 0.04f;
 
-        [Header("Summon")]
+        // Chain
+        [BoxGroup("Chain")]
+        [ShowIf("@Kind == SpellKind.Chain")]
+        [MinValue(1)]
+        public int ChainMaxTargets = 3;
+
+        [BoxGroup("Chain")]
+        [ShowIf("@Kind == SpellKind.Chain")]
+        [LabelText("Chain Radius"), SuffixLabel("units", true), MinValue(0f)]
+        public float ChainRadius = 6f;
+
+        [BoxGroup("Chain")]
+        [ShowIf("@Kind == SpellKind.Chain")]
+        [LabelText("Per Jump Delay"), SuffixLabel("s", true), MinValue(0f)]
+        public float ChainPerJumpDelay = 0.05f;
+
+        // Summon
+        [BoxGroup("Summon")]
+        [ShowIf("@Kind == SpellKind.Summon")]
+        [LabelText("Summon Prefab"), AssetsOnly]
         public GameObject SummonPrefab;
 
-        [Min(1)] public int SummonCount = 1;
+        [BoxGroup("Summon")]
+        [ShowIf("@Kind == SpellKind.Summon")]
+        [MinValue(1)]
+        public int SummonCount = 1;
 
-        [Header("Debug")]
+        // Debug
+        [BoxGroup("Debug")]
         public bool  DebugDraw = true;
-        public Color DebugColor = new Color(0.8f, 0.2f, 1f, 0.5f);
 
-        // (Hidden/auto fields omitted)
+        [BoxGroup("Debug")]
+        public Color DebugColor = new Color(0.8f, 0.2f, 1f, 0.5f);
     }
 }

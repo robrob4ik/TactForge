@@ -1,6 +1,7 @@
 // FILE: Assets/PROJECT/Scripts/Runtime/Config/UnitDefinition.cs
 using System.Collections.Generic;
 using UnityEngine;
+using Sirenix.OdinInspector;
 
 namespace OneBitRob
 {
@@ -8,52 +9,103 @@ namespace OneBitRob
     public enum CombatStrategyType { Ranged, Melee }
 
     public enum UnitTrait { Undead, Beast, Goblin, Human }
-    public enum UnitClass { Warrior, Mage, Hunter, Assassin, }
-    public enum MovementType { Normal = 0, Melee = 1, Brute = 2, }
+    public enum UnitClass { Warrior, Mage, Hunter, Assassin }
+    public enum MovementType { Normal = 0, Melee = 1, Brute = 2 }
 
     public enum AttackAnimationSelect { Random, Sequential }
 
     [CreateAssetMenu(menuName = "TactForge/Definition/Unit", fileName = "UnitDefinition")]
     public class UnitDefinition : ScriptableObject
     {
-        [Header("Visual & Prefab")]
+        // Visual & Prefab
+        [BoxGroup("Visual & Prefab")]
+        [LabelText("Unit Model"), AssetsOnly]
         public GameObject unitModel;
 
-        [Header("Classification")]
+        // Classification
+        [BoxGroup("Classification")]
+        [ListDrawerSettings(Expanded = true)]
         public List<UnitTrait> traits = new();
+
+        [BoxGroup("Classification")]
+        [ListDrawerSettings(Expanded = true)]
         public List<UnitClass> classes = new();
 
-        [Header("Shop Settings")]
-        [Range(1, 5)] public int price = 1;
-        [Range(1, 5)] public int tier = 1;
+        // Shop Settings
+        [BoxGroup("Shop Settings")]
+        [PropertyRange(1, 5)]
+        public int price = 1;
+
+        [BoxGroup("Shop Settings")]
+        [PropertyRange(1, 5)]
+        public int tier = 1;
+
+        [BoxGroup("Shop Settings")]
+        [LabelText("Unit Name")]
         public string unitName;
 
-        [Header("Base Stats")]
+        // Base Stats
+        [BoxGroup("Base Stats")]
+        [MinValue(1)]
         public int health = 100;
-        [Tooltip("m/s")] public float moveSpeed = 4f;
+
+        [BoxGroup("Base Stats")]
+        [LabelText("Move Speed"), SuffixLabel("m/s", true)]
+        [MinValue(0f)]
+        public float moveSpeed = 4f;
+
+        [BoxGroup("Base Stats")]
+        [LabelText("Acceleration"), SuffixLabel("m/s²", true)]
+        [MinValue(0f)]
         public float acceleration = 10f;
+
+        [BoxGroup("Base Stats")]
         public MovementType movementType = MovementType.Normal;
 
-        [Header("Agent")]
-        [Tooltip("units")] public float stoppingDistance = 1.5f;
-        [Tooltip("units")] public float autoTargetMinSwitchDistance = 3f;
-        [Tooltip("units")] public float targetDetectionRange = 10f;
-        [Tooltip("secs")]  public float retargetCheckInterval = 1f;
+        // Agent
+        [BoxGroup("Agent")]
+        [LabelText("Stopping Distance"), SuffixLabel("units", true)]
+        [MinValue(0f)]
+        public float stoppingDistance = 1.5f;
 
-        [Header("AI")]
-        [Tooltip("While chasing, periodically return Failure from MoveToTarget to let BT re-evaluate (0 = off).")]
-        [Min(0f)] public float moveRecheckYieldInterval = 0.35f;
+        [BoxGroup("Agent")]
+        [LabelText("Auto Target Min Switch Dist"), SuffixLabel("units", true)]
+        [MinValue(0f)]
+        public float autoTargetMinSwitchDistance = 3f;
 
-        [Header("Team")]
+        [BoxGroup("Agent")]
+        [LabelText("Target Detection Range"), SuffixLabel("units", true)]
+        [MinValue(0f)]
+        public float targetDetectionRange = 10f;
+
+        [BoxGroup("Agent")]
+        [LabelText("Retarget Check Interval"), SuffixLabel("s", true)]
+        [MinValue(0f)]
+        public float retargetCheckInterval = 1f;
+
+        // AI
+        [BoxGroup("AI")]
+        [InfoBox("While chasing, periodically return Failure from MoveToTarget to let BT re-evaluate (0 = off).")]
+        [LabelText("Move Recheck Yield Interval"), SuffixLabel("s", true)]
+        [MinValue(0f)]
+        public float moveRecheckYieldInterval = 0.35f;
+
+        // Team
+        [BoxGroup("Team")]
+        [LabelText("Is Enemy")]
         public bool isEnemy = false;
 
-        [Header("Strategies")]
+        // Strategies
+        [BoxGroup("Strategies")]
         public TargetingStrategyType targetingStrategy;
 
-        [Header("Combat")]
+        // Combat
+        [BoxGroup("Combat")]
         public WeaponDefinition weapon;
 
-        [Header("Spells (unique per unit)")]
+        // Spells (unique per unit)
+        [BoxGroup("Spells (unique per unit)")]
+        [ListDrawerSettings(Expanded = false)]
         public List<SpellDefinition> unitSpells;
     }
 }
