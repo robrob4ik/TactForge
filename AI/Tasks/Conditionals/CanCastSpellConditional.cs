@@ -1,7 +1,4 @@
-﻿// Runtime/AI/BehaviorTasks/Spell/CanCastSpellConditional.cs
-// Display rename only; logic unchanged.
-
-using OneBitRob.ECS;
+﻿using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
@@ -26,8 +23,18 @@ namespace OneBitRob.AI
         protected override TaskStatus Execute(Entity e, UnitBrain _)
         {
             var em = EntityManager;
-            if (!em.HasComponent<SpellConfig>(e) || !em.HasComponent<SpellState>(e))
+            if (!em.HasComponent<SpellState>(e))
                 return TaskStatus.Failure;
+
+            // Symmetry with attack gating: if we're mid-attack windup or locked for attack, don't allow casting
+            if (em.HasComponent<AttackWindup>(e) && em.GetComponentData<AttackWindup>(e).Active != 0)
+                return TaskStatus.Failure;
+
+            if (em.HasComponent<MovementLock>(e))
+            {
+                var f = em.GetComponentData<MovementLock>(e).Flags;
+                if ((f & MovementLockFlags.Attacking) != 0) return TaskStatus.Failure;
+            }
 
             var ss = em.GetComponentData<SpellState>(e);
             return ss.Ready != 0 ? TaskStatus.Success : TaskStatus.Failure;

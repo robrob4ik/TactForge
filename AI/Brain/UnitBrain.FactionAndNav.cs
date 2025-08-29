@@ -1,5 +1,10 @@
-﻿using UnityEngine;
+﻿// FILE: Assets/PROJECT/Scripts/Runtime/AI/Brain/UnitBrain.FactionAndNav.cs
+// Summary: faction auto-assign kept; nav "apply" no longer writes Body.Speed etc.
+// Adds StopAgentMotion() that uses AgentBody.Stop() safely.
+
+using UnityEngine;
 using OneBitRob.Config;
+using ProjectDawn.Navigation.Hybrid; // AgentAuthoring
 
 namespace OneBitRob.AI
 {
@@ -8,15 +13,23 @@ namespace OneBitRob.AI
         [Header("Faction Layer Auto-Assign")]
         [SerializeField] private bool _reassignOnEnable = true;
 
+        [Header("Nav Auto-Config")]
+        [Tooltip("If true, minimal nav init runs on Start (does NOT touch locomotion tunables).")]
+        [SerializeField] private bool _applyNavFromDefinitionOnStart = true;
+
 #if UNITY_EDITOR
         [Header("Debug")]
         [SerializeField] private bool _logLayerAssignSummary = false;
+        [SerializeField] private bool _logNavAssignSummary = false;
 #endif
 
         private void Start()
         {
             if (autoAssignFactionLayer)
                 AssignFactionLayers_Internal("Start");
+
+            if (_applyNavFromDefinitionOnStart)
+                ApplyNavFromDefinition_Internal();
         }
 
         private void OnEnable()
@@ -24,7 +37,7 @@ namespace OneBitRob.AI
             if (autoAssignFactionLayer && _reassignOnEnable)
                 AssignFactionLayers_Internal("OnEnable");
         }
-        
+
         private void AssignFactionLayers_Internal(string reason)
         {
             if (!UnitDefinition) return;
@@ -53,6 +66,29 @@ namespace OneBitRob.AI
                 Debug.Log($"[UnitBrain] '{name}' set {changed}/{total} colliders to layer {layer} ({layerName}). Reason={reason}", this);
             }
 #endif
+        }
+
+        private void ApplyNavFromDefinition_Internal()
+        {
+            if (_navAgent == null) return;
+
+            var body = _navAgent.Body;
+            body.IsStopped = false;
+            _navAgent.Body = body;
+
+#if UNITY_EDITOR
+            if (_logNavAssignSummary)
+                Debug.Log($"[UnitBrain] '{name}' nav init: cleared IsStopped on AgentBody.", this);
+#endif
+        }
+
+        public void StopAgentMotion()
+        {
+            if (_navAgent == null) return;
+
+            var body = _navAgent.Body;
+            body.Stop();            // sets IsStopped = true and Velocity = 0
+            _navAgent.Body = body;  // write back to ECS
         }
     }
 }

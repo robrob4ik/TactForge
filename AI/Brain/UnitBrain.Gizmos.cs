@@ -1,4 +1,4 @@
-﻿// Editor/AI/Brain/UnitBrain.Gizmos.cs
+﻿
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
@@ -21,14 +21,6 @@ namespace OneBitRob.AI
         {
             var pos = transform.position;
 
-            // Target detection range
-            if (UnitDefinition != null && UnitDefinition.targetDetectionRange > 0f)
-            {
-                Gizmos.color = new Color(1f, 0.9f, 0.25f, 0.5f);
-                Handles.color = Gizmos.color;
-                Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.targetDetectionRange);
-            }
-
             // Weapon attack range
             if (UnitDefinition != null && UnitDefinition.weapon != null && UnitDefinition.weapon.attackRange > 0f)
             {
@@ -48,7 +40,7 @@ namespace OneBitRob.AI
             // Retarget hysteresis
             if (UnitDefinition != null && UnitDefinition.autoTargetMinSwitchDistance > 0f)
             {
-                Gizmos.color = new Color(0.35f, 0.6f, 1f, 0.5f);
+                Gizmos.color = new Color(0.1f, 0.4f, 1f, 1f);
                 Handles.color = Gizmos.color;
                 Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.autoTargetMinSwitchDistance);
             }

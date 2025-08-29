@@ -1,5 +1,4 @@
-﻿// FILE: Runtime/Combat/WeaponDefinition.cs
-using UnityEngine;
+﻿using UnityEngine;
 using Sirenix.OdinInspector;
 
 namespace OneBitRob
@@ -19,14 +18,14 @@ namespace OneBitRob
         [BoxGroup("Common")]
         [LabelText("Attack Cooldown"), SuffixLabel("s", true)]
         [MinValue(0f)]
-        public float attackCooldown = 0.5f;
+        public float attackCooldown = 1f;
 
         // Variance
         [BoxGroup("Variance")]
         [InfoBox("Random ± added to attackCooldown each use. Example: 0.05 → 1s becomes [0.95..1.05]s.", InfoMessageType.None)]
         [LabelText("Cooldown Jitter"), SuffixLabel("s", true)]
         [MinValue(0f)]
-        public float attackCooldownJitter = 0f;
+        public float attackCooldownJitter = 0.2f;
 
         // Criticals
         [BoxGroup("Criticals")]

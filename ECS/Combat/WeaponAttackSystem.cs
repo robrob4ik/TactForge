@@ -1,12 +1,12 @@
-﻿// Assets/PROJECT/Scripts/Runtime/AI/Combat/Weapon/WeaponAttackSystem.cs
+﻿// FILE: Assets/PROJECT/Scripts/Runtime/ECS/Combat/Weapon/WeaponAttackSystem.cs
+using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using OneBitRob.AI;
-using OneBitRob.ECS;
-using UnityEngine;
 using static Unity.Mathematics.math;
+using float3 = Unity.Mathematics.float3;
+using OneBitRob.FX; // NEW: feedbacks
 
 namespace OneBitRob.AI
 {
@@ -106,6 +106,9 @@ namespace OneBitRob.AI
 
                     brain.CombatSubsystem?.PlayRangedFire(rw.animations);
 
+                    // NEW: feedback at the muzzle when firing
+                    FeedbackService.TryPlay(rw.fireFeedback, brain.transform, (UnityEngine.Vector3)origin);
+
                     var cd = em.HasComponent<AttackCooldown>(e) ? em.GetComponentData<AttackCooldown>(e) : default;
                     float jitter = CalcJitter(rw.attackCooldownJitter, e, now);
                     cd.NextTime = now + max(0.01f, rw.attackCooldown) + jitter;
@@ -132,6 +135,9 @@ namespace OneBitRob.AI
                     else                                    ecb.AddComponent(e, hit);
 
                     brain.CombatSubsystem?.PlayMeleeAttack(mw.attackAnimations);
+
+                    // NEW: feedback for melee swing on release path (if used)
+                    FeedbackService.TryPlay(mw.attackFeedback, brain.transform, (UnityEngine.Vector3)selfPos);
 
                     var cd = em.HasComponent<AttackCooldown>(e) ? em.GetComponentData<AttackCooldown>(e) : default;
                     float jitter = CalcJitter(mw.attackCooldownJitter, e, now);
@@ -193,6 +199,15 @@ namespace OneBitRob.AI
                     else                                    ecb.AddComponent(e, hit);
 
                     brain.CombatSubsystem?.PlayMeleeAttack(mw2.attackAnimations);
+                    FeedbackService.TryPlay(mw2.attackFeedback, brain.transform, (UnityEngine.Vector3)selfPos);
+                    
+                    float hold = max(0f, mw2.lockWhileFiringSeconds);
+                    if (hold > 0f)
+                    {
+                        var win = new ActionLockUntil { Until = now + hold };
+                        if (em.HasComponent<ActionLockUntil>(e)) ecb.SetComponent(e, win);
+                        else                                     ecb.AddComponent(e, win);
+                    }
 
                     float jitter = CalcJitter(mw2.attackCooldownJitter, e, now);
                     cd.NextTime = now + max(0.01f, mw2.attackCooldown) + jitter;
@@ -213,6 +228,9 @@ namespace OneBitRob.AI
                         w.ReleaseTime = now + max(0f, rw2.windupSeconds);
                         ecb.SetComponent(e, w);
                         brain.CombatSubsystem?.PlayRangedPrepare(rw2.animations);
+
+                        // NEW: feedback when starting ranged windup
+                        FeedbackService.TryPlay(rw2.prepareFeedback, brain.transform, (UnityEngine.Vector3)selfPos);
                     }
                 }
 

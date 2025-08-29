@@ -1,10 +1,10 @@
-﻿// ECS/HybridSync/MonoToEcs/Brain_MonoToEcs_AliveMirrorSystem.cs
+﻿// FILE: Assets/PROJECT/Scripts/Runtime/ECS/Brain/Brain_MonoToEcs_AliveMirrorSystem.cs
 using Unity.Collections;
 using Unity.Entities;
+using OneBitRob.FX; // <-- add
 
 namespace OneBitRob.ECS
 {
-    /// Mirrors CombatSubsystem.IsAlive -> Alive and tags for cleanup when dead.
     [UpdateInGroup(typeof(MonoToEcsSyncGroup))]
     public partial struct Brain_MonoToEcs_AliveMirrorSystem : ISystem
     {
@@ -30,9 +30,17 @@ namespace OneBitRob.ECS
                 alive.Value = (byte)(monoAlive ? 1 : 0);
                 em.SetComponentData(e, alive);
 
-                // If dead, tag for cleanup once (structural change deferred)
+                // If dead, tag for cleanup once and trigger death feedback once
                 if (!monoAlive && !em.HasComponent<DestroyEntityTag>(e))
+                {
                     ecb.AddComponent<DestroyEntityTag>(e);
+
+                    var ud = brain.UnitDefinition;
+                    if (ud != null && ud.deathFeedback != null)
+                    {
+                        FeedbackService.TryPlay(ud.deathFeedback, null, brain.transform.position);
+                    }
+                }
             }
 
             ecb.Playback(em);

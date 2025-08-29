@@ -1,15 +1,11 @@
-﻿// FILE: Assets/PROJECT/Scripts/Runtime/AI/Brain/MoveToTargetAction.cs
-
-using OneBitRob.Constants;
+﻿using OneBitRob.Constants;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
-using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using UnityEngine;
 
 namespace OneBitRob.AI
 {
@@ -19,34 +15,41 @@ namespace OneBitRob.AI
         protected override MoveToTargetComponent CreateBufferElement(ushort runtimeIndex) => new MoveToTargetComponent { Index = runtimeIndex };
     }
 
-    public struct MoveToTargetComponent : IBufferElementData, ITaskCommand
-    {
-        public ushort Index { get; set; }
-    }
-
+    public struct MoveToTargetComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }
     public struct MoveToTargetTag : IComponentData, IEnableableComponent { }
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellWindupAndFireSystem))] // ensure casting status is visible
+    [UpdateAfter(typeof(SpellWindupAndFireSystem))]
     public partial class MoveToTargetSystem : TaskProcessorSystem<MoveToTargetComponent, MoveToTargetTag>
     {
         ComponentLookup<LocalTransform> _posRO;
         ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
+
+        // New lookups reused for gating
+        ComponentLookup<InAttackRange> _inRangeRO;
+        ComponentLookup<MovementLock>  _lockRO;
+        ComponentLookup<AttackWindup>  _windRO;
 
         private EntityCommandBuffer _ecb;
 
         protected override void OnCreate()
         {
             base.OnCreate();
-            _posRO  = GetComponentLookup<LocalTransform>(true);
-            _factRO = GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
+            _posRO   = GetComponentLookup<LocalTransform>(true);
+            _factRO  = GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
+            _inRangeRO = GetComponentLookup<InAttackRange>(true);
+            _lockRO    = GetComponentLookup<MovementLock>(true);
+            _windRO    = GetComponentLookup<AttackWindup>(true);
         }
 
         protected override void OnUpdate()
         {
             _posRO.Update(this);
             _factRO.Update(this);
+            _inRangeRO.Update(this);
+            _lockRO.Update(this);
+            _windRO.Update(this);
 
             _ecb = new EntityCommandBuffer(Allocator.Temp);
             base.OnUpdate();
@@ -58,49 +61,40 @@ namespace OneBitRob.AI
         {
             float dt = (float)SystemAPI.Time.DeltaTime;
 
-            // ─────────────────────────────────────────────
-            // MOVEMENT LOCK WHILE CASTING
-            if (EntityManager.HasComponent<SpellWindup>(e))
-            {
-                var sw = EntityManager.GetComponentData<SpellWindup>(e);
-                if (sw.Active != 0)
-                {
-                    var here = SystemAPI.GetComponent<LocalTransform>(e).Position;
-                    var ddLock = EntityManager.GetComponentData<DesiredDestination>(e);
-                    ddLock.Position = here;
-                    ddLock.HasValue = 1;
-                    EntityManager.SetComponentData(e, ddLock);
-                    return TaskStatus.Running;
-                }
-            }
-            // ─────────────────────────────────────────────
+            // Lock → park and run
+            bool weaponWindup = _windRO.HasComponent(e) && _windRO[e].Active != 0;
+            bool anyLock = _lockRO.HasComponent(e) &&
+                           (_lockRO[e].Flags & (MovementLockFlags.Casting | MovementLockFlags.Attacking)) != 0;
 
-            // No target → stop and fail
+            if (weaponWindup || anyLock)
+            {
+                ParkAtSelf(e);
+                return TaskStatus.Running;
+            }
+
+            // In range → park and succeed
+            if (_inRangeRO.HasComponent(e) && _inRangeRO[e].Value != 0)
+            {
+                ParkAtSelf(e);
+                return TaskStatus.Success;
+            }
+
+            // Normal chase….
             if (!EntityManager.HasComponent<Target>(e))
             {
-                var dd0 = EntityManager.GetComponentData<DesiredDestination>(e);
-                dd0.Position = SystemAPI.GetComponent<LocalTransform>(e).Position;
-                dd0.HasValue = 1;
-                EntityManager.SetComponentData(e, dd0);
+                ParkAtSelf(e);
                 return TaskStatus.Failure;
             }
 
             var target = EntityManager.GetComponentData<Target>(e).Value;
-
-            // Target entity invalid → clear, stop, and fail
             if (target == Entity.Null || !_posRO.HasComponent(target))
             {
                 EntityManager.SetComponentData(e, new Target { Value = Entity.Null });
-
-                var dd1 = EntityManager.GetComponentData<DesiredDestination>(e);
-                dd1.Position = SystemAPI.GetComponent<LocalTransform>(e).Position;
-                dd1.HasValue = 1;
-                EntityManager.SetComponentData(e, dd1);
-
+                ParkAtSelf(e);
                 return TaskStatus.Failure;
             }
-
-            // Opportunistic retargeting (kept from your logic) …
+            
+            // Opportunistic retargeting (kept) …
             double now = SystemAPI.Time.ElapsedTime;
             float switchInterval = math.max(0f, brain.UnitDefinition.retargetCheckInterval);
 
@@ -126,7 +120,7 @@ namespace OneBitRob.AI
             float stop = brain.UnitDefinition.stoppingDistance;
             float currDistSq = math.distancesq(selfPos, currPos);
 
-            // No-progress fallback retained …
+            // No-progress assist (kept) …
             const float progressEpsilon = 0.05f;
             const float stuckTime = 1.5f;
 
@@ -195,26 +189,19 @@ namespace OneBitRob.AI
                 }
             }
 
-            // Push current target position as DesiredDestination (consumed by bridge)
+            // Push desired destination toward target (agent’s StoppingDistance will handle spacing)
             var targetPos = _posRO[target].Position;
-            var dd = EntityManager.GetComponentData<DesiredDestination>(e);
-            dd.Position = targetPos;
-            dd.HasValue = 1;
-            EntityManager.SetComponentData(e, dd);
+            SetDesiredDestination(e, targetPos);
 
-            // Arrival check
-            var self = _posRO[e].Position;
+            // Arrival check (stoppingDistance)
             float stopDist = brain.UnitDefinition.stoppingDistance;
-            if (math.distancesq(self, targetPos) <= stopDist * stopDist)
+            if (math.distancesq(selfPos, targetPos) <= stopDist * stopDist)
             {
-                dd.Position = self;
-                dd.HasValue = 1;
-                EntityManager.SetComponentData(e, dd);
+                ParkAtSelf(e);
                 return TaskStatus.Success;
             }
-
-            // ─────────────────────────────────────────────────────────────
-            // NEW: PERIODIC YIELD to force BT re-evaluation (casting, etc.)
+            
+            // Periodic yield (kept)
             float yieldInterval = math.max(0f, brain.UnitDefinition.moveRecheckYieldInterval);
             if (yieldInterval > 0f)
             {
@@ -228,13 +215,28 @@ namespace OneBitRob.AI
                     if (had) EntityManager.SetComponentData(e, y);
                     else     _ecb.AddComponent(e, y);
 
-                    // Keep current destination but give the BT a chance to run other branches.
                     return TaskStatus.Failure;
                 }
             }
-            // ─────────────────────────────────────────────────────────────
 
             return TaskStatus.Running;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Helpers (prevent duplicate local variables everywhere)
+        // ─────────────────────────────────────────────────────────────────────
+        private void ParkAtSelf(Entity e)
+        {
+            float3 here = SystemAPI.GetComponent<LocalTransform>(e).Position;
+            SetDesiredDestination(e, here);
+        }
+
+        private void SetDesiredDestination(Entity e, float3 position)
+        {
+            var dd = EntityManager.GetComponentData<DesiredDestination>(e);
+            dd.Position = position;
+            dd.HasValue = 1;
+            EntityManager.SetComponentData(e, dd);
         }
     }
 }

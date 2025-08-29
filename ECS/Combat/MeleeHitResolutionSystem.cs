@@ -83,6 +83,8 @@ namespace OneBitRob.AI
                 int maxT = math.max(1, req.MaxTargets);
                 int applied = 0;
 
+                var meleeDef = attackerBrain.UnitDefinition != null ? attackerBrain.UnitDefinition.weapon as OneBitRob.MeleeWeaponDefinition : null;
+                
                 for (int h = 0; h < count; h++)
                 {
                     var col = s_Hits[h];
@@ -128,6 +130,12 @@ namespace OneBitRob.AI
                         Position = targetBrain.transform.position,
                         Amount   = dmg
                     });
+                    
+                    if (meleeDef != null && meleeDef.hitFeedback != null)
+                    {
+                        // Attach to target so it follows if the target staggers/moves
+                        FeedbackService.TryPlay(meleeDef.hitFeedback, targetBrain.transform, targetBrain.transform.position);
+                    }
 
 #if UNITY_EDITOR
                     // show "actual hit" line (yellow) slightly thicker via double draw

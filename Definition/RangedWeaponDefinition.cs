@@ -1,6 +1,6 @@
-﻿// FILE: Runtime/Combat/RangedWeaponDefinition.cs
-using UnityEngine;
+﻿using UnityEngine;
 using Sirenix.OdinInspector;
+using OneBitRob.FX;
 
 namespace OneBitRob
 {
@@ -22,7 +22,7 @@ namespace OneBitRob
         [BoxGroup("Projectile")]
         [LabelText("Speed"), SuffixLabel("units/s", true)]
         [MinValue(0.01f)]
-        public float projectileSpeed = 60f;
+        public float projectileSpeed = 40f;
 
         [BoxGroup("Projectile")]
         [LabelText("Max Distance"), SuffixLabel("units", true)]
@@ -33,7 +33,7 @@ namespace OneBitRob
         [BoxGroup("Timing")]
         [LabelText("Windup"), SuffixLabel("s", true)]
         [MinValue(0f)]
-        public float windupSeconds = 0.15f;
+        public float windupSeconds = 0.5f;
 
         // Animations
         [BoxGroup("Animations")]
@@ -43,5 +43,18 @@ namespace OneBitRob
         [BoxGroup("Projectile Pool Key")]
         [InfoBox("Key used to choose a scene pool in ProjectilePools (e.g. 'arrow', 'mage_orb').")]
         public string projectileId = "arrow";
+
+        // Feedbacks
+        [BoxGroup("Feedbacks")]
+        [LabelText("Prepare Feedback")]
+        [AssetsOnly] public FeedbackDefinition prepareFeedback;
+
+        [BoxGroup("Feedbacks")]
+        [LabelText("Fire Feedback")]
+        [AssetsOnly] public FeedbackDefinition fireFeedback;
+
+        [BoxGroup("Feedbacks")]
+        [LabelText("Impact Feedback")]                  // NEW: plays when projectile hits a target
+        [AssetsOnly] public FeedbackDefinition impactFeedback;
     }
 }

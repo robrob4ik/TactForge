@@ -1,7 +1,7 @@
-// FILE: Assets/PROJECT/Scripts/Runtime/Config/UnitDefinition.cs
 using System.Collections.Generic;
-using UnityEngine;
 using Sirenix.OdinInspector;
+using UnityEngine;
+using OneBitRob.FX;
 
 namespace OneBitRob
 {
@@ -76,7 +76,7 @@ namespace OneBitRob
         [BoxGroup("Agent")]
         [LabelText("Target Detection Range"), SuffixLabel("units", true)]
         [MinValue(0f)]
-        public float targetDetectionRange = 10f;
+        public float targetDetectionRange = 100f;
 
         [BoxGroup("Agent")]
         [LabelText("Retarget Check Interval"), SuffixLabel("s", true)]
@@ -88,7 +88,7 @@ namespace OneBitRob
         [InfoBox("While chasing, periodically return Failure from MoveToTarget to let BT re-evaluate (0 = off).")]
         [LabelText("Move Recheck Yield Interval"), SuffixLabel("s", true)]
         [MinValue(0f)]
-        public float moveRecheckYieldInterval = 0.35f;
+        public float moveRecheckYieldInterval = 3f;
 
         // Team
         [BoxGroup("Team")]
@@ -107,5 +107,10 @@ namespace OneBitRob
         [BoxGroup("Spells (unique per unit)")]
         [ListDrawerSettings(Expanded = false)]
         public List<SpellDefinition> unitSpells;
+
+        // Feedbacks
+        [BoxGroup("Feedbacks")]
+        [LabelText("Death Feedback")]
+        [AssetsOnly] public FeedbackDefinition deathFeedback;
     }
 }

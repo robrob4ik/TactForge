@@ -1,12 +1,12 @@
-﻿// Assets/PROJECT/Scripts/Runtime/AI/Combat/Spell/SpellWindupAndFireSystem.cs
+﻿// FILE: Assets/PROJECT/Scripts/Runtime/AI/Combat/Spell/SpellWindupAndFireSystem.cs
+using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
 using static Unity.Mathematics.math;
-using OneBitRob.AI;
-using OneBitRob.ECS;
 using float3 = Unity.Mathematics.float3;
+using OneBitRob.FX; // NEW: feedbacks
 
 namespace OneBitRob.AI
 {
@@ -50,7 +50,7 @@ namespace OneBitRob.AI
                 if (w.Active == 0 || now < w.ReleaseTime) continue;
 
                 var cfg = em.GetComponentData<SpellConfig>(e);
-                FireSpell(ref state, ref ecb, e, in cfg, in w);
+                FireSpell(ref state, ref ecb, e, in cfg, in w); // Fire & feedbacks
 
                 if (em.HasComponent<SpellCooldown>(e))
                 {
@@ -134,7 +134,14 @@ namespace OneBitRob.AI
                     {
                         var spells = brain.UnitDefinition.unitSpells;
                         if (spells != null && spells.Count > 0 && spells[0] != null)
-                            brain.CombatSubsystem?.PlaySpell(spells[0].animations);
+                        {
+                            var sd = spells[0];
+                            brain.CombatSubsystem?.PlaySpell(sd.animations);
+
+                            // NEW: prepare feedback at caster when windup starts
+                            float3 casterPos = _posRO.HasComponent(e) ? _posRO[e].Position : float3.zero;
+                            FeedbackService.TryPlay(sd.prepareFeedback, brain.transform, (UnityEngine.Vector3)casterPos);
+                        }
                     }
 
                     if (em.HasComponent<SpellWindup>(e)) ecb.SetComponent(e, w);
@@ -246,10 +253,21 @@ namespace OneBitRob.AI
                         Positive       = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
                         AreaVfxIdHash  = cfg.AreaVfxIdHash,
                         LayerMask      = mask,
-                        VfxYOffset     = math.max(0f, cfg.AreaVfxYOffset) // <-- NEW
+                        VfxYOffset     = math.max(0f, cfg.AreaVfxYOffset)
                     };
                     if (em.HasComponent<DoTArea>(e)) ecb.SetComponent(e, area);
                     else                              ecb.AddComponent(e, area);
+
+                    // NEW: impact feedback at AoE center (ground)
+                    if (brain != null)
+                    {
+                        var spells = brain.UnitDefinition != null ? brain.UnitDefinition.unitSpells : null;
+                        if (spells != null && spells.Count > 0 && spells[0] != null)
+                        {
+                            var sd = spells[0];
+                            FeedbackService.TryPlay(sd.impactFeedback, null, (UnityEngine.Vector3)aimPos);
+                        }
+                    }
                     break;
                 }
 
@@ -309,6 +327,17 @@ namespace OneBitRob.AI
                         else                                   ecb.AddComponent(e, summon);
                     }
                     break;
+                }
+            }
+
+            // NEW: generic fire feedback at caster (any spell kind)
+            if (brain != null)
+            {
+                var spells = brain.UnitDefinition != null ? brain.UnitDefinition.unitSpells : null;
+                if (spells != null && spells.Count > 0 && spells[0] != null)
+                {
+                    var sd = spells[0];
+                    FeedbackService.TryPlay(sd.fireFeedback, brain.transform, (UnityEngine.Vector3)selfPos);
                 }
             }
         }

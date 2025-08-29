@@ -1,6 +1,4 @@
-﻿// CHANGED: Renamed to WeaponProjectile; kept legacy alias EcsProjectile for safety.
-
-using MoreMountains.Tools;
+﻿using MoreMountains.Tools;
 using OneBitRob.AI;
 using OneBitRob.FX;
 using UnityEngine;
@@ -158,6 +156,14 @@ namespace OneBitRob.ECS
                     Follow   = brain.transform,
                     Amount   = dmg
                 });
+
+                // ───────────── Impact feedback (ranged) ─────────────
+                var rangedDef = _attackerBrain != null ? _attackerBrain.UnitDefinition?.weapon as OneBitRob.RangedWeaponDefinition : null;
+                if (rangedDef != null && rangedDef.impactFeedback != null)
+                {
+                    // Attach to the target so volume follows it if it moves post-impact
+                    FeedbackService.TryPlay(rangedDef.impactFeedback, brain.transform, hit.point);
+                }
             }
         }
 

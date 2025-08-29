@@ -1,4 +1,3 @@
-// FILE: Assets/PROJECT/Scripts/Runtime/AI/Brain/UnitBrain.cs
 using System.Collections.Generic;
 using OneBitRob.Config;
 using OneBitRob.EnigmaEngine;
@@ -123,7 +122,9 @@ namespace OneBitRob.AI
                 Character.CharacterModel.layer = factionLayer;
         }
 
-        public void Setup() { }
+        public void Setup()
+        {
+        }
 
         public void SetEntity(Entity entity)
         {
@@ -131,25 +132,12 @@ namespace OneBitRob.AI
             UnitBrainRegistry.Register(entity, this);
         }
 
-        public LayerMask GetTargetLayerMask() => _targetMask;
-
-        /// <summary>Mask of hostiles relative to this brain’s faction.</summary>
         public LayerMask GetHostileLayerMask() => CombatLayers.HostileMaskFor(_isEnemy);
 
-        /// <summary>Mask of friendlies relative to this brain’s faction.</summary>
         public LayerMask GetFriendlyLayerMask() => CombatLayers.FriendlyMaskFor(_isEnemy);
 
         // ─── Compatibility (older systems call this name) ───────────────────
         public LayerMask GetDamageableLayerMask() => GetHostileLayerMask();
-
-        public GameObject FindTarget() => CurrentTarget;
-
-        public bool IsFacingTarget()
-        {
-            if (!CurrentTarget) return false;
-            var toTgt = (CurrentTarget.transform.position - transform.position).normalized;
-            return Vector3.Dot(transform.forward, toTgt) >= 0.95f;
-        }
 
         public bool IsTargetAlive()
         {
@@ -159,48 +147,16 @@ namespace OneBitRob.AI
                    && targetBrain.Character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
         }
 
-        public bool IsTargetInAttackRange(GameObject target)
-        {
-            if (!target) return false;
-            float r = UnitDefinition && UnitDefinition.weapon ? UnitDefinition.weapon.attackRange : 1.5f;
-            var diff = transform.position - target.transform.position;
-            return diff.sqrMagnitude <= r * r;
-        }
-
         // ─── Locomotion ─────────────────────────────────────────────────────
         public void MoveToPosition(Vector3 position)
         {
             CurrentTargetPosition = position;
             _navAgent?.SetDestinationDeferred(position);
         }
-
-        public void RunTo(Vector3 position) => _navAgent?.SetDestination(position);
-
+        
         public void SetForcedFacing(Vector3 worldPosition)
         {
             if (_navMove != null) _navMove.ForcedRotationTarget = worldPosition; // smoothed by the ability
-        }
-
-        public void RotateToTarget()
-        {
-            if (CurrentTarget) SetForcedFacing(CurrentTarget.transform.position);
-        }
-
-        public void RotateToSpellTarget()
-        {
-            if (CurrentSpellTarget)
-                SetForcedFacing(CurrentSpellTarget.transform.position);
-            else if (CurrentSpellTargetPosition.HasValue) SetForcedFacing(CurrentSpellTargetPosition.Value);
-        }
-
-        public Vector3 GetCurrentDirection() => transform.forward;
-
-        public bool HasReachedDestination()
-        {
-            if (_navAgent == null) return true;
-            var rd = _navAgent.Body.RemainingDistance;
-            if (rd <= 0f) return false;
-            return rd <= UnitDefinition.stoppingDistance + 0.001f;
         }
 
         public float RemainingDistance() => _navAgent ? _navAgent.Body.RemainingDistance : 0f;

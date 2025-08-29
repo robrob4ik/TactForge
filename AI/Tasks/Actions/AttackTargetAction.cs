@@ -1,7 +1,6 @@
 ﻿using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Unity.Entities;
-using UnityEngine;
 
 namespace OneBitRob.AI
 {
@@ -18,27 +17,35 @@ namespace OneBitRob.AI
     {
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
         {
-            // NEW: do not issue weapon attack requests while a spell cast is in progress
-            if (EntityManager.HasComponent<SpellWindup>(e))
+            var em = EntityManager;
+
+            // Block while casting, ranged windup, or any explicit movement lock
+            if (em.HasComponent<SpellWindup>(e) && em.GetComponentData<SpellWindup>(e).Active != 0)
+                return TaskStatus.Failure;
+
+            if (em.HasComponent<AttackWindup>(e) && em.GetComponentData<AttackWindup>(e).Active != 0)
+                return TaskStatus.Failure;
+
+            if (em.HasComponent<MovementLock>(e))
             {
-                var sw = EntityManager.GetComponentData<SpellWindup>(e);
-                if (sw.Active != 0)
-                    return TaskStatus.Failure; // casting → skip attacking this frame
+                var f = em.GetComponentData<MovementLock>(e).Flags;
+                if ((f & (MovementLockFlags.Casting | MovementLockFlags.Attacking)) != 0)
+                    return TaskStatus.Failure;
             }
 
-            if (!EntityManager.HasComponent<Target>(e)) return TaskStatus.Failure;
+            if (!em.HasComponent<Target>(e)) return TaskStatus.Failure;
 
-            var target = EntityManager.GetComponentData<Target>(e).Value;
+            var target = em.GetComponentData<Target>(e).Value;
             if (target == Entity.Null) return TaskStatus.Failure;
 
-            if (!EntityManager.HasComponent<AttackRequest>(e))
-                EntityManager.AddComponentData(e, new AttackRequest { Target = target, HasValue = 1 });
+            if (!em.HasComponent<AttackRequest>(e))
+                em.AddComponentData(e, new AttackRequest { Target = target, HasValue = 1 });
             else
             {
-                var req = EntityManager.GetComponentData<AttackRequest>(e);
+                var req = em.GetComponentData<AttackRequest>(e);
                 req.Target = target;
                 req.HasValue = 1;
-                EntityManager.SetComponentData(e, req);
+                em.SetComponentData(e, req);
             }
 
             return TaskStatus.Success;

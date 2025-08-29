@@ -1,6 +1,6 @@
-﻿// FILE: Runtime/Combat/MeleeWeaponDefinition.cs
-using UnityEngine;
+﻿using UnityEngine;
 using Sirenix.OdinInspector;
+using OneBitRob.FX;
 
 namespace OneBitRob
 {
@@ -21,8 +21,22 @@ namespace OneBitRob
         [MinValue(0f)]
         public float invincibility = 0.10f;
 
-        // Animations
+        [BoxGroup("Timing")]
+        [LabelText("Lock While Firing"), SuffixLabel("s", true)]
+        [MinValue(0f)]
+        public float lockWhileFiringSeconds = 0.25f;
+
+        // Animations (swing)
         [BoxGroup("Animations")]
         public AttackAnimationSettings attackAnimations;
+
+        // Feedbacks
+        [BoxGroup("Feedbacks")]
+        [LabelText("Attack (Swing) Feedback")]
+        [AssetsOnly] public FeedbackDefinition attackFeedback;
+
+        [BoxGroup("Feedbacks")]
+        [LabelText("Hit Feedback")]                   // NEW: plays when the melee attack actually lands
+        [AssetsOnly] public FeedbackDefinition hitFeedback;
     }
 }

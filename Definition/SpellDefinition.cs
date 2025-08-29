@@ -1,9 +1,7 @@
-﻿// FILE: Assets/PROJECT/Scripts/Runtime/Config/SpellDefinition.cs
-using System.Collections.Generic;
+﻿// FILE: Assets/PROJECT/Scripts/Runtime/Combat/SpellDefinition.cs
 using UnityEngine;
 using Sirenix.OdinInspector;
-using static Unity.Mathematics.math;
-using OneBitRob.AI.Debugging;
+using OneBitRob.FX;
 
 namespace OneBitRob
 {
@@ -168,5 +166,16 @@ namespace OneBitRob
 
         [BoxGroup("Debug")]
         public Color DebugColor = new Color(0.8f, 0.2f, 1f, 0.5f);
+
+        // Feedbacks
+        [BoxGroup("Feedbacks")]
+        [LabelText("Prepare Feedback")]
+        [AssetsOnly] public FeedbackDefinition prepareFeedback;
+        [BoxGroup("Feedbacks")]
+        [LabelText("Fire Feedback")]
+        [AssetsOnly] public FeedbackDefinition fireFeedback;
+        [BoxGroup("Feedbacks")]
+        [LabelText("Impact Feedback (AOE Center)")]
+        [AssetsOnly] public FeedbackDefinition impactFeedback;
     }
 }
