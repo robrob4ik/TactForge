@@ -19,9 +19,9 @@ namespace OneBitRob.ECS
 
     public struct SpellConfig : IComponentData
     {
-        public OneBitRob.SpellKind Kind;
-        public OneBitRob.SpellEffectType EffectType;
-        public OneBitRob.SpellAcquireMode AcquireMode;
+        public SpellKind Kind;
+        public SpellEffectType EffectType;
+        public SpellAcquireMode AcquireMode;
 
         public float CastTime;
         public float Cooldown;

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using GPUInstancerPro.PrefabModule;
 using OneBitRob.AI;
-using OneBitRob.FX;
+using OneBitRob.VFX;
 using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
@@ -24,7 +24,7 @@ namespace OneBitRob.ECS
                 if (EntityManager.HasComponent<ActiveTargetVfx>(entity))
                 {
                     var bind = EntityManager.GetComponentData<ActiveTargetVfx>(entity);
-                    SpellVfxPoolManager.EndPersistent(bind.Key);
+                    VfxPoolManager.EndPersistent(bind.Key);
                     ecb.RemoveComponent<ActiveTargetVfx>(entity);
                 }
 

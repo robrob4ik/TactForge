@@ -4,11 +4,6 @@ using Unity.Entities;
 
 namespace OneBitRob.AI
 {
-    /// <summary>
-    /// Sets/clears MovementLock.Attacking while:
-    /// - AttackWindup.Active != 0 (ranged windup)
-    /// - ActionLockUntil active (melee short lock)
-    /// </summary>
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     [UpdateAfter(typeof(WeaponAttackSystem))]
     public partial struct WeaponMovementLockSystem : ISystem

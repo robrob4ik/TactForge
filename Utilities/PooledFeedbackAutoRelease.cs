@@ -7,20 +7,19 @@ using UnityEngine;
 namespace OneBitRob.FX
 {
     [DisallowMultipleComponent]
-    internal sealed class MMFeedbacksAutoRelease : MonoBehaviour
+    internal sealed class PooledFeedbackAutoRelease : MonoBehaviour
     {
-        private Coroutine _co;
+        private Coroutine _releaseCoroutine;
 
         public void Arm(MMFeedbacks player, float minSeconds, float paddingSeconds)
         {
             if (!isActiveAndEnabled) return;
-            if (_co != null) StopCoroutine(_co);
+            if (_releaseCoroutine != null) StopCoroutine(_releaseCoroutine);
 
-            float baseDur = (player != null) ? Mathf.Max(0f, player.TotalDuration) : 0f;
-            float wait = Mathf.Max(minSeconds, baseDur + paddingSeconds);
+            float baseDuration = (player != null) ? Mathf.Max(0f, player.TotalDuration) : 0f;
+            float wait = Mathf.Max(minSeconds, baseDuration + paddingSeconds);
 
-            // Always use realtime to avoid stalls on global timescale tricks
-            _co = StartCoroutine(ReleaseAfter(wait));
+            _releaseCoroutine = StartCoroutine(ReleaseAfter(wait));
         }
 
         private IEnumerator ReleaseAfter(float seconds)

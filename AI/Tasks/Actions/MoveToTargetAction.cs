@@ -222,9 +222,6 @@ namespace OneBitRob.AI
             return TaskStatus.Running;
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // Helpers (prevent duplicate local variables everywhere)
-        // ─────────────────────────────────────────────────────────────────────
         private void ParkAtSelf(Entity e)
         {
             float3 here = SystemAPI.GetComponent<LocalTransform>(e).Position;

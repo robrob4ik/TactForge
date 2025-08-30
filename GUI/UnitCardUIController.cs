@@ -3,6 +3,7 @@ using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using UnityEngine.Serialization;
 
 public class UnitCardUIController : MonoBehaviour
 {
@@ -18,7 +19,7 @@ public class UnitCardUIController : MonoBehaviour
     [SerializeField] private GameObject iconPrefab;
 
     [Title("Icon Libraries")]
-    [SerializeField] private IconLibrary library;
+    [SerializeField] private IconRegistry registry;
 
     private UnitDefinition unitData;
     private GameObject spawnedModel;
@@ -44,14 +45,14 @@ public class UnitCardUIController : MonoBehaviour
 
         foreach (var trait in unitData.traits)
         {
-            var icon = library?.GetTraitIcon(trait);
+            var icon = registry?.GetTraitIcon(trait);
             if (icon != null)
                 AddIconToContainer(traitIconContainer, icon);
         }
 
         foreach (var cls in unitData.classes)
         {
-            var icon = library?.GetClassIcon(cls);
+            var icon = registry?.GetClassIcon(cls);
             if (icon != null)
                 AddIconToContainer(classIconContainer, icon);
         }

@@ -7,7 +7,6 @@ namespace OneBitRob
     [CreateAssetMenu(menuName = "TactForge/Definition/Weapon (Ranged)", fileName = "RangedWeaponDefinition")]
     public class RangedWeaponDefinition : WeaponDefinition
     {
-        // Muzzle
         [BoxGroup("Muzzle")]
         [LabelText("Muzzle Forward (Local Z)"), SuffixLabel("units", true)]
         [InfoBox("Forward offset in local Z. Keep 0 if you use muzzleLocalOffset.z instead.", InfoMessageType.None)]
@@ -18,7 +17,6 @@ namespace OneBitRob
         [LabelText("Muzzle Local Offset (XYZ)")]
         public Vector3 muzzleLocalOffset = Vector3.zero;
 
-        // Projectile
         [BoxGroup("Projectile")]
         [LabelText("Speed"), SuffixLabel("units/s", true)]
         [MinValue(0.01f)]
@@ -29,22 +27,18 @@ namespace OneBitRob
         [MinValue(0.10f)]
         public float projectileMaxDistance = 40f;
 
-        // Timing
         [BoxGroup("Timing")]
         [LabelText("Windup"), SuffixLabel("s", true)]
         [MinValue(0f)]
         public float windupSeconds = 0.5f;
 
-        // Animations
         [BoxGroup("Animations")]
         public TwoStageAttackAnimationSettings animations;
 
-        // Projectile Pool Key
         [BoxGroup("Projectile Pool Key")]
         [InfoBox("Key used to choose a scene pool in ProjectilePools (e.g. 'arrow', 'mage_orb').")]
         public string projectileId = "arrow";
 
-        // Feedbacks
         [BoxGroup("Feedbacks")]
         [LabelText("Prepare Feedback")]
         [AssetsOnly] public FeedbackDefinition prepareFeedback;
@@ -54,7 +48,7 @@ namespace OneBitRob
         [AssetsOnly] public FeedbackDefinition fireFeedback;
 
         [BoxGroup("Feedbacks")]
-        [LabelText("Impact Feedback")]                  // NEW: plays when projectile hits a target
+        [LabelText("Impact Feedback")]            
         [AssetsOnly] public FeedbackDefinition impactFeedback;
     }
 }

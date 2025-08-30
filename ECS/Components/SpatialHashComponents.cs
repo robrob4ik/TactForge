@@ -11,7 +11,7 @@ namespace OneBitRob.ECS
 
         public struct SpatialHashSettings : IComponentData
         {
-            public float CellSize;    // World‑space size of one cubic cell.
+            public float CellSize; 
         }
         
     }

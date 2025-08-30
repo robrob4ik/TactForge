@@ -1,31 +1,28 @@
-﻿// ECS/HybridSync/EcsToMono/Brain_EcsToMono_FacingBridgeSystem.cs
-
-using OneBitRob.AI;
-using Unity.Entities;
+﻿using Unity.Entities;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    /// For each DesiredFacing with HasValue=1, force Mono facing.
     [UpdateInGroup(typeof(EcsToMonoBridgeGroup))]
     public partial struct Brain_EcsToMono_FacingBridgeSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
-            foreach (var (df, e) in SystemAPI.Query<RefRW<DesiredFacing>>().WithEntityAccess())
+            foreach (var (desiredFacing, entity) in SystemAPI.Query<RefRW<DesiredFacing>>().WithEntityAccess())
             {
-                if (df.ValueRO.HasValue == 0) continue;
+                if (desiredFacing.ValueRO.HasValue == 0) continue;
 
-                var brain = UnitBrainRegistry.Get(e);
+                var brain = OneBitRob.AI.UnitBrainRegistry.Get(entity);
                 if (brain)
                 {
-                    var facePos = (Vector3)df.ValueRO.TargetPosition;
+                    var facePos = (Vector3)desiredFacing.ValueRO.TargetPosition;
                     brain.SetForcedFacing(facePos);
 #if UNITY_EDITOR
-                    Debug.DrawLine(brain.transform.position, facePos, Color.yellow, 0f, false);
+                    Debug.DrawLine(brain.transform.position, facePos, Color.yellow, 0.6f, false);
 #endif
                 }
-                df.ValueRW = default; // consume
+                desiredFacing.ValueRW = default; // consume
             }
         }
     }

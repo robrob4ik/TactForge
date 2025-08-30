@@ -1,221 +1,215 @@
-﻿
-using OneBitRob.ECS;
-using Unity.Collections;
+﻿using OneBitRob.ECS;
+using OneBitRob.FX;
 using Unity.Entities;
 using Unity.Transforms;
 using static Unity.Mathematics.math;
+using UnityEngine;
 using float3 = Unity.Mathematics.float3;
-using OneBitRob.FX; 
 
 namespace OneBitRob.AI
 {
-    /// <summary>
-    /// Spell pipeline: consumes CastRequest, starts windup (with optional delay),
-    /// faces the aim point, and fires when windup releases (spawns projectiles / DoT / Chain / Summon).
-    /// Also sets cooldown.
-    /// </summary>
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     public partial struct SpellWindupAndFireSystem : ISystem
     {
         private EntityQuery _castQuery;
-        private EntityQuery _pendingQuery;
-        private ComponentLookup<LocalTransform> _posRO;
-        private ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
+        private EntityQuery _pendingWindupQuery;
+        private ComponentLookup<LocalTransform> _transformLookup; // RO
+        private ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factionLookup; // RO
 
         public void OnCreate(ref SystemState state)
         {
-            _castQuery    = state.GetEntityQuery(ComponentType.ReadWrite<CastRequest>(), ComponentType.ReadOnly<SpellConfig>());
-            _pendingQuery = state.GetEntityQuery(ComponentType.ReadWrite<SpellWindup>(), ComponentType.ReadOnly<SpellConfig>());
-            _posRO        = state.GetComponentLookup<LocalTransform>(true);
-            _factRO       = state.GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
+            _castQuery          = state.GetEntityQuery(ComponentType.ReadWrite<CastRequest>(), ComponentType.ReadOnly<SpellConfig>());
+            _pendingWindupQuery = state.GetEntityQuery(ComponentType.ReadWrite<SpellWindup>(), ComponentType.ReadOnly<SpellConfig>());
+            _transformLookup    = state.GetComponentLookup<LocalTransform>(true);
+            _factionLookup      = state.GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
             state.RequireForUpdate(_castQuery);
         }
 
         public void OnUpdate(ref SystemState state)
         {
-            _posRO.Update(ref state);
-            _factRO.Update(ref state);
+            _transformLookup.Update(ref state);
+            _factionLookup.Update(ref state);
 
             var em  = state.EntityManager;
-            var ecb = new EntityCommandBuffer(Allocator.Temp);
+            var ecb = new EntityCommandBuffer(Unity.Collections.Allocator.Temp);
             float now = (float)SystemAPI.Time.ElapsedTime;
 
             // Release pending casts when windup timer finishes
-            var wents = _pendingQuery.ToEntityArray(Allocator.Temp);
-            for (int i = 0; i < wents.Length; i++)
+            var windupEntities = _pendingWindupQuery.ToEntityArray(Unity.Collections.Allocator.Temp);
+            for (int i = 0; i < windupEntities.Length; i++)
             {
-                var e = wents[i];
-                var w = em.GetComponentData<SpellWindup>(e);
-                if (w.Active == 0 || now < w.ReleaseTime) continue;
+                var entity = windupEntities[i];
+                var windup = em.GetComponentData<SpellWindup>(entity);
+                if (windup.Active == 0 || now < windup.ReleaseTime) continue;
 
-                var cfg = em.GetComponentData<SpellConfig>(e);
-                FireSpell(ref state, ref ecb, e, in cfg, in w); // Fire & feedbacks
+                var config = em.GetComponentData<SpellConfig>(entity);
+                FireSpell(ref state, ref ecb, entity, in config, in windup); // Fire & feedbacks
 
-                if (em.HasComponent<SpellCooldown>(e))
+                if (em.HasComponent<SpellCooldown>(entity))
                 {
-                    var cd = em.GetComponentData<SpellCooldown>(e);
-                    cd.NextTime = now + max(0f, cfg.Cooldown);
-                    ecb.SetComponent(e, cd);
+                    var cd = em.GetComponentData<SpellCooldown>(entity);
+                    cd.NextTime = now + max(0f, config.Cooldown);
+                    ecb.SetComponent(entity, cd);
                 }
 
-                w.Active = 0;
-                ecb.SetComponent(e, w);
+                windup.Active = 0;
+                ecb.SetComponent(entity, windup);
             }
-            wents.Dispose();
+            windupEntities.Dispose();
 
             // Start new windups / set facing / play cast anims / consume CastRequest
-            var ents = _castQuery.ToEntityArray(Allocator.Temp);
-            for (int i = 0; i < ents.Length; i++)
+            var castEntities = _castQuery.ToEntityArray(Unity.Collections.Allocator.Temp);
+            for (int i = 0; i < castEntities.Length; i++)
             {
-                var e = ents[i];
-                var req = em.GetComponentData<CastRequest>(e);
-                if (req.HasValue == 0) continue;
+                var entity = castEntities[i];
+                var request = em.GetComponentData<CastRequest>(entity);
+                if (request.HasValue == 0) continue;
 
-                var brain = UnitBrainRegistry.Get(e);
-                var cfg   = em.GetComponentData<SpellConfig>(e);
+                var brain = UnitBrainRegistry.Get(entity);
+                var config = em.GetComponentData<SpellConfig>(entity);
 
-                var w = em.HasComponent<SpellWindup>(e) ? em.GetComponentData<SpellWindup>(e) : default;
-                w.Active        = 1;
-                w.ReleaseTime   = now + max(0f, cfg.CastTime);
-                w.FacingDeadline = w.ReleaseTime;
+                var windup = em.HasComponent<SpellWindup>(entity) ? em.GetComponentData<SpellWindup>(entity) : default;
+                windup.Active        = 1;
+                windup.ReleaseTime   = now + max(0f, config.CastTime);
+                windup.FacingDeadline = windup.ReleaseTime;
 
-                float3 aimPos = float3.zero;
-                switch (req.Kind)
+                float3 aimPosition = float3.zero;
+                switch (request.Kind)
                 {
                     case CastKind.SingleTarget:
-                        w.HasAimPoint = 0;
-                        w.AimTarget   = req.Target;
-                        if (_posRO.HasComponent(req.Target)) aimPos = _posRO[req.Target].Position;
+                        windup.HasAimPoint = 0;
+                        windup.AimTarget   = request.Target;
+                        if (_transformLookup.HasComponent(request.Target)) aimPosition = _transformLookup[request.Target].Position;
 
                         if (brain != null)
                         {
-                            brain.CurrentSpellTarget = UnitBrainRegistry.GetGameObject(req.Target);
+                            brain.CurrentSpellTarget = UnitBrainRegistry.GetGameObject(request.Target);
                             brain.CurrentSpellTargets = null;
                             brain.CurrentSpellTargetPosition = null;
                         }
                         break;
 
                     case CastKind.AreaOfEffect:
-                        w.HasAimPoint = 1;
-                        w.AimPoint    = req.AoEPosition;
-                        aimPos        = req.AoEPosition;
+                        windup.HasAimPoint = 1;
+                        windup.AimPoint    = request.AoEPosition;
+                        aimPosition        = request.AoEPosition;
 
                         if (brain != null)
                         {
                             brain.CurrentSpellTarget = null;
                             brain.CurrentSpellTargets = null;
-                            brain.CurrentSpellTargetPosition = req.AoEPosition;
+                            brain.CurrentSpellTargetPosition = request.AoEPosition;
                         }
                         break;
 
                     default:
-                        w.Active = 0;
+                        windup.Active = 0;
                         break;
                 }
 
-                if (w.Active != 0)
+                if (windup.Active != 0)
                 {
-                    // Face aim pos immediately
-                    if (em.HasComponent<DesiredFacing>(e))
+                    // Face aim position immediately
+                    if (em.HasComponent<DesiredFacing>(entity))
                     {
-                        var df = em.GetComponentData<DesiredFacing>(e);
-                        df.TargetPosition = aimPos;
-                        df.HasValue = 1;
-                        ecb.SetComponent(e, df);
+                        var desiredFacing = em.GetComponentData<DesiredFacing>(entity);
+                        desiredFacing.TargetPosition = aimPosition;
+                        desiredFacing.HasValue = 1;
+                        ecb.SetComponent(entity, desiredFacing);
                     }
                     else
                     {
-                        ecb.AddComponent(e, new DesiredFacing { TargetPosition = aimPos, HasValue = 1 });
+                        ecb.AddComponent(entity, new DesiredFacing { TargetPosition = aimPosition, HasValue = 1 });
                     }
 
-                    // Trigger spell animation if any
+                    // Trigger spell animation if any and prepare feedback at caster
                     if (brain != null && brain.UnitDefinition != null)
                     {
                         var spells = brain.UnitDefinition.unitSpells;
                         if (spells != null && spells.Count > 0 && spells[0] != null)
                         {
-                            var sd = spells[0];
-                            brain.CombatSubsystem?.PlaySpell(sd.animations);
+                            var def = spells[0];
+                            brain.UnitCombatController?.PlaySpell(def.animations);
 
-                            // NEW: prepare feedback at caster when windup starts
-                            float3 casterPos = _posRO.HasComponent(e) ? _posRO[e].Position : float3.zero;
-                            FeedbackService.TryPlay(sd.prepareFeedback, brain.transform, (UnityEngine.Vector3)casterPos);
+                            float3 casterPos = _transformLookup.HasComponent(entity) ? _transformLookup[entity].Position : float3.zero;
+                            FeedbackService.TryPlay(def.prepareFeedback, brain.transform, (Vector3)casterPos);
                         }
                     }
 
-                    if (em.HasComponent<SpellWindup>(e)) ecb.SetComponent(e, w);
-                    else                                ecb.AddComponent(e, w);
+                    if (em.HasComponent<SpellWindup>(entity)) ecb.SetComponent(entity, windup);
+                    else                                      ecb.AddComponent(entity, windup);
                 }
 
                 // consume request
-                req.HasValue = 0;
-                ecb.SetComponent(e, req);
+                request.HasValue = 0;
+                ecb.SetComponent(entity, request);
             }
-            ents.Dispose();
+            castEntities.Dispose();
 
             ecb.Playback(em);
             ecb.Dispose();
         }
 
-         private void FireSpell(ref SystemState state, ref EntityCommandBuffer ecb, Entity e, in SpellConfig cfg, in SpellWindup w)
+        private void FireSpell(ref SystemState state, ref EntityCommandBuffer ecb, Entity caster, in SpellConfig config, in SpellWindup windup)
         {
             var em = state.EntityManager;
-            var brain = UnitBrainRegistry.Get(e);
+            var brain = UnitBrainRegistry.Get(caster);
 
-            float3 selfPos = _posRO.HasComponent(e) ? _posRO[e].Position : float3.zero;
+            float3 selfPos = _transformLookup.HasComponent(caster) ? _transformLookup[caster].Position : float3.zero;
 
             float3 fwd   = new float3(0,0,1);
             float3 up    = new float3(0,1,0);
             float3 right = new float3(1,0,0);
-            if (_posRO.HasComponent(e))
+            if (_transformLookup.HasComponent(caster))
             {
-                var rot = _posRO[e].Rotation;
+                var rot = _transformLookup[caster].Rotation;
                 fwd   = normalizesafe(mul(rot, new float3(0,0,1)));
                 up    = normalizesafe(mul(rot, new float3(0,1,0)));
                 right = normalizesafe(mul(rot, new float3(1,0,0)));
             }
 
-            var stats = em.HasComponent<UnitRuntimeStats>(e) ? em.GetComponentData<UnitRuntimeStats>(e) : UnitRuntimeStats.Defaults;
+            var stats = em.HasComponent<UnitRuntimeStats>(caster) ? em.GetComponentData<UnitRuntimeStats>(caster) : UnitRuntimeStats.Defaults;
 
-            float3 aimPos = w.HasAimPoint != 0
-                ? w.AimPoint
-                : (w.AimTarget != Entity.Null && _posRO.HasComponent(w.AimTarget) ? _posRO[w.AimTarget].Position : selfPos);
+            float3 aimPos = windup.HasAimPoint != 0
+                ? windup.AimPoint
+                : (windup.AimTarget != Entity.Null && _transformLookup.HasComponent(windup.AimTarget) ? _transformLookup[windup.AimTarget].Position : selfPos);
 
-            switch (cfg.Kind)
+            switch (config.Kind)
             {
                 case SpellKind.ProjectileLine:
                 {
                     float3 origin = selfPos
-                        + fwd   * max(0f, cfg.MuzzleForward)
-                        + right * cfg.MuzzleLocalOffset.x
-                        + up    * cfg.MuzzleLocalOffset.y
-                        + fwd   * cfg.MuzzleLocalOffset.z;
+                        + fwd   * max(0f, config.MuzzleForward)
+                        + right * config.MuzzleLocalOffset.x
+                        + up    * config.MuzzleLocalOffset.y
+                        + fwd   * config.MuzzleLocalOffset.z;
 
                     float3 dir = normalizesafe(aimPos - origin, fwd); dir.y = 0;
 
+                    // Compute mask per cast (no reliance on TargetLayerMask)
                     int mask = ~0;
                     if (brain != null)
-                        mask = cfg.EffectType == SpellEffectType.Positive
+                        mask = config.EffectType == SpellEffectType.Positive
                             ? brain.GetFriendlyLayerMask().value
                             : brain.GetDamageableLayerMask().value;
 
-                    float radius = max(0f, cfg.ProjectileRadius * max(0.0001f, stats.ProjectileRadiusMult));
+                    float radius = max(0f, config.ProjectileRadius * max(0.0001f, stats.ProjectileRadiusMult));
 
-                    var req = new SpellProjectileSpawnRequest
+                    var spawnRequest = new SpellProjectileSpawnRequest
                     {
                         Origin      = origin,
                         Direction   = dir,
-                        Speed       = max(0.01f, cfg.ProjectileSpeed),
-                        Damage      = cfg.EffectType == SpellEffectType.Negative ? max(0f, cfg.Amount) : -max(0f, cfg.Amount),
-                        MaxDistance = max(0.1f, cfg.ProjectileMaxDistance),
+                        Speed       = max(0.01f, config.ProjectileSpeed),
+                        Damage      = config.EffectType == SpellEffectType.Negative ? max(0f, config.Amount) : -max(0f, config.Amount),
+                        MaxDistance = max(0.1f, config.ProjectileMaxDistance),
                         Radius      = radius,
-                        ProjectileIdHash = cfg.ProjectileIdHash,
+                        ProjectileIdHash = config.ProjectileIdHash,
                         LayerMask   = mask,
                         Pierce      = 1,
                         HasValue    = 1
                     };
-                    if (em.HasComponent<SpellProjectileSpawnRequest>(e)) ecb.SetComponent(e, req);
-                    else                                                                ecb.AddComponent(e, req);
+                    if (em.HasComponent<SpellProjectileSpawnRequest>(caster)) ecb.SetComponent(caster, spawnRequest);
+                    else                                                      ecb.AddComponent(caster, spawnRequest);
                     break;
                 }
 
@@ -223,35 +217,39 @@ namespace OneBitRob.AI
                 {
                     int mask = ~0;
                     if (brain != null)
-                        mask = cfg.EffectType == SpellEffectType.Positive
+                        mask = config.EffectType == SpellEffectType.Positive
                             ? brain.GetFriendlyLayerMask().value
                             : brain.GetDamageableLayerMask().value;
 
-                    float areaRadius = cfg.AreaRadius * max(0.0001f, stats.SpellAoeMult);
+                    float areaRadius = config.AreaRadius * max(0.0001f, stats.SpellAoeMult);
+
+                    // Light validation (replacement for the deleted guard system)
+                    if (areaRadius <= 0f)
+                        Debug.LogWarning($"[Spell] AoE AreaRadius is 0 on caster {caster.Index}:{caster.Version}. Check SpellDefinition.");
 
                     var area = new DoTArea
                     {
-                        Position       = w.HasAimPoint != 0 ? w.AimPoint : (_posRO.HasComponent(e) ? _posRO[e].Position : float3.zero),
+                        Position       = windup.HasAimPoint != 0 ? windup.AimPoint : (_transformLookup.HasComponent(caster) ? _transformLookup[caster].Position : float3.zero),
                         Radius         = max(0f, areaRadius),
-                        AmountPerTick  = max(0f, cfg.Amount),
-                        Interval       = max(0.05f, cfg.TickInterval),
-                        Remaining      = max(0f, cfg.Duration),
+                        AmountPerTick  = max(0f, config.Amount),
+                        Interval       = max(0.05f, config.TickInterval),
+                        Remaining      = max(0f, config.Duration),
                         NextTick       = 0f,
-                        Positive       = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
-                        AreaVfxIdHash  = cfg.AreaVfxIdHash,
+                        Positive       = (byte)(config.EffectType == SpellEffectType.Positive ? 1 : 0),
+                        AreaVfxIdHash  = config.AreaVfxIdHash,
                         LayerMask      = mask,
-                        VfxYOffset     = max(0f, cfg.AreaVfxYOffset)
+                        VfxYOffset     = max(0f, config.AreaVfxYOffset)
                     };
-                    if (em.HasComponent<DoTArea>(e)) ecb.SetComponent(e, area);
-                    else                                           ecb.AddComponent(e, area);
+                    if (em.HasComponent<DoTArea>(caster)) ecb.SetComponent(caster, area);
+                    else                                   ecb.AddComponent(caster, area);
 
                     if (brain != null)
                     {
                         var spells = brain.UnitDefinition != null ? brain.UnitDefinition.unitSpells : null;
                         if (spells != null && spells.Count > 0 && spells[0] != null)
                         {
-                            var sd = spells[0];
-                            FeedbackService.TryPlay(sd.impactFeedback, null, (UnityEngine.Vector3)aimPos);
+                            var def = spells[0];
+                            FeedbackService.TryPlay(def.impactFeedback, null, (Vector3)aimPos);
                         }
                     }
                     break;
@@ -260,37 +258,37 @@ namespace OneBitRob.AI
                 case SpellKind.Chain:
                 {
                     float3 origin = selfPos
-                                    + fwd   * max(0f, cfg.MuzzleForward)
-                                    + right * cfg.MuzzleLocalOffset.x
-                                    + up    * cfg.MuzzleLocalOffset.y
-                                    + fwd   * cfg.MuzzleLocalOffset.z;
+                                    + fwd   * max(0f, config.MuzzleForward)
+                                    + right * config.MuzzleLocalOffset.x
+                                    + up    * config.MuzzleLocalOffset.y
+                                    + fwd   * config.MuzzleLocalOffset.z;
 
-                    var runner = new SpellChainRunner
+                    var chainRunner = new SpellChainRunner
                     {
-                        Remaining        = max(1, cfg.ChainMaxTargets),
-                        Radius           = max(0f, cfg.ChainRadius /* można też skalać AOE tu jeśli chcesz */),
-                        JumpDelay        = max(0f, cfg.ChainJumpDelay),
-                        ProjectileSpeed  = max(0.01f, cfg.ProjectileSpeed),
-                        Amount           = max(0f, cfg.Amount),
-                        Positive         = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
-                        ProjectileIdHash = cfg.ProjectileIdHash,
+                        Remaining        = max(1, config.ChainMaxTargets),
+                        Radius           = max(0f, config.ChainRadius),
+                        JumpDelay        = max(0f, config.ChainJumpDelay),
+                        ProjectileSpeed  = max(0.01f, config.ProjectileSpeed),
+                        Amount           = max(0f, config.Amount),
+                        Positive         = (byte)(config.EffectType == SpellEffectType.Positive ? 1 : 0),
+                        ProjectileIdHash = config.ProjectileIdHash,
                         FromPos          = origin,
                         HasFromPos       = 1,
-                        CurrentTarget    = w.AimTarget,
-                        PreviousTarget   = Unity.Entities.Entity.Null,
-                        Caster           = e,
-                        CasterFaction    = SystemAPI.HasComponent<SpatialHashComponents.SpatialHashTarget>(e)
-                            ? SystemAPI.GetComponent<SpatialHashComponents.SpatialHashTarget>(e).Faction
-                            : (byte)OneBitRob.Constants.GameConstants.ALLY_FACTION,
+                        CurrentTarget    = windup.AimTarget,
+                        PreviousTarget   = Entity.Null,
+                        Caster           = caster,
+                        CasterFaction    = SystemAPI.HasComponent<SpatialHashComponents.SpatialHashTarget>(caster)
+                            ? SystemAPI.GetComponent<SpatialHashComponents.SpatialHashTarget>(caster).Faction
+                            : (byte)Constants.GameConstants.ALLY_FACTION,
                         LayerMask        = (brain != null
-                            ? (cfg.EffectType == SpellEffectType.Positive
+                            ? (config.EffectType == SpellEffectType.Positive
                                 ? brain.GetFriendlyLayerMask().value
                                 : brain.GetDamageableLayerMask().value)
                             : ~0)
                     };
 
-                    if (em.HasComponent<SpellChainRunner>(e)) ecb.SetComponent(e, runner);
-                    else                                                   ecb.AddComponent(e, runner);
+                    if (em.HasComponent<SpellChainRunner>(caster)) ecb.SetComponent(caster, chainRunner);
+                    else                                           ecb.AddComponent(caster, chainRunner);
                     break;
                 }
 
@@ -298,19 +296,19 @@ namespace OneBitRob.AI
                 {
                     var summon = new SummonRequest
                     {
-                        PrefabIdHash = cfg.SummonPrefabHash,
+                        PrefabIdHash = config.SummonPrefabHash,
                         Position     = aimPos,
                         Count        = 1,
-                        Faction      = SystemAPI.HasComponent<SpatialHashComponents.SpatialHashTarget>(e)
-                            ? SystemAPI.GetComponent<SpatialHashComponents.SpatialHashTarget>(e).Faction
+                        Faction      = SystemAPI.HasComponent<SpatialHashComponents.SpatialHashTarget>(caster)
+                            ? SystemAPI.GetComponent<SpatialHashComponents.SpatialHashTarget>(caster).Faction
                             : (byte)0,
-                        HasValue     = (cfg.SummonPrefabHash != 0 ? 1 : 0)
+                        HasValue     = (config.SummonPrefabHash != 0 ? 1 : 0)
                     };
 
                     if (summon.HasValue != 0)
                     {
-                        if (em.HasComponent<SummonRequest>(e)) ecb.SetComponent(e, summon);
-                        else                                   ecb.AddComponent(e, summon);
+                        if (em.HasComponent<SummonRequest>(caster)) ecb.SetComponent(caster, summon);
+                        else                                      ecb.AddComponent(caster, summon);
                     }
                     break;
                 }
@@ -321,8 +319,8 @@ namespace OneBitRob.AI
                 var spells = brain.UnitDefinition != null ? brain.UnitDefinition.unitSpells : null;
                 if (spells != null && spells.Count > 0 && spells[0] != null)
                 {
-                    var sd = spells[0];
-                    FeedbackService.TryPlay(sd.fireFeedback, brain.transform, (UnityEngine.Vector3)selfPos);
+                    var def = spells[0];
+                    FeedbackService.TryPlay(def.fireFeedback, brain.transform, (Vector3)selfPos);
                 }
             }
         }

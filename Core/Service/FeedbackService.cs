@@ -1,28 +1,16 @@
-﻿using System.Collections;
-using MoreMountains.Tools;
+﻿// File: OneBitRob/FX/FeedbackService.cs
+using System.Collections;
 using MoreMountains.Feedbacks;
+using MoreMountains.Tools;
 using UnityEngine;
 
 namespace OneBitRob.FX
 {
-    /// <summary>
-    /// Plays pooled MMFeedbacks with correct activation, placement and auto-release.
-    /// </summary>
     public static class FeedbackService
     {
-        /// <param name="definition">FeedbackDefinition that references a pool id and/or fallback prefab.</param>
-        /// <param name="attach">Optional attachment transform (e.g., the unit).</param>
-        /// <param name="worldPosition">World position hint (e.g., muzzle or impact). Used when not attaching.</param>
-        /// <param name="overrideIntensity">Optional intensity override.</param>
         public static bool TryPlay(FeedbackDefinition definition, Transform attach, Vector3 worldPosition, float? overrideIntensity = null)
         {
-            if (definition == null)
-            {
-#if UNITY_EDITOR
-                Debug.LogWarning("[FeedbackService] Null FeedbackDefinition passed.");
-#endif
-                return false;
-            }
+            if (definition == null) return false;
 
             GameObject go = null;
             MMObjectPooler pooler = null;
@@ -31,7 +19,7 @@ namespace OneBitRob.FX
             // 1) Resolve pooled instance if possible
             if (definition.HasPoolId)
             {
-                pooler = FeedbackPoolManager.Resolve(definition.poolId); // ← your existing resolver
+                pooler = FeedbackPoolManager.GetPooler(definition.poolId); // <-- unified
                 if (pooler != null)
                 {
                     go = pooler.GetPooledGameObject();
@@ -46,13 +34,7 @@ namespace OneBitRob.FX
                 pooled = false;
             }
 
-            if (go == null)
-            {
-#if UNITY_EDITOR
-                Debug.LogWarning($"[FeedbackService] No pooled object or fallback prefab for '{definition.name}' (poolId='{definition.poolId}').");
-#endif
-                return false;
-            }
+            if (go == null) return false;
 
             // 3) Place & parent BEFORE activation so initial OnEnable effects use correct transform
             if (definition.attachToTarget && attach != null)
@@ -68,36 +50,24 @@ namespace OneBitRob.FX
                     (definition.inheritRotation && attach != null) ? attach.rotation : go.transform.rotation);
             }
 
-            // 4) Activate pooled instance
             if (!go.activeSelf) go.SetActive(true);
             var poolable = go.GetComponent<MMPoolableObject>();
             poolable?.TriggerOnSpawnComplete();
 
-            // 5) Locate player & play
             var player = go.GetComponent<MMFeedbacks>();
             if (player == null)
             {
-#if UNITY_EDITOR
-                Debug.LogWarning($"[FeedbackService] MMFeedbacks not found on pooled object '{go.name}'.");
-#endif
-                // Fail-safe: if pooled, return it; else destroy
                 if (pooled) { if (poolable != null) poolable.Destroy(); else go.SetActive(false); }
                 else Object.Destroy(go);
                 return false;
             }
 
-            // Initialization ties owner for channels/position bind
             var owner = (definition.attachToTarget && attach != null) ? attach.gameObject : go;
             player.Initialization(owner);
 
             var intensity = overrideIntensity.HasValue ? overrideIntensity.Value : definition.intensity;
-
-#if UNITY_EDITOR
-            Debug.Log($"[FeedbackService] PLAY '{definition.name}' at {go.transform.position} (pooled={pooled})");
-#endif
             player.PlayFeedbacks(go.transform.position, intensity, false);
 
-            // 6) Auto-release after playback duration (or min guard)
             float duration = player.TotalDuration;
             if (duration <= 0f) duration = definition.minAutoReleaseSeconds;
             duration += definition.autoReleasePadding;
@@ -107,9 +77,6 @@ namespace OneBitRob.FX
         }
     }
 
-    /// <summary>
-    /// Coroutine host for auto-releasing feedback instances.
-    /// </summary>
     internal sealed class FeedbackServiceRunner : MonoBehaviour
     {
         private static FeedbackServiceRunner _instance;
@@ -130,12 +97,11 @@ namespace OneBitRob.FX
 
         private static IEnumerator ReleaseCo(GameObject go, MMPoolableObject poolable, bool pooled, float delay)
         {
-            // Let the last audio tail ring; we don't force a fade here
             yield return new WaitForSeconds(delay);
 
             if (pooled)
             {
-                if (poolable != null) poolable.Destroy(); // returns to pool (MMTools)
+                if (poolable != null) poolable.Destroy();
                 else go.SetActive(false);
             }
             else

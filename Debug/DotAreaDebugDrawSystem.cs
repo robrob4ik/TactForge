@@ -1,5 +1,5 @@
-﻿// NEW FILE: Assets/PROJECT/Scripts/Editor/Debug/DoTAreaDebugDrawSystem.cs
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
+using OneBitRob.Debugging;
 using OneBitRob.ECS;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -20,12 +20,12 @@ namespace OneBitRob.AI.Debugging
                 if (a.Radius <= 0f) continue;
 
                 float3 center = a.Position + new float3(0f, math.max(0.02f, a.VfxYOffset * 0.6f), 0f);
-                Color c = (a.Positive != 0) ? new Color(0.2f, 1f, 0.35f, 0.8f) : new Color(1f, 0.25f, 0.25f, 0.9f);
-                DrawRing(center, a.Radius, c);
+                Color c = (a.Positive != 0) ? new Color(0.2f, 1f, 0.35f, 0.9f) : new Color(1f, 0.25f, 0.25f, 0.95f);
+                DrawRing(center, a.Radius, c, 0.4f);
             }
         }
 
-        private static void DrawRing(float3 center, float radius, Color color)
+        private static void DrawRing(float3 center, float radius, Color color, float duration)
         {
             const int segs = 32;
             var c = (Vector3)center;
@@ -34,7 +34,7 @@ namespace OneBitRob.AI.Debugging
             {
                 float t = (i / (float)segs) * 2f * Mathf.PI;
                 Vector3 p = c + new Vector3(Mathf.Cos(t) * radius, 0f, Mathf.Sin(t) * radius);
-                Debug.DrawLine(prev, p, color, 0f, false);
+                DebugDraw.Line(prev, p, color);
                 prev = p;
             }
         }

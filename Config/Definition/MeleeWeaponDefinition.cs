@@ -7,7 +7,6 @@ namespace OneBitRob
     [CreateAssetMenu(menuName = "TactForge/Definition/Weapon (Melee)", fileName = "MeleeWeaponDefinition")]
     public class MeleeWeaponDefinition : WeaponDefinition
     {
-        // Arc / Targets
         [BoxGroup("Arc & Targets")]
         [LabelText("Half Angle"), PropertyRange(0f, 179f), SuffixLabel("°", true)]
         public float halfAngleDeg = 60f;
@@ -26,17 +25,15 @@ namespace OneBitRob
         [MinValue(0f)]
         public float lockWhileFiringSeconds = 0.25f;
 
-        // Animations (swing)
         [BoxGroup("Animations")]
         public AttackAnimationSettings attackAnimations;
 
-        // Feedbacks
         [BoxGroup("Feedbacks")]
         [LabelText("Attack (Swing) Feedback")]
         [AssetsOnly] public FeedbackDefinition attackFeedback;
 
         [BoxGroup("Feedbacks")]
-        [LabelText("Hit Feedback")]                   // NEW: plays when the melee attack actually lands
+        [LabelText("Hit Feedback")]                 
         [AssetsOnly] public FeedbackDefinition hitFeedback;
     }
 }

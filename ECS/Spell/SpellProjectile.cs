@@ -1,6 +1,4 @@
-﻿// CHANGED: Renamed to SpellProjectile; kept legacy alias EcsSpellProjectile for safety.
-
-using MoreMountains.Tools;
+﻿using MoreMountains.Tools;
 using OneBitRob.AI;
 using OneBitRob.FX;
 using UnityEngine;

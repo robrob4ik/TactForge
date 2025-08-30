@@ -1,4 +1,5 @@
 ﻿// File: /WeaponProjectile.cs
+
 using System.Collections.Generic;
 using MoreMountains.Tools;
 using OneBitRob.AI;
@@ -14,20 +15,20 @@ namespace OneBitRob.ECS
         {
             public GameObject Attacker;
             public Vector3 Origin;
-            public Vector3 Direction;   // normalized
+            public Vector3 Direction;
             public float Speed;
             public float Damage;
             public float MaxDistance;
-            public int LayerMask;       // targets (damageable)
-            public float CritChance;     // 0..1
-            public float CritMultiplier; // >= 1
-            public float PierceChance;   // 0..1
-            public int   PierceMaxTargets; // >= 0
+            public int LayerMask;
+            public float CritChance;
+            public float CritMultiplier;
+            public float PierceChance;
+            public int PierceMaxTargets;
         }
 
         private GameObject _attacker;
-        private UnitBrain  _attackerBrain;
-        private bool       _attackerIsEnemy;
+        private UnitBrain _attackerBrain;
+        private bool _attackerIsEnemy;
 
         private Vector3 _dir;
         private float _speed;
@@ -39,8 +40,8 @@ namespace OneBitRob.ECS
         private float _critMultiplier;
 
         private float _pierceChance;
-        private int   _pierceMaxTargets;
-        private int   _piercedCount;
+        private int _pierceMaxTargets;
+        private int _piercedCount;
 
         private Vector3 _lastPos;
 
@@ -49,30 +50,30 @@ namespace OneBitRob.ECS
 
         public void Arm(ArmData data)
         {
-            _attacker      = data.Attacker;
+            _attacker = data.Attacker;
             _attackerBrain = _attacker ? _attacker.GetComponent<UnitBrain>() : null;
             _attackerIsEnemy = _attackerBrain && _attackerBrain.UnitDefinition
-                             ? _attackerBrain.UnitDefinition.isEnemy
-                             : false;
+                ? _attackerBrain.UnitDefinition.isEnemy
+                : false;
 
-            _dir         = (data.Direction.sqrMagnitude < 1e-6f ? Vector3.forward : data.Direction.normalized);
-            _speed       = Mathf.Max(0.01f, data.Speed);
-            _baseDamage  = data.Damage;
-            _remaining   = Mathf.Max(0.01f, data.MaxDistance);
-            _mask        = data.LayerMask;
+            _dir = (data.Direction.sqrMagnitude < 1e-6f ? Vector3.forward : data.Direction.normalized);
+            _speed = Mathf.Max(0.01f, data.Speed);
+            _baseDamage = data.Damage;
+            _remaining = Mathf.Max(0.01f, data.MaxDistance);
+            _mask = data.LayerMask;
 
-            _critChance     = Mathf.Clamp01(data.CritChance);
+            _critChance = Mathf.Clamp01(data.CritChance);
             _critMultiplier = Mathf.Max(1f, data.CritMultiplier);
 
-            _pierceChance   = Mathf.Clamp01(data.PierceChance);
+            _pierceChance = Mathf.Clamp01(data.PierceChance);
             _pierceMaxTargets = Mathf.Max(0, data.PierceMaxTargets);
-            _piercedCount   = 0;
+            _piercedCount = 0;
 
             _hitEntityKeys.Clear();
 
             transform.position = data.Origin;
-            transform.forward  = _dir;
-            _lastPos           = transform.position;
+            transform.forward = _dir;
+            _lastPos = transform.position;
         }
 
         protected override void OnEnable()
@@ -87,7 +88,11 @@ namespace OneBitRob.ECS
         {
             base.Update();
 
-            if (_remaining <= 0f) { Despawn(); return; }
+            if (_remaining <= 0f)
+            {
+                Despawn();
+                return;
+            }
 
             float stepLen = Mathf.Min(_speed * Time.deltaTime, _remaining);
 
@@ -114,7 +119,7 @@ namespace OneBitRob.ECS
                     if (key != 0) _hitEntityKeys.Add(key);
 
 #if UNITY_EDITOR
-                    Debug.DrawLine(_lastPos, _lastPos + _dir * h.distance, new Color(1f, 0.95f, 0.2f, 1f), 0.08f, false);
+                    Debug.DrawLine(_lastPos, _lastPos + _dir * h.distance, new Color(1f, 0.95f, 0.2f, 0.95f), 0.40f, false);
 #endif
                     OnImpact(h);
 
@@ -146,6 +151,7 @@ namespace OneBitRob.ECS
 
         private int ClosestValidEnemyHit(int count)
         {
+            /* unchanged logic */
             float bestDist = float.MaxValue;
             int best = -1;
 
@@ -154,20 +160,16 @@ namespace OneBitRob.ECS
                 var col = s_Hits[i].collider;
                 if (!col) continue;
 
-                if (_attacker && col.transform.root == _attacker.transform.root)
-                    continue;
+                if (_attacker && col.transform.root == _attacker.transform.root) continue;
 
                 var brain = col.GetComponentInParent<UnitBrain>();
                 if (brain == null) continue;
 
-                // Already pierced this entity? skip
                 int key = ExtractEntityKey(col);
-                if (key != 0 && _hitEntityKeys.Contains(key))
-                    continue;
+                if (key != 0 && _hitEntityKeys.Contains(key)) continue;
 
                 bool targetIsEnemy = brain.UnitDefinition && brain.UnitDefinition.isEnemy;
-                if (targetIsEnemy == _attackerIsEnemy)
-                    continue;
+                if (targetIsEnemy == _attackerIsEnemy) continue;
 
                 if (s_Hits[i].distance < bestDist)
                 {
@@ -198,27 +200,28 @@ namespace OneBitRob.ECS
                 Vector3 dir = _dir;
                 brain.Health.Damage(dmg, _attacker, 0f, 0f, dir);
 
-                DamageNumbersManager.Popup(new DamageNumbersParams
-                {
-                    Kind     = isCrit ? DamagePopupKind.CritDamage : DamagePopupKind.Damage,
-                    Position = hit.point,
-                    Follow   = brain.transform,
-                    Amount   = dmg
-                });
+                DamageNumbersManager.Popup(
+                    new DamageNumbersParams
+                    {
+                        Kind = isCrit ? DamagePopupKind.CritDamage : DamagePopupKind.Damage,
+                        Position = hit.point,
+                        Follow = brain.transform,
+                        Amount = dmg
+                    }
+                );
 
                 var rangedDef = _attackerBrain != null ? _attackerBrain.UnitDefinition?.weapon as OneBitRob.RangedWeaponDefinition : null;
-                if (rangedDef != null && rangedDef.impactFeedback != null)
-                {
-                    FeedbackService.TryPlay(rangedDef.impactFeedback, brain.transform, hit.point);
-                }
+                if (rangedDef != null && rangedDef.impactFeedback != null) { FeedbackService.TryPlay(rangedDef.impactFeedback, brain.transform, hit.point); }
             }
         }
 
         private void Despawn()
         {
             var poolable = GetComponent<MMPoolableObject>();
-            if (poolable != null) poolable.Destroy();
-            else gameObject.SetActive(false);
+            if (poolable != null)
+                poolable.Destroy();
+            else
+                gameObject.SetActive(false);
         }
     }
 }

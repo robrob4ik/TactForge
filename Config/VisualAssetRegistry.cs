@@ -1,16 +1,11 @@
-﻿// Runtime/ECS/Spell/SpellVisualRegistry.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using OneBitRob.ECS;
 using UnityEngine;
 
-namespace OneBitRob.ECS
+namespace OneBitRob.VFX
 {
-    /// <summary>
-    /// Maps authoring IDs (strings/prefabs) to stable int hashes for ECS.
-    /// IMPORTANT:
-    /// - Strings are hashed with StableHash.String32 (deterministic across runs).
-    /// - Prefabs are mapped by InstanceID at runtime (sufficient for spell summons).
-    /// </summary>
-    public static class SpellVisualRegistry
+    /// Central registry for visual assets (strings & prefabs -> stable int hashes).// Use hashes at runtime, keep human-readable strings in authoring assets.
+    public static class VisualAssetRegistry
     {
         private static readonly Dictionary<int, string> _projectiles = new(64);
         private static readonly Dictionary<int, string> _vfx         = new(128);
@@ -19,7 +14,6 @@ namespace OneBitRob.ECS
         private static int HashString(string id) => StableHash.String32(id);
         private static int HashPrefab(GameObject go) => go ? go.GetInstanceID() : 0;
 
-        /// <summary>Register a projectile pool ID (e.g., "arrow", "mage_orb") and return its stable hash.</summary>
         public static int RegisterProjectile(string id)
         {
             var h = HashString(id);
@@ -28,7 +22,6 @@ namespace OneBitRob.ECS
             return h;
         }
 
-        /// <summary>Register a VFX id (e.g., "heal_aura") and return its stable hash.</summary>
         public static int RegisterVfx(string id)
         {
             var h = HashString(id);
@@ -37,7 +30,6 @@ namespace OneBitRob.ECS
             return h;
         }
 
-        /// <summary>Register a summon prefab and return its (runtime) stable key for this session.</summary>
         public static int RegisterSummon(GameObject prefab)
         {
             var h = HashPrefab(prefab);
@@ -55,7 +47,6 @@ namespace OneBitRob.ECS
         public static GameObject GetSummonPrefab(int hash)
             => (hash != 0 && _summons.TryGetValue(hash, out var go)) ? go : null;
 
-        /// <summary>Clear all maps (mainly for domain reloads in editor).</summary>
         public static void Clear()
         {
             _projectiles.Clear();

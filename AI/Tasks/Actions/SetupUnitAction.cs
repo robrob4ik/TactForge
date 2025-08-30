@@ -1,4 +1,5 @@
 ﻿using OneBitRob.ECS;
+using OneBitRob.VFX;
 using Opsive.BehaviorDesigner.Runtime.Components;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
@@ -28,7 +29,7 @@ namespace OneBitRob.AI
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     [UpdateBefore(typeof(MoveToTargetSystem))]
-    [UpdateBefore(typeof(WeaponRangeFlagSystem))] // ważne: runtime stats gotowe zanim systemy dystansu
+    [UpdateBefore(typeof(WeaponRangeFlagSystem))]
     public partial class SetupUnitSystem : TaskProcessorSystem<SetupUnitComponent, SetupUnitTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
@@ -93,10 +94,10 @@ namespace OneBitRob.AI
             if (hasSpell)
             {
                 var spell = spells[0];
-                int projHash = SpellVisualRegistry.RegisterProjectile(spell.ProjectileId);
-                int effectHash = SpellVisualRegistry.RegisterVfx(spell.EffectVfxId);
-                int areaVfxHash = SpellVisualRegistry.RegisterVfx(spell.AreaVfxId);
-                int summonHash = SpellVisualRegistry.RegisterSummon(spell.SummonPrefab);
+                int projHash = VisualAssetRegistry.RegisterProjectile(spell.ProjectileId);
+                int effectHash = VisualAssetRegistry.RegisterVfx(spell.EffectVfxId);
+                int areaVfxHash = VisualAssetRegistry.RegisterVfx(spell.AreaVfxId);
+                int summonHash = VisualAssetRegistry.RegisterSummon(spell.SummonPrefab);
 
                 float amount = (spell.Kind == SpellKind.EffectOverTimeArea || spell.Kind == SpellKind.EffectOverTimeTarget)
                     ? spell.TickAmount

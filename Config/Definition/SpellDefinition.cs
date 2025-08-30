@@ -1,4 +1,4 @@
-﻿// FILE: Assets/PROJECT/Scripts/Runtime/Combat/SpellDefinition.cs
+﻿
 using UnityEngine;
 using Sirenix.OdinInspector;
 using OneBitRob.FX;

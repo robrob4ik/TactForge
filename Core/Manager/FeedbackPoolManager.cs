@@ -1,4 +1,4 @@
-﻿// FILE: Assets/PROJECT/Scripts/Runtime/FX/Feedbacks/FeedbackPoolManager.cs
+﻿// File: OneBitRob/FX/FeedbackPoolManager.cs
 using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
@@ -6,6 +6,7 @@ using UnityEngine;
 namespace OneBitRob.FX
 {
     [DisallowMultipleComponent]
+    [DefaultExecutionOrder(-9999)]
     public sealed class FeedbackPoolManager : MonoBehaviour
     {
         [System.Serializable]
@@ -18,26 +19,70 @@ namespace OneBitRob.FX
         [Tooltip("Map of feedback ids to MM poolers. Setup once per scene.")]
         public List<Entry> Pools = new();
 
+        [Header("Debug")]
+        public bool LogMissing = true;
+
+        private static FeedbackPoolManager _instance;
         private static Dictionary<string, MMObjectPooler> _map;
+        private static readonly HashSet<string> _warned = new();
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap() => Ensure();
+
+        public static FeedbackPoolManager Ensure()
+        {
+            if (_instance) return _instance;
+            var go = new GameObject("[FeedbackPoolManager]");
+            DontDestroyOnLoad(go);
+            _instance = go.AddComponent<FeedbackPoolManager>();
+            _instance.RebuildMap();
+            return _instance;
+        }
 
         private void Awake()
         {
-            if (_map == null) _map = new Dictionary<string, MMObjectPooler>(Pools.Count);
-            else _map.Clear();
+            if (_instance && _instance != this) { Destroy(gameObject); return; }
+            _instance = this;
+            DontDestroyOnLoad(gameObject);
+            RebuildMap();
+        }
 
+        private void RebuildMap()
+        {
+            _map = new Dictionary<string, MMObjectPooler>(Pools.Count);
             for (int i = 0; i < Pools.Count; i++)
             {
                 var p = Pools[i];
                 if (p.Pooler == null || string.IsNullOrEmpty(p.Id)) continue;
-                // Do NOT call FillObjectPool() here; MM handles it.
                 _map[p.Id] = p.Pooler;
             }
         }
 
-        public static MMObjectPooler Resolve(string id)
+        public static MMObjectPooler GetPooler(string id)
         {
-            if (string.IsNullOrEmpty(id) || _map == null) return null;
-            return _map.TryGetValue(id, out var pooler) ? pooler : null;
+            Ensure();
+            if (string.IsNullOrEmpty(id) || _map == null || !_map.TryGetValue(id, out var pooler))
+            {
+#if UNITY_EDITOR
+                if (_instance && _instance.LogMissing && !_warned.Contains(id ?? "<null>"))
+                {
+                    _warned.Add(id ?? "<null>");
+                    Debug.LogWarning($"[FeedbackPoolManager] No pool for id '{id}'. Assign it on {nameof(FeedbackPoolManager)} in scene.");
+                }
+#endif
+                return null;
+            }
+            return pooler;
         }
+
+        public static GameObject GetPooled(string id)
+        {
+            var pooler = GetPooler(id);
+            return pooler ? pooler.GetPooledGameObject() : null;
+        }
+
+        /// Legacy API (kept for back-compat)
+        [System.Obsolete("Use GetPooler(id) instead.")]
+        public static MMObjectPooler Resolve(string id) => GetPooler(id);
     }
 }

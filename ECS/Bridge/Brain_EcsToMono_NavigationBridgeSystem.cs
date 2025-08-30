@@ -1,12 +1,9 @@
-﻿// ECS/HybridSync/EcsToMono/Brain_EcsToMono_NavigationBridgeSystem.cs
+﻿using OneBitRob.Debugging;
 using Unity.Entities;
-using Unity.Mathematics;
 using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    /// For each DesiredDestination with HasValue=1, drive the Mono navigation.
-    /// Honors MovementLock.Casting (park in place while casting).
     [UpdateInGroup(typeof(EcsToMonoBridgeGroup))]
     public partial struct Brain_EcsToMono_NavigationBridgeSystem : ISystem
     {
@@ -14,27 +11,26 @@ namespace OneBitRob.ECS
         {
             var em = state.EntityManager;
 
-            foreach (var (dd, e) in SystemAPI.Query<RefRW<DesiredDestination>>().WithEntityAccess())
+            foreach (var (desiredDestination, entity) in SystemAPI.Query<RefRW<DesiredDestination>>().WithEntityAccess())
             {
-                if (dd.ValueRO.HasValue == 0) continue;
+                if (desiredDestination.ValueRO.HasValue == 0) continue;
 
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(e);
-                if (!brain) { dd.ValueRW = default; continue; }
+                var brain = OneBitRob.AI.UnitBrainRegistry.Get(entity);
+                if (!brain) { desiredDestination.ValueRW = default; continue; }
 
-                bool casting = em.HasComponent<MovementLock>(e) &&
-                               (em.GetComponentData<MovementLock>(e).Flags & MovementLockFlags.Casting) != 0;
+                bool casting = em.HasComponent<MovementLock>(entity) &&
+                               (em.GetComponentData<MovementLock>(entity).Flags & MovementLockFlags.Casting) != 0;
 
-                Vector3 wanted = casting ? brain.transform.position : (Vector3)dd.ValueRO.Position;
+                Vector3 wanted = casting ? brain.transform.position : (Vector3)desiredDestination.ValueRO.Position;
 
                 // avoid noise
                 if ((wanted - brain.CurrentTargetPosition).sqrMagnitude > 0.0004f)
                     brain.MoveToPosition(wanted);
 
-#if UNITY_EDITOR
-                Debug.DrawLine(brain.transform.position, wanted,
-                    casting ? new Color(1f, 0.6f, 0.1f, 0.9f) : Color.cyan, 0f, false);
-#endif
-                dd.ValueRW = default; // consume
+
+                DebugDraw.Line(brain.transform.position, wanted, casting ? new Color(1f, 0.6f, 0.1f, 0.9f) : Color.cyan);
+
+                desiredDestination.ValueRW = default; // consume
             }
         }
     }

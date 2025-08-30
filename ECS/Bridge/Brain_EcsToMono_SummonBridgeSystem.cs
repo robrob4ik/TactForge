@@ -3,6 +3,7 @@
 using GPUInstancerPro.PrefabModule;
 using OneBitRob.AI;
 using OneBitRob.ECS.GPUI;
+using OneBitRob.VFX;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -26,7 +27,7 @@ namespace OneBitRob.ECS
             {
                 if (req.ValueRO.HasValue == 0) continue;
 
-                var prefab = SpellVisualRegistry.GetSummonPrefab(req.ValueRO.PrefabIdHash);
+                var prefab = VisualAssetRegistry.GetSummonPrefab(req.ValueRO.PrefabIdHash);
                 if (prefab != null &&
                     SystemAPI.ManagedAPI.TryGetSingleton<SpawnerData>(out var data) &&
                     SystemAPI.ManagedAPI.TryGetSingleton<GPUIManagerRef>(out var gpuiRef))

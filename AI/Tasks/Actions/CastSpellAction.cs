@@ -1,6 +1,7 @@
 ﻿// Runtime/AI/BehaviorTasks/Spell/CastSpell.cs
 // Commits the cast: face the aim now; ECS executor will windup/fire.
 
+using OneBitRob.Debugging;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
@@ -88,9 +89,8 @@ namespace OneBitRob.AI
             else
                 em.AddComponentData(e, df);
 
-#if UNITY_EDITOR
-            if (brain) Debug.DrawLine(brain.transform.position, (Vector3)aim, Color.yellow, 0f, false);
-#endif
+            if (brain) DebugDraw.Line(brain.transform.position, (Vector3)aim, Color.yellow);
+
             
             return TaskStatus.Success;
         }

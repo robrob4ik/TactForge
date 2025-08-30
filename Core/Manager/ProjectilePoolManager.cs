@@ -1,12 +1,14 @@
-﻿// CHANGED: removed FillObjectPool() calls to avoid duplicate child pools.
-
+﻿// File: OneBitRob/ECS/ProjectilePoolManager.cs
 using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    [DisallowMultipleComponent]
+    /// <summary>
+    /// Scene-level ID -> MMObjectPooler resolver for projectile prefabs.
+    /// </summary>
+    [DefaultExecutionOrder(-9999)]
     public class ProjectilePoolManager : MonoBehaviour
     {
         [System.Serializable]
@@ -19,29 +21,69 @@ namespace OneBitRob.ECS
         [Tooltip("Map of projectile ids to MM poolers. Setup once per scene.")]
         public List<Entry> Pools = new();
 
+        [Header("Debug")]
+        public bool LogMissing = true;
+
+        private static ProjectilePoolManager _instance;
         private static Dictionary<string, MMObjectPooler> _map;
+        private static readonly HashSet<string> _warned = new();
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap() => Ensure();
+
+        public static ProjectilePoolManager Ensure()
+        {
+            if (_instance) return _instance;
+            var go = new GameObject("[ProjectilePoolManager]");
+            DontDestroyOnLoad(go);
+            _instance = go.AddComponent<ProjectilePoolManager>();
+            _instance.RebuildMap();
+            return _instance;
+        }
 
         private void Awake()
         {
-            if (_map == null) _map = new Dictionary<string, MMObjectPooler>(Pools.Count);
-            else _map.Clear();
-
-            foreach (var p in Pools)
-            {
-                if (p.Pooler == null || string.IsNullOrEmpty(p.Id)) continue;
-                // DO NOT call p.Pooler.FillObjectPool() here; MM does that on its own.
-                _map[p.Id] = p.Pooler;
-            }
+            if (_instance && _instance != this) { Destroy(gameObject); return; }
+            _instance = this;
+            DontDestroyOnLoad(gameObject);
+            RebuildMap();
         }
 
-        public static MMObjectPooler Resolve(string id)
+        private void RebuildMap()
         {
-            if (string.IsNullOrEmpty(id)) return null;
-            if (_map != null && _map.TryGetValue(id, out var pooler)) return pooler;
-#if UNITY_EDITOR
-            Debug.LogWarning($"ProjectilePools: no pooler mapped for id '{id}'.");
-#endif
-            return null;
+            _map = new Dictionary<string, MMObjectPooler>(Pools.Count);
+            foreach (var p in Pools)
+                if (p.Pooler != null && !string.IsNullOrEmpty(p.Id))
+                    _map[p.Id] = p.Pooler;
         }
+
+        /// Returns a pooler or null. Logs once if missing (if LogMissing=true).
+        public static MMObjectPooler GetPooler(string id)
+        {
+            Ensure();
+            if (string.IsNullOrEmpty(id) || _map == null || !_map.TryGetValue(id, out var pooler))
+            {
+#if UNITY_EDITOR
+                if (_instance && _instance.LogMissing && !_warned.Contains(id ?? "<null>"))
+                {
+                    _warned.Add(id ?? "<null>");
+                    Debug.LogWarning($"[ProjectilePoolManager] No pool for id '{id}'. Assign it on {nameof(ProjectilePoolManager)} in scene.");
+                }
+#endif
+                return null;
+            }
+            return pooler;
+        }
+
+        /// Returns an inactive pooled object ready to be armed, or null if not found.
+        public static GameObject GetPooled(string id)
+        {
+            var pooler = GetPooler(id);
+            return pooler ? pooler.GetPooledGameObject() : null;
+        }
+
+        /// Legacy API (kept for back-compat)
+        [System.Obsolete("Use GetPooler(id) instead.")]
+        public static MMObjectPooler Resolve(string id) => GetPooler(id);
     }
 }

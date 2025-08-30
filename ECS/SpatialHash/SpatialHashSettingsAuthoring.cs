@@ -5,7 +5,7 @@ using UnityEngine;
 namespace OneBitRob.ECS
 {
     [DisallowMultipleComponent]
-    public class SpatialHashSettingsBootstrap : EntityBehaviour
+    public class SpatialHashSettingsAuthoring : EntityBehaviour
     {
         [SerializeField]
         internal float CellSize = 3f;
@@ -22,12 +22,12 @@ namespace OneBitRob.ECS
         }
     }
 
-    class Baker : Baker<SpatialHashSettingsBootstrap>
+    class Baker : Baker<SpatialHashSettingsAuthoring>
     {
-        public override void Bake(SpatialHashSettingsBootstrap bootstrap)
+        public override void Bake(SpatialHashSettingsAuthoring authoring)
         {
             var e = GetEntity(TransformUsageFlags.None);
-            AddComponent(e, new SpatialHashComponents.SpatialHashSettings { CellSize = bootstrap.CellSize });
+            AddComponent(e, new SpatialHashComponents.SpatialHashSettings { CellSize = authoring.CellSize });
         }
     }
 }

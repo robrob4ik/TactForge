@@ -20,7 +20,7 @@ namespace OneBitRob
     }
    
     [CreateAssetMenu(fileName = "IconLibrary", menuName = "TactForge/Config/Libraries/Icon Library")]
-    public class IconLibrary : SerializedScriptableObject
+    public class IconRegistry : SerializedScriptableObject
     {
         [TableList] public List<TraitIconMapping> traitIcons = new();
         [TableList] public List<ClassIconMapping> classIcons = new();

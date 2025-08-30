@@ -1,4 +1,6 @@
 ﻿using OneBitRob.AI;
+using OneBitRob.Debugging;
+using OneBitRob.VFX;
 using Unity.Entities;
 using UnityEngine;
 
@@ -10,28 +12,26 @@ namespace OneBitRob.ECS
     {
         public void OnUpdate(ref SystemState state)
         {
-            foreach (var (spawn, e) in SystemAPI.Query<RefRW<SpellProjectileSpawnRequest>>().WithEntityAccess())
+            foreach (var (spawnRequest, entity) in SystemAPI.Query<RefRW<SpellProjectileSpawnRequest>>().WithEntityAccess())
             {
-                if (spawn.ValueRO.HasValue == 0) continue;
+                if (spawnRequest.ValueRO.HasValue == 0) continue;
 
-                var brain = UnitBrainRegistry.Get(e);
-                if (brain && brain.CombatSubsystem != null)
+                var brain = OneBitRob.AI.UnitBrainRegistry.Get(entity);
+                if (brain && brain.UnitCombatController != null)
                 {
-                    var origin = (Vector3)spawn.ValueRO.Origin;
-                    var dir    = ((Vector3)spawn.ValueRO.Direction).normalized;
-                    string projId = SpellVisualRegistry.GetProjectileId(spawn.ValueRO.ProjectileIdHash);
+                    var origin = (Vector3)spawnRequest.ValueRO.Origin;
+                    var dir    = ((Vector3)spawnRequest.ValueRO.Direction).normalized;
+                    string projId = VisualAssetRegistry.GetProjectileId(spawnRequest.ValueRO.ProjectileIdHash);
 
-                    brain.CombatSubsystem.FireSpellProjectile(
+                    brain.UnitCombatController.FireSpellProjectile(
                         projId, origin, dir, brain.gameObject,
-                        spawn.ValueRO.Speed, spawn.ValueRO.Damage, spawn.ValueRO.MaxDistance,
-                        spawn.ValueRO.LayerMask, spawn.ValueRO.Radius, spawn.ValueRO.Pierce == 1
-                        );
+                        spawnRequest.ValueRO.Speed, spawnRequest.ValueRO.Damage, spawnRequest.ValueRO.MaxDistance,
+                        spawnRequest.ValueRO.LayerMask, spawnRequest.ValueRO.Radius, spawnRequest.ValueRO.Pierce == 1
+                    );
 
-#if UNITY_EDITOR
-                    Debug.DrawRay(origin, dir * 1.2f, Color.magenta, 0f, false);
-#endif
+                    DebugDraw.Ray(origin, dir * 1.2f, Color.magenta);
                 }
-                spawn.ValueRW = default; // consume
+                spawnRequest.ValueRW = default; // consume
             }
         }
     }

@@ -1,8 +1,9 @@
-﻿// Runtime/AI/Combat/CombatSubsystem.cs
+﻿
 using System.Collections.Generic;
 using MoreMountains.Tools;
 using OneBitRob.ECS;
 using OneBitRob.EnigmaEngine;
+using OneBitRob.VFX;
 using Unity.Entities;
 using UnityEngine;
 
@@ -10,10 +11,9 @@ namespace OneBitRob.AI
 {
     [TemporaryBakingType]
     [RequireComponent(typeof(EnigmaCharacter))]
-    public sealed class CombatSubsystem : MonoBehaviour
+    public sealed class UnitCombatController : MonoBehaviour
     {
         private EnigmaCharacter _character;
-        private EnigmaCharacterHandleWeapon _characterHandleWeapon;
         private Animator _anim;
         private UnitBrain _brain;
 
@@ -32,7 +32,6 @@ namespace OneBitRob.AI
         private void Awake()
         {
             _character = GetComponent<EnigmaCharacter>();
-            _characterHandleWeapon = _character.FindAbility<EnigmaCharacterHandleWeapon>();
             _anim = GetComponentInChildren<Animator>();
             _brain = GetComponent<UnitBrain>();
 
@@ -40,9 +39,7 @@ namespace OneBitRob.AI
             if (weapon is RangedWeaponDefinition rw) _projectileId = rw.projectileId;
         }
 
-        public bool IsAlive =>
-            _character != null &&
-            _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
+        public bool IsAlive => _character != null && _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
 
         public void PlayMeleeAttack(AttackAnimationSettings settings)
         {
@@ -72,9 +69,6 @@ namespace OneBitRob.AI
             if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
         }
 
-        public void PlaySpellPrepare(TwoStageAttackAnimationSettings settings) { }
-        public void PlaySpellFire   (TwoStageAttackAnimationSettings settings) { }
-
 #if UNITY_EDITOR
         private bool AnimatorHasTrigger(string param)
         {
@@ -91,9 +85,7 @@ namespace OneBitRob.AI
 #else
         private bool AnimatorHasTrigger(string _) => true;
 #endif
-
-        public bool HasRangedProjectileConfigured() => ResolveProjectilePooler() != null;
-
+        
         private MMObjectPooler ResolveProjectilePooler()
         {
             if (_projectilePooler != null) return _projectilePooler;
@@ -112,7 +104,7 @@ namespace OneBitRob.AI
                 return null;
             }
 
-            _projectilePooler = ProjectilePoolManager.Resolve(_projectileId);
+            _projectilePooler = ProjectileService.GetPooler(_projectileId);
 #if UNITY_EDITOR
             if (_projectilePooler == null)
                 Debug.LogWarning($"[{name}] No projectile pooler found for id '{_projectileId}'. Add your ProjectilePools prefab to this scene or register the id.");
@@ -166,7 +158,7 @@ namespace OneBitRob.AI
             float speed, float damage, float maxDistance, int layerMask, float radius, bool pierce)
         {
             if (string.IsNullOrEmpty(projectileId)) return;
-            var pooler = ProjectilePoolManager.Resolve(projectileId);
+            var pooler = ProjectileService.GetPooler(projectileId);
             if (pooler == null)
             {
 #if UNITY_EDITOR
@@ -191,7 +183,7 @@ namespace OneBitRob.AI
             go.transform.forward = (direction.sqrMagnitude < 1e-6f ? Vector3.forward : direction.normalized);
 
             proj.Arm(
-                new ECS.SpellProjectile.ArmData
+                new SpellProjectile.ArmData
                 {
                     Attacker = attacker,
                     Origin = origin,

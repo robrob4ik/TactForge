@@ -1,5 +1,4 @@
-﻿// FILE: OneBitRob/AI/TaskProcessorSystem.cs
-using Opsive.BehaviorDesigner.Runtime.Components;
+﻿using Opsive.BehaviorDesigner.Runtime.Components;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Unity.Collections;
 using Unity.Entities;

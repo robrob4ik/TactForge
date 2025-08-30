@@ -28,7 +28,7 @@ namespace OneBitRob.ECS
 
                 // Alive flag
                 var alive = em.GetComponentData<Alive>(e);
-                bool monoAlive = brain.CombatSubsystem != null && brain.CombatSubsystem.IsAlive;
+                bool monoAlive = brain.UnitCombatController != null && brain.UnitCombatController.IsAlive;
                 alive.Value = (byte)(monoAlive ? 1 : 0);
                 em.SetComponentData(e, alive);
 

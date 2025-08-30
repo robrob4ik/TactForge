@@ -1,8 +1,6 @@
-﻿// FILE: Assets/PROJECT/Scripts/Runtime/ECS/AI/SpellPlanSystem.cs
-//
-// Phase: PLAN — picks a cast (target or AoE point) and writes CastRequest.
+﻿// Phase: PLAN — picks a cast (target or AoE point) and writes CastRequest.
 // Renamed from SpellDecisionSystem for consistency with Plan → Aim → Execute.
-//
+
 // Notes:
 // - Negative AoE: no self fallback. If no enemy point, no cast.
 // - Positive AoE (heals/buffs): may fallback to self.
@@ -173,8 +171,6 @@ namespace OneBitRob.AI
             {
                 case SpellAcquireMode.DensestEnemyCluster:
                     return new DensestEnemyClusterTargeting().TryGetAOETargetPoint(self, in cfg, ref _posRO, ref _factRO, out point);
-
-                // Default: try closest enemy; POSITIVE may fallback to self, NEGATIVE must skip.
                 case SpellAcquireMode.LowestHealthAlly:
                 case SpellAcquireMode.ClosestEnemy:
                 default:

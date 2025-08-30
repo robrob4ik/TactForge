@@ -1,93 +1,87 @@
-﻿using OneBitRob.ECS;
-using Unity.Burst;
+﻿using OneBitRob.Debugging;
+using OneBitRob.ECS;
+using OneBitRob.FX;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 using static Unity.Mathematics.math;
-using OneBitRob.FX;
 
 namespace OneBitRob.AI
 {
-    /// One-shot, hybrid melee hitscan:
-    /// - single Physics.OverlapSphereNonAlloc per request
-    /// - cone test + cap targets, then applies EnigmaHealth.Damage on the Mono side
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     public partial struct MeleeHitResolutionSystem : ISystem
     {
-        private static readonly Collider[] s_Hits = new Collider[256];
-        private EntityQuery _reqQuery;
+        private static readonly Collider[] s_SphereOverlapHits = new Collider[256];
+        private EntityQuery _requestQuery;
 
         public void OnCreate(ref SystemState state)
         {
-            _reqQuery = state.GetEntityQuery(ComponentType.ReadWrite<MeleeHitRequest>());
-            state.RequireForUpdate(_reqQuery);
+            _requestQuery = state.GetEntityQuery(ComponentType.ReadWrite<MeleeHitRequest>());
+            state.RequireForUpdate(_requestQuery);
         }
 
         public void OnUpdate(ref SystemState state)
         {
             var em = state.EntityManager;
 
-            var entities = _reqQuery.ToEntityArray(Allocator.Temp);
-            for (int i = 0; i < entities.Length; i++)
+            var requestEntities = _requestQuery.ToEntityArray(Allocator.Temp);
+            for (int i = 0; i < requestEntities.Length; i++)
             {
-                var e = entities[i];
-                var req = em.GetComponentData<MeleeHitRequest>(e);
-                if (req.HasValue == 0)
+                var entity = requestEntities[i];
+                var request = em.GetComponentData<MeleeHitRequest>(entity);
+                if (request.HasValue == 0)
                     continue;
 
                 // consume first
-                req.HasValue = 0;
-                em.SetComponentData(e, req);
+                request.HasValue = 0;
+                em.SetComponentData(entity, request);
 
-                var attackerBrain = UnitBrainRegistry.Get(e);
+                var attackerBrain = UnitBrainRegistry.Get(entity);
                 if (attackerBrain == null)
                     continue;
 
-                // ────────────── collect candidates ──────────────
-                int maskToUse = (req.LayerMask != 0) ? req.LayerMask : ~0;
-                int count = Physics.OverlapSphereNonAlloc(
-                    (Vector3)req.Origin,
-                    req.Range,
-                    s_Hits,
+                int maskToUse = (request.LayerMask != 0) ? request.LayerMask : ~0;
+                int hitCount = Physics.OverlapSphereNonAlloc(
+                    (Vector3)request.Origin,
+                    request.Range,
+                    s_SphereOverlapHits,
                     maskToUse,
                     QueryTriggerInteraction.Collide
                 );
 
                 // Fallback: if mask filtering produced no hits, re-run across all layers
-                if (count == 0 && maskToUse != ~0)
+                if (hitCount == 0 && maskToUse != ~0)
                 {
-                    count = Physics.OverlapSphereNonAlloc(
-                        (Vector3)req.Origin,
-                        req.Range,
-                        s_Hits,
+                    hitCount = Physics.OverlapSphereNonAlloc(
+                        (Vector3)request.Origin,
+                        request.Range,
+                        s_SphereOverlapHits,
                         ~0,
                         QueryTriggerInteraction.Collide
                     );
                 }
 
-#if UNITY_EDITOR
-                // visualize the attack volume each time a request is processed
-                DebugDrawVolume(in req);
-#endif
+                DebugDrawVolume(in request);
 
-                if (count <= 0)
+
+                if (hitCount <= 0)
                     continue;
 
                 bool attackerIsEnemy = attackerBrain.UnitDefinition != null && attackerBrain.UnitDefinition.isEnemy;
 
-                float3 fwd = math.normalizesafe(req.Forward);
-                float cosHalf = math.cos(req.HalfAngleRad);
-                float cos2 = cosHalf * cosHalf;
-                float rangeSq = req.Range * req.Range;
-                int maxT = math.max(1, req.MaxTargets);
+                float3 forward = normalizesafe(request.Forward);
+                float cosHalf = cos(request.HalfAngleRad);
+                float cosHalfSq = cosHalf * cosHalf;
+                float rangeSq = request.Range * request.Range;
+                int maxTargets = max(1, request.MaxTargets);
                 int applied = 0;
 
-                var meleeDef = attackerBrain.UnitDefinition != null ? attackerBrain.UnitDefinition.weapon as OneBitRob.MeleeWeaponDefinition : null;
-                
-                for (int h = 0; h < count; h++)
+                var meleeDef = attackerBrain.UnitDefinition?.weapon as OneBitRob.MeleeWeaponDefinition;
+
+                for (int h = 0; h < hitCount; h++)
                 {
-                    var col = s_Hits[h];
+                    var col = s_SphereOverlapHits[h];
                     if (!col) continue;
 
                     // ignore own root
@@ -103,77 +97,73 @@ namespace OneBitRob.AI
                     if (attackerIsEnemy == targetIsEnemy)
                         continue;
 
-                    float3 to = (float3)targetBrain.transform.position - req.Origin;
-                    float sq = math.lengthsq(to);
+                    float3 to = (float3)targetBrain.transform.position - request.Origin;
+                    float sq = lengthsq(to);
                     if (sq > rangeSq) continue;
 
-                    float dot = math.dot(fwd, to);
+                    float dot = math.dot(forward, to);
                     if (dot <= 0f) continue;                 // behind us
-                    if ((dot * dot) < (cos2 * sq)) continue; // outside cone
+                    if ((dot * dot) < (cosHalfSq * sq)) continue; // outside cone
 
-#if UNITY_EDITOR
-                    // show "candidate" line (green)
-                    Debug.DrawLine((Vector3)req.Origin, targetBrain.transform.position, new Color(0.2f, 1f, 0.2f, 0.9f), 0.1f, false);
-#endif
+                    DebugDraw.Line((Vector3)request.Origin, targetBrain.transform.position, new Color(0.2f, 1f, 0.2f, 0.95f));
+
 
                     // Let Health handle invincibility internally; do not pre-gate.
-                    bool isCrit = (req.CritChance > 0f) && (UnityEngine.Random.value < req.CritChance);
-                    float dmg = isCrit ? req.Damage * math.max(1f, req.CritMultiplier) : req.Damage;
+                    bool isCrit = (request.CritChance > 0f) && (UnityEngine.Random.value < request.CritChance);
+                    float damage = isCrit ? request.Damage * max(1f, request.CritMultiplier) : request.Damage;
 
-                    Vector3 dir = ((Vector3)to).normalized;
-                    targetBrain.Health.Damage(dmg, attackerBrain.gameObject, 0f, req.Invincibility, dir);
+                    Vector3 impactDir = ((Vector3)to).normalized;
+                    targetBrain.Health.Damage(damage, attackerBrain.gameObject, 0f, request.Invincibility, impactDir);
 
                     DamageNumbersManager.Popup(new DamageNumbersParams
                     {
                         Kind     = isCrit ? DamagePopupKind.CritDamage : DamagePopupKind.Damage,
                         Follow   = targetBrain.transform,
                         Position = targetBrain.transform.position,
-                        Amount   = dmg
+                        Amount   = damage
                     });
-                    
+
                     if (meleeDef != null && meleeDef.hitFeedback != null)
                     {
                         // Attach to target so it follows if the target staggers/moves
                         FeedbackService.TryPlay(meleeDef.hitFeedback, targetBrain.transform, targetBrain.transform.position);
                     }
 
-#if UNITY_EDITOR
-                    // show "actual hit" line (yellow) slightly thicker via double draw
-                    Debug.DrawLine((Vector3)req.Origin, targetBrain.transform.position, new Color(1f, 0.95f, 0.2f, 1f), 0.12f, false);
-                    Debug.DrawLine((Vector3)req.Origin + Vector3.up * 0.03f, targetBrain.transform.position + Vector3.up * 0.03f, new Color(1f, 0.95f, 0.2f, 1f), 0.12f, false);
-#endif
-
-                    if (++applied >= maxT)
+                    // "Thicker" highlight: second line slightly offset
+                    DebugDraw.Line((Vector3)request.Origin + Vector3.up * 0.03f,
+                        targetBrain.transform.position + Vector3.up * 0.03f,
+                        new Color(1f, 0.95f, 0.2f, 1f));
+                    
+                    if (++applied >= maxTargets)
                         break;
                 }
             }
 
-            entities.Dispose();
+            requestEntities.Dispose();
         }
 
 #if UNITY_EDITOR
         private static void DebugDrawVolume(in MeleeHitRequest req)
         {
             // Range sphere
-            Color sphereColor = new Color(1f, 0f, 0f, 0.25f);
-            DrawWireSphere(req.Origin, req.Range, sphereColor, 0.11f);
+            Color sphereColor = new Color(1f, 0f, 0f, 0.28f);
+            DrawWireSphere(req.Origin, req.Range, sphereColor, 0.25f);
 
             // Forward direction
             Vector3 origin = (Vector3)req.Origin;
             Vector3 fwd = ((Vector3)req.Forward).normalized;
-            Debug.DrawRay(origin, fwd * (req.Range * 0.9f), Color.red, 0.11f, false);
+            DebugDraw.Ray(origin, fwd * (req.Range * 0.9f), Color.red);
 
             // Cone edges (approx)
-            float deg = math.degrees(req.HalfAngleRad);
+            float deg = degrees(req.HalfAngleRad);
             Quaternion left  = Quaternion.AngleAxis(-deg, Vector3.up);
             Quaternion right = Quaternion.AngleAxis( deg, Vector3.up);
-            Debug.DrawRay(origin, (left  * fwd) * req.Range, new Color(1f, 0.5f, 0.2f, 0.9f), 0.11f, false);
-            Debug.DrawRay(origin, (right * fwd) * req.Range, new Color(1f, 0.5f, 0.2f, 0.9f), 0.11f, false);
+            DebugDraw.Ray(origin, (left  * fwd) * req.Range, new Color(1f, 0.6f, 0.2f, 0.95f));
+            DebugDraw.Ray(origin, (right * fwd) * req.Range, new Color(1f, 0.6f, 0.2f, 0.95f));
         }
 
-        private static void DrawWireSphere(float3 center, float radius, Color color, float dur)
+        private static void DrawWireSphere(float3 center, float radius, Color color, float duration)
         {
-            // minimal wire sphere using 3 great circles
             const int segments = 24;
             Vector3 c = (Vector3)center;
             Vector3 prev = c + Vector3.right * radius;
@@ -182,7 +172,7 @@ namespace OneBitRob.AI
                 float t = (i / (float)segments) * 2f * Mathf.PI;
                 // XY
                 Vector3 p = c + new Vector3(Mathf.Cos(t) * radius, Mathf.Sin(t) * radius, 0f);
-                Debug.DrawLine(prev, p, color, dur, false);
+                DebugDraw.Line(prev, p, color);
                 prev = p;
             }
             prev = c + Vector3.forward * radius;
@@ -191,7 +181,7 @@ namespace OneBitRob.AI
                 float t = (i / (float)segments) * 2f * Mathf.PI;
                 // XZ
                 Vector3 p = c + new Vector3(Mathf.Cos(t) * radius, 0f, Mathf.Sin(t) * radius);
-                Debug.DrawLine(prev, p, color, dur, false);
+                DebugDraw.Line(prev, p, color);
                 prev = p;
             }
             prev = c + Vector3.up * radius;
@@ -200,7 +190,7 @@ namespace OneBitRob.AI
                 float t = (i / (float)segments) * 2f * Mathf.PI;
                 // YZ
                 Vector3 p = c + new Vector3(0f, Mathf.Cos(t) * radius, Mathf.Sin(t) * radius);
-                Debug.DrawLine(prev, p, color, dur, false);
+                DebugDraw.Line(prev, p, color);
                 prev = p;
             }
         }
