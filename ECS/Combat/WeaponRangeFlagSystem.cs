@@ -1,17 +1,13 @@
-﻿// Assets/PROJECT/Scripts/Runtime/AI/Combat/Weapon/WeaponRangeFlagSystem.cs
+﻿// File: OneBitRob.AI/WeaponRangeFlagSystem.cs
+
+using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using OneBitRob.AI;
-using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    /// <summary>
-    /// Updates InAttackRange based on distance(self, target) vs weapon.attackRange.
-    /// Pure ECS; UnitBrain only used to read weapon stat.
-    /// </summary>
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     public partial struct WeaponRangeFlagSystem : ISystem
     {
@@ -61,10 +57,18 @@ namespace OneBitRob.AI
                 float  distSq  = math.lengthsq(selfPos - tgtPos);
 
                 var brain = UnitBrainRegistry.Get(e);
-                float range = 0.01f;
+                float baseRange = 0.01f;
+                bool isRanged = false;
                 if (brain != null && brain.UnitDefinition != null && brain.UnitDefinition.weapon != null)
-                    range = math.max(0.01f, brain.UnitDefinition.weapon.attackRange);
+                {
+                    baseRange = math.max(0.01f, brain.UnitDefinition.weapon.attackRange);
+                    isRanged  = brain.UnitDefinition.weapon is RangedWeaponDefinition;
+                }
 
+                var stats = em.HasComponent<UnitRuntimeStats>(e) ? em.GetComponentData<UnitRuntimeStats>(e) : UnitRuntimeStats.Defaults;
+
+                float mult = isRanged ? stats.AttackRangeMult_Ranged : stats.AttackRangeMult_Melee;
+                float range = baseRange * math.max(0.0001f, mult);
                 float rangeSq = range * range;
 
                 f.DistanceSq = distSq;

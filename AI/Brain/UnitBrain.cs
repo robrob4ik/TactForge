@@ -9,7 +9,7 @@ namespace OneBitRob.AI
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(UnitDefinitionProvider))]
-    public sealed partial class UnitBrain : MonoBehaviour
+    public sealed class UnitBrain : MonoBehaviour
     {
         private Entity _entity;
 
@@ -25,15 +25,13 @@ namespace OneBitRob.AI
 
         private LayerMask _targetMask;
 
-        [SerializeField, Tooltip("Set all child colliders to Ally/Enemy faction layer at Awake().")]
+        [Header("Auto-Assign")]
+        [SerializeField, Tooltip("Set all child colliders to Ally/Enemy faction layer at Awake/Enable/Start depending on flags.")]
         private bool autoAssignFactionLayer = true;
 
-        public GameObject CurrentTarget { get; set; }
-        public Vector3 CurrentTargetPosition { get; private set; }
-        public GameObject CurrentSpellTarget { get; set; }
-        public List<GameObject> CurrentSpellTargets { get; set; }
-        public Vector3? CurrentSpellTargetPosition { get; set; }
-        public float NextAllowedAttackTime { get; set; }
+        [SerializeField] private bool reassignOnEnable = true;
+        [SerializeField, Tooltip("If true, minimal nav init runs on Start (does NOT change tunables).")]
+        private bool applyNavFromDefinitionOnStart = true;
 
 #if UNITY_EDITOR
         public string CurrentTaskName { get; set; } = "Idle";
@@ -43,7 +41,17 @@ namespace OneBitRob.AI
         public bool DebugAlwaysDraw = false;
         public bool DebugDrawFacing = true;
         public bool DebugDrawSpell = true;
+
+        [SerializeField] private bool logLayerAssignSummary = false;
+        [SerializeField] private bool logNavAssignSummary = false;
 #endif
+
+        public GameObject CurrentTarget { get; set; }
+        public Vector3 CurrentTargetPosition { get; private set; }
+        public GameObject CurrentSpellTarget { get; set; }
+        public List<GameObject> CurrentSpellTargets { get; set; }
+        public Vector3? CurrentSpellTargetPosition { get; set; }
+        public float NextAllowedAttackTime { get; set; }
 
         public Entity GetEntity() => _entity;
 
@@ -76,10 +84,10 @@ namespace OneBitRob.AI
                 Health.CurrentHealth = UnitDefinition.health;
             }
 
-            CacheLayerMasks();
+            RecomputeMasks();
 
             if (autoAssignFactionLayer)
-                ApplyFactionLayerToChildren();
+                AssignFactionLayers("Awake");
 
             if (HandleWeapon != null)
             {
@@ -88,6 +96,21 @@ namespace OneBitRob.AI
                 // Put owner/hurtboxes on own faction layer for any internal filters.
                 HandleWeapon.SetDamageableLayer(CombatLayers.FactionLayerIndexFor(_isEnemy));
             }
+        }
+
+        private void Start()
+        {
+            if (autoAssignFactionLayer)
+                AssignFactionLayers("Start");
+
+            if (applyNavFromDefinitionOnStart)
+                ApplyNavFromDefinition();
+        }
+
+        private void OnEnable()
+        {
+            if (autoAssignFactionLayer && reassignOnEnable)
+                AssignFactionLayers("OnEnable");
         }
 
         private void OnDisable()
@@ -100,44 +123,70 @@ namespace OneBitRob.AI
             if (_entity != Entity.Null) UnitBrainRegistry.Unregister(_entity, gameObject);
         }
 
-        private void CacheLayerMasks()
+        private void RecomputeMasks()
         {
             _targetMask = CombatLayers.TargetMaskFor(_isEnemy); // == Hostile
         }
 
-        private void ApplyFactionLayerToChildren()
+        private void AssignFactionLayers(string reason)
         {
-            int factionLayer = CombatLayers.FactionLayerIndexFor(_isEnemy);
-            if (factionLayer < 0 || factionLayer > 31) return;
+            int layer = CombatLayers.FactionLayerIndexFor(_isEnemy);
+            if (layer < 0 || layer > 31) return;
 
-            var cols = GetComponentsInChildren<Collider>(includeInactive: true);
-            for (int i = 0; i < cols.Length; i++)
+            var colliders = GetComponentsInChildren<Collider>(includeInactive: true);
+            int total = 0, changed = 0;
+
+            for (int i = 0; i < colliders.Length; i++)
             {
-                var c = cols[i];
+                var c = colliders[i];
                 if (!c) continue;
-                c.gameObject.layer = factionLayer;
+                total++;
+                if (c.gameObject.layer != layer)
+                {
+                    c.gameObject.layer = layer;
+                    changed++;
+                }
             }
 
             if (Character && Character.CharacterModel)
-                Character.CharacterModel.layer = factionLayer;
+                Character.CharacterModel.layer = layer;
+
+#if UNITY_EDITOR
+            if (logLayerAssignSummary)
+            {
+                string layerName = LayerMask.LayerToName(layer);
+                Debug.Log($"[UnitBrain] '{name}' set {changed}/{total} colliders to layer {layer} ({layerName}). Reason={reason}", this);
+            }
+#endif
         }
 
-        public void Setup()
+        private void ApplyNavFromDefinition()
         {
+            if (_navAgent == null) return;
+
+            var body = _navAgent.Body;
+            if (body.IsStopped)
+            {
+                body.IsStopped = false;
+                _navAgent.Body = body;
+#if UNITY_EDITOR
+                if (logNavAssignSummary)
+                    Debug.Log($"[UnitBrain] '{name}' nav init: cleared IsStopped on AgentBody.", this);
+#endif
+            }
         }
 
-        public void SetEntity(Entity entity)
+        public void StopAgentMotion()
         {
-            _entity = entity;
-            UnitBrainRegistry.Register(entity, this);
+            if (_navAgent == null) return;
+
+            var body = _navAgent.Body;
+            if (!body.IsStopped)
+            {
+                body.Stop();           
+                _navAgent.Body = body;
+            }
         }
-
-        public LayerMask GetHostileLayerMask() => CombatLayers.HostileMaskFor(_isEnemy);
-
-        public LayerMask GetFriendlyLayerMask() => CombatLayers.FriendlyMaskFor(_isEnemy);
-
-        // ─── Compatibility (older systems call this name) ───────────────────
-        public LayerMask GetDamageableLayerMask() => GetHostileLayerMask();
 
         public bool IsTargetAlive()
         {
@@ -147,29 +196,98 @@ namespace OneBitRob.AI
                    && targetBrain.Character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
         }
 
-        // ─── Locomotion ─────────────────────────────────────────────────────
         public void MoveToPosition(Vector3 position)
         {
             CurrentTargetPosition = position;
             _navAgent?.SetDestinationDeferred(position);
         }
-        
+
         public void SetForcedFacing(Vector3 worldPosition)
         {
-            if (_navMove != null) _navMove.ForcedRotationTarget = worldPosition; // smoothed by the ability
+            if (_navMove != null) _navMove.ForcedRotationTarget = worldPosition;
         }
 
         public float RemainingDistance() => _navAgent ? _navAgent.Body.RemainingDistance : 0f;
 
-        internal class Baker : Baker<UnitBrain>
+        public void Setup() { /* hook for future */ }
+
+        public void SetEntity(Entity entity)
         {
-            public override void Bake(UnitBrain authoring)
+            _entity = entity;
+            UnitBrainRegistry.Register(entity, this);
+        }
+
+        public LayerMask GetHostileLayerMask()   => CombatLayers.HostileMaskFor(_isEnemy);
+        public LayerMask GetFriendlyLayerMask()  => CombatLayers.FriendlyMaskFor(_isEnemy);
+        public LayerMask GetDamageableLayerMask()=> GetHostileLayerMask();
+
+#if UNITY_EDITOR
+        private void OnDrawGizmos()
+        {
+            if (DebugDrawCombatGizmos && DebugAlwaysDraw) DrawCombatGizmos();
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            if (DebugDrawCombatGizmos) DrawCombatGizmos();
+        }
+
+        private void DrawCombatGizmos()
+        {
+            var pos = transform.position;
+
+            if (UnitDefinition != null && UnitDefinition.weapon != null && UnitDefinition.weapon.attackRange > 0f)
             {
-                var e = GetEntity(TransformUsageFlags.Dynamic);
-                AddComponent<UnitBrainTag>(e);
+                Gizmos.color = new Color(1f, 0.25f, 0.25f, 0.7f);
+                UnityEditor.Handles.color = Gizmos.color;
+                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.weapon.attackRange);
+            }
+
+            if (UnitDefinition != null)
+            {
+                Gizmos.color = new Color(0.25f, 1f, 0.35f, 0.65f);
+                UnityEditor.Handles.color = Gizmos.color;
+                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.stoppingDistance);
+            }
+
+            if (UnitDefinition != null && UnitDefinition.autoTargetMinSwitchDistance > 0f)
+            {
+                Gizmos.color = new Color(0.1f, 0.4f, 1f, 1f);
+                UnityEditor.Handles.color = Gizmos.color;
+                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.autoTargetMinSwitchDistance);
+            }
+
+            if (CurrentTargetPosition != default)
+            {
+                Gizmos.color = Color.cyan;
+                Gizmos.DrawLine(pos, CurrentTargetPosition);
+                Gizmos.DrawSphere(CurrentTargetPosition, 0.08f);
+            }
+
+            if (CurrentTarget)
+            {
+                Gizmos.color = Color.green;
+                Gizmos.DrawLine(pos, CurrentTarget.transform.position);
+                Gizmos.DrawSphere(CurrentTarget.transform.position, 0.07f);
+            }
+
+            if (DebugDrawFacing)
+            {
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawRay(pos + Vector3.up * 0.05f, transform.forward * 0.9f);
+            }
+
+            if (DebugDrawSpell && UnitDefinition != null && UnitDefinition.unitSpells != null && UnitDefinition.unitSpells.Count > 0)
+            {
+                var sd = UnitDefinition.unitSpells[0];
+                if (sd != null && sd.Range > 0f)
+                {
+                    Gizmos.color = new Color(sd.DebugColor.r, sd.DebugColor.g, sd.DebugColor.b, 0.35f);
+                    UnityEditor.Handles.color = Gizmos.color;
+                    UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, sd.Range);
+                }
             }
         }
+#endif
     }
-
-    public struct UnitBrainTag : IComponentData { }
 }

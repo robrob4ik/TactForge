@@ -1,10 +1,7 @@
-﻿// ECS/HybridSync/MonoToEcs/Brain_MonoToEcs_SpellStateMirrorSystem.cs
-using Unity.Entities;
+﻿using Unity.Entities;
 
 namespace OneBitRob.ECS
 {
-    /// Sets SpellState.CanCast/Ready from ECS spell components (no Mono reads).
-    /// Keeps the convention from your original code but isolates it.
     [UpdateInGroup(typeof(MonoToEcsSyncGroup))]
     public partial struct Brain_MonoToEcs_SpellStateMirrorSystem : ISystem
     {

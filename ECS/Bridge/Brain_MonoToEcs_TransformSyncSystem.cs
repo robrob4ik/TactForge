@@ -1,4 +1,6 @@
 ﻿// ECS/HybridSync/MonoToEcs/Brain_MonoToEcs_TransformSyncSystem.cs
+
+using OneBitRob.AI;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
@@ -6,9 +8,8 @@ using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    /// Mirrors UnitBrain's Transform -> LocalTransform (position/rotation).
     [UpdateInGroup(typeof(MonoToEcsSyncGroup))]
-    [UpdateBefore(typeof(OneBitRob.ECS.SpatialHashBuildSystem))]
+    [UpdateBefore(typeof(SpatialHashBuildSystem))]
     public partial struct Brain_MonoToEcs_TransformSyncSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
@@ -18,13 +19,13 @@ namespace OneBitRob.ECS
                          .WithAll<AgentTag>()
                          .WithEntityAccess())
             {
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(e);
+                var brain = UnitBrainRegistry.Get(e);
                 if (!brain) continue;
 
                 var t = brain.transform;
                 var v = lt.ValueRO;
                 v.Position = t.position;
-                v.Rotation = (quaternion)t.rotation; // keep rotation for facing logic
+                v.Rotation = (quaternion)t.rotation;
                 lt.ValueRW = v;
 
 #if UNITY_EDITOR

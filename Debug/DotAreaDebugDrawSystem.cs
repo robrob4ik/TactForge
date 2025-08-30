@@ -1,5 +1,6 @@
 ﻿// NEW FILE: Assets/PROJECT/Scripts/Editor/Debug/DoTAreaDebugDrawSystem.cs
 #if UNITY_EDITOR
+using OneBitRob.ECS;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
@@ -13,7 +14,7 @@ namespace OneBitRob.AI.Debugging
     {
         public void OnUpdate(ref SystemState state)
         {
-            foreach (var area in SystemAPI.Query<RefRO<OneBitRob.ECS.DoTArea>>())
+            foreach (var area in SystemAPI.Query<RefRO<DoTArea>>())
             {
                 var a = area.ValueRO;
                 if (a.Radius <= 0f) continue;

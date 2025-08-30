@@ -27,17 +27,16 @@ namespace OneBitRob.AI
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateBefore(typeof(MoveToTargetSystem))] // ensure definition-driven setup is available to AI tasks
+    [UpdateBefore(typeof(MoveToTargetSystem))]
+    [UpdateBefore(typeof(WeaponRangeFlagSystem))] // ważne: runtime stats gotowe zanim systemy dystansu
     public partial class SetupUnitSystem : TaskProcessorSystem<SetupUnitComponent, SetupUnitTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
         {
-            // Keep existing Mono setup
             brain.Setup();
 
             var em = EntityManager;
 
-            // ──────────────────────────────────────────────────────
             // Health from UnitDefinition (fallback 100)
             int hp = 100;
             var def = brain != null ? brain.UnitDefinition : null;
@@ -52,7 +51,6 @@ namespace OneBitRob.AI
             }
             else { em.AddComponentData(e, new HealthMirror { Current = hp, Max = hp }); }
 
-            // ──────────────────────────────────────────────────────
             // Combat style from weapon type (1 = melee, 2 = ranged)
             byte style = 1;
             var weapon = def != null ? def.weapon : null;
@@ -63,8 +61,7 @@ namespace OneBitRob.AI
             else
                 em.AddComponentData(e, new CombatStyle { Value = style });
 
-            // ──────────────────────────────────────────────────────
-            // Retarget helpers (assist + optional cooldown presence)
+            // Retarget helpers
             float3 spawnPos = em.HasComponent<LocalTransform>(e) ? em.GetComponentData<LocalTransform>(e).Position : float3.zero;
 
             if (em.HasComponent<RetargetAssist>(e))
@@ -89,16 +86,13 @@ namespace OneBitRob.AI
 
             if (!em.HasComponent<RetargetCooldown>(e)) em.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
 
-            // ──────────────────────────────────────────────────────
-            // Spells: configure only if the unit actually has a first spell
+            // Spells baseline (jak było)
             var spells = def != null ? def.unitSpells : null;
             bool hasSpell = spells != null && spells.Count > 0 && spells[0] != null;
 
             if (hasSpell)
             {
                 var spell = spells[0];
-
-                // Visual registry hashes (no GPUI here)
                 int projHash = SpellVisualRegistry.RegisterProjectile(spell.ProjectileId);
                 int effectHash = SpellVisualRegistry.RegisterVfx(spell.EffectVfxId);
                 int areaVfxHash = SpellVisualRegistry.RegisterVfx(spell.AreaVfxId);
@@ -132,8 +126,6 @@ namespace OneBitRob.AI
                     ProjectileIdHash = projHash,
                     MuzzleForward = spell.MuzzleForward,
                     MuzzleLocalOffset = new float3(spell.MuzzleLocalOffset.x, spell.MuzzleLocalOffset.y, spell.MuzzleLocalOffset.z),
-
-                    // AOE DAMAGE RADIUS must come from SpellDefinition.AreaRadius (NOT Range)
                     AreaRadius = spell.Kind == SpellKind.EffectOverTimeArea ? spell.AreaRadius : 0f,
                     Duration = spell.Duration,
                     TickInterval = spell.TickInterval,
@@ -154,12 +146,9 @@ namespace OneBitRob.AI
                     em.AddComponentData(e, config);
 
                 if (!em.HasComponent<SpellDecisionRequest>(e)) em.AddComponentData(e, new SpellDecisionRequest { HasValue = 0 });
-
                 if (!em.HasComponent<SpellWindup>(e)) em.AddComponentData(e, new SpellWindup { Active = 0, ReleaseTime = 0f });
-
                 if (!em.HasComponent<SpellCooldown>(e)) em.AddComponentData(e, new SpellCooldown { NextTime = 0f });
 
-                // Make sure SpellState (shell from spawner) is valid/enabled
                 if (em.HasComponent<SpellState>(e))
                 {
                     var ss = em.GetComponentData<SpellState>(e);
@@ -171,6 +160,14 @@ namespace OneBitRob.AI
                     }
                 }
             }
+
+            // === Stats bootstrap ===
+            if (!em.HasComponent<UnitRuntimeStats>(e)) em.AddComponentData(e, UnitRuntimeStats.Defaults);
+            if (!em.HasBuffer<StatModifier>(e)) em.AddBuffer<StatModifier>(e);
+            if (!em.HasComponent<StatsDirtyTag>(e)) em.AddComponent<StatsDirtyTag>(e);
+
+            // Apply baseScaling from UnitDefinition (if any)
+            if (def != null && def.baseScaling != null) StatsService.AddModifiers(e, def.baseScaling);
 
             return TaskStatus.Success;
         }

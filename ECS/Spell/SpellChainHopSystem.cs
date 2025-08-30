@@ -1,6 +1,4 @@
-﻿// Assets/PROJECT/Scripts/Runtime/AI/Combat/Spell/SpellChainHopSystem.cs
-
-using OneBitRob.ECS;
+﻿using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -11,9 +9,7 @@ using quaternion = Unity.Mathematics.quaternion;
 
 namespace OneBitRob.AI
 {
-    /// <summary>
     /// Processes chain spells hop-by-hop by spawning a short projectile to the next target and scheduling the next hop.
-    /// </summary>
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     [UpdateAfter(typeof(SpellWindupAndFireSystem))]
     public partial struct SpellChainHopSystem : ISystem
@@ -126,9 +122,7 @@ namespace OneBitRob.AI
         {
             byte wantFaction = (run.Positive != 0)
                 ? run.CasterFaction
-                : (run.CasterFaction == OneBitRob.Constants.GameConstants.ENEMY_FACTION
-                    ? OneBitRob.Constants.GameConstants.ALLY_FACTION
-                    : OneBitRob.Constants.GameConstants.ENEMY_FACTION);
+                : (run.CasterFaction == Constants.GameConstants.ENEMY_FACTION ? Constants.GameConstants.ALLY_FACTION : Constants.GameConstants.ENEMY_FACTION);
 
             var wanted = new FixedList128Bytes<byte>(); wanted.Add(wantFaction);
 
@@ -136,7 +130,7 @@ namespace OneBitRob.AI
             float3 center = _posRO[run.PreviousTarget].Position;
 
             using var list = new NativeList<Entity>(Allocator.Temp);
-            OneBitRob.ECS.SpatialHashSearch.CollectInSphere(center, run.Radius, wanted, list, ref _posRO, ref _factRO);
+            SpatialHashSearch.CollectInSphere(center, run.Radius, wanted, list, ref _posRO, ref _factRO);
 
             Entity best = Entity.Null;
             float bestDist = float.MaxValue;

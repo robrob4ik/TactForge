@@ -1,4 +1,6 @@
 ﻿// FILE: Assets/PROJECT/Scripts/Runtime/ECS/Brain/Brain_MonoToEcs_AliveMirrorSystem.cs
+
+using OneBitRob.AI;
 using Unity.Collections;
 using Unity.Entities;
 using OneBitRob.FX; // <-- add
@@ -21,7 +23,7 @@ namespace OneBitRob.ECS
             for (int i = 0; i < ents.Length; i++)
             {
                 var e = ents[i];
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(e);
+                var brain = UnitBrainRegistry.Get(e);
                 if (brain == null) continue;
 
                 // Alive flag

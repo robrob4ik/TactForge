@@ -1,5 +1,4 @@
-﻿// Assets/PROJECT/Scripts/Runtime/ECS/Combat/Weapon/WeaponComponents.cs
-using Unity.Entities;
+﻿using Unity.Entities;
 using Unity.Mathematics;
 
 namespace OneBitRob.ECS
@@ -24,8 +23,7 @@ namespace OneBitRob.ECS
         public float CritMultiplier;
         public byte  HasValue;
     }
-
-    /// <summary>Weapon projectile spawn request (ranged weapon).</summary>
+    
     public struct EcsProjectileSpawnRequest : IComponentData
     {
         public float3 Origin;
@@ -33,8 +31,13 @@ namespace OneBitRob.ECS
         public float  Speed;
         public float  Damage;
         public float  MaxDistance;
+
         public float  CritChance;
         public float  CritMultiplier;
+
+        public float  PierceChance;
+        public int    PierceMaxTargets;
+
         public int    HasValue;
     }
 

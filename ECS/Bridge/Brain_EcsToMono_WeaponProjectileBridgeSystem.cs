@@ -1,12 +1,11 @@
-﻿// ECS/HybridSync/EcsToMono/Brain_EcsToMono_WeaponProjectileBridgeSystem.cs
+﻿using OneBitRob.AI;
 using Unity.Entities;
 using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    /// Consumes EcsProjectileSpawnRequest and fires Mono projectile once.
     [UpdateInGroup(typeof(EcsToMonoBridgeGroup))]
-    [UpdateAfter(typeof(OneBitRob.AI.WeaponAttackSystem))] // requests set there
+    [UpdateAfter(typeof(WeaponAttackSystem))]
     public partial struct Brain_EcsToMono_WeaponProjectileBridgeSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
@@ -15,7 +14,7 @@ namespace OneBitRob.ECS
             {
                 if (spawn.ValueRO.HasValue == 0) continue;
 
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(e);
+                var brain = UnitBrainRegistry.Get(e);
                 if (brain && brain.CombatSubsystem != null)
                 {
                     var origin = (Vector3)spawn.ValueRO.Origin;
@@ -25,7 +24,9 @@ namespace OneBitRob.ECS
                     brain.CombatSubsystem.FireProjectile(
                         origin, dir, brain.gameObject,
                         spawn.ValueRO.Speed, spawn.ValueRO.Damage, spawn.ValueRO.MaxDistance,
-                        layer, spawn.ValueRO.CritChance, spawn.ValueRO.CritMultiplier);
+                        layer,
+                        spawn.ValueRO.CritChance, spawn.ValueRO.CritMultiplier,
+                        spawn.ValueRO.PierceChance, spawn.ValueRO.PierceMaxTargets);
 
 #if UNITY_EDITOR
                     Debug.DrawRay(origin, dir * 1.2f, Color.red, 0f, false);

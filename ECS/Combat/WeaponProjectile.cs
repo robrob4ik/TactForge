@@ -1,11 +1,12 @@
-﻿using MoreMountains.Tools;
+﻿// File: /WeaponProjectile.cs
+using System.Collections.Generic;
+using MoreMountains.Tools;
 using OneBitRob.AI;
 using OneBitRob.FX;
 using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    /// Minimal pooled weapon projectile (bows, etc.)
     [DisallowMultipleComponent]
     public class WeaponProjectile : MMPoolableObject
     {
@@ -20,6 +21,8 @@ namespace OneBitRob.ECS
             public int LayerMask;       // targets (damageable)
             public float CritChance;     // 0..1
             public float CritMultiplier; // >= 1
+            public float PierceChance;   // 0..1
+            public int   PierceMaxTargets; // >= 0
         }
 
         private GameObject _attacker;
@@ -35,9 +38,14 @@ namespace OneBitRob.ECS
         private float _critChance;
         private float _critMultiplier;
 
+        private float _pierceChance;
+        private int   _pierceMaxTargets;
+        private int   _piercedCount;
+
         private Vector3 _lastPos;
 
         private static readonly RaycastHit[] s_Hits = new RaycastHit[32];
+        private readonly List<int> _hitEntityKeys = new List<int>(8);
 
         public void Arm(ArmData data)
         {
@@ -54,7 +62,13 @@ namespace OneBitRob.ECS
             _mask        = data.LayerMask;
 
             _critChance     = Mathf.Clamp01(data.CritChance);
-            _critMultiplier = Mathf.Max(1f, data.CritMultiplier <= 0f ? 1f : data.CritMultiplier);
+            _critMultiplier = Mathf.Max(1f, data.CritMultiplier);
+
+            _pierceChance   = Mathf.Clamp01(data.PierceChance);
+            _pierceMaxTargets = Mathf.Max(0, data.PierceMaxTargets);
+            _piercedCount   = 0;
+
+            _hitEntityKeys.Clear();
 
             transform.position = data.Origin;
             transform.forward  = _dir;
@@ -65,6 +79,8 @@ namespace OneBitRob.ECS
         {
             base.OnEnable();
             _lastPos = transform.position;
+            _hitEntityKeys.Clear();
+            _piercedCount = 0;
         }
 
         protected override void Update()
@@ -93,10 +109,30 @@ namespace OneBitRob.ECS
                 if (best >= 0)
                 {
                     var h = s_Hits[best];
+
+                    int key = ExtractEntityKey(h.collider);
+                    if (key != 0) _hitEntityKeys.Add(key);
+
 #if UNITY_EDITOR
                     Debug.DrawLine(_lastPos, _lastPos + _dir * h.distance, new Color(1f, 0.95f, 0.2f, 1f), 0.08f, false);
 #endif
                     OnImpact(h);
+
+                    // Decide piercing
+                    bool canPierceMore = _piercedCount < _pierceMaxTargets;
+                    bool rollPierce = _pierceChance > 0f && Random.value < _pierceChance;
+
+                    if (canPierceMore && rollPierce)
+                    {
+                        _piercedCount++;
+                        // advance slightly to avoid re-hitting same contact
+                        Vector3 newPos = _lastPos + _dir * (h.distance + 0.02f);
+                        transform.position = newPos;
+                        _lastPos = newPos;
+                        _remaining -= (h.distance + 0.02f);
+                        return; // keep flying
+                    }
+
                     transform.position = _lastPos + _dir * h.distance;
                     Despawn();
                     return;
@@ -124,6 +160,11 @@ namespace OneBitRob.ECS
                 var brain = col.GetComponentInParent<UnitBrain>();
                 if (brain == null) continue;
 
+                // Already pierced this entity? skip
+                int key = ExtractEntityKey(col);
+                if (key != 0 && _hitEntityKeys.Contains(key))
+                    continue;
+
                 bool targetIsEnemy = brain.UnitDefinition && brain.UnitDefinition.isEnemy;
                 if (targetIsEnemy == _attackerIsEnemy)
                     continue;
@@ -136,6 +177,14 @@ namespace OneBitRob.ECS
             }
 
             return best;
+        }
+
+        private static int ExtractEntityKey(Collider col)
+        {
+            var brain = col ? col.GetComponentInParent<UnitBrain>() : null;
+            if (!brain) return 0;
+            var ent = UnitBrainRegistry.GetEntity(brain.gameObject);
+            return ent == Unity.Entities.Entity.Null ? brain.gameObject.GetInstanceID() : (ent.Index ^ (ent.Version << 8));
         }
 
         private void OnImpact(RaycastHit hit)
@@ -157,11 +206,9 @@ namespace OneBitRob.ECS
                     Amount   = dmg
                 });
 
-                // ───────────── Impact feedback (ranged) ─────────────
                 var rangedDef = _attackerBrain != null ? _attackerBrain.UnitDefinition?.weapon as OneBitRob.RangedWeaponDefinition : null;
                 if (rangedDef != null && rangedDef.impactFeedback != null)
                 {
-                    // Attach to the target so volume follows it if it moves post-impact
                     FeedbackService.TryPlay(rangedDef.impactFeedback, brain.transform, hit.point);
                 }
             }

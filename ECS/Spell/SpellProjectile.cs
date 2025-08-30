@@ -1,6 +1,8 @@
 ﻿// CHANGED: Renamed to SpellProjectile; kept legacy alias EcsSpellProjectile for safety.
 
 using MoreMountains.Tools;
+using OneBitRob.AI;
+using OneBitRob.FX;
 using UnityEngine;
 
 namespace OneBitRob.ECS
@@ -15,7 +17,7 @@ namespace OneBitRob.ECS
             public Vector3 Origin;
             public Vector3 Direction;
             public float Speed;
-            public float Damage;        // negative => heal
+            public float Damage;
             public float MaxDistance;
             public int LayerMask;
             public float Radius;
@@ -78,7 +80,7 @@ namespace OneBitRob.ECS
                     if (!col) continue;
                     if (_attacker && col.transform.root == _attacker.transform.root) continue;
 
-                    var brain = col.GetComponentInParent<OneBitRob.AI.UnitBrain>();
+                    var brain = col.GetComponentInParent<UnitBrain>();
                     if (brain == null || brain.Health == null) continue;
 
                     Apply(brain, h);
@@ -97,14 +99,14 @@ namespace OneBitRob.ECS
             _remaining -= stepLen;
         }
 
-        private void Apply(OneBitRob.AI.UnitBrain brain, RaycastHit h)
+        private void Apply(UnitBrain brain, RaycastHit h)
         {
             float invuln = 0f;
             brain.Health.Damage(_damage, _attacker, 0f, invuln, _dir);
 
-            OneBitRob.FX.DamageNumbersManager.Popup(new OneBitRob.FX.DamageNumbersParams
+            DamageNumbersManager.Popup(new DamageNumbersParams
             {
-                Kind     = _damage < 0 ? OneBitRob.FX.DamagePopupKind.Heal : OneBitRob.FX.DamagePopupKind.Damage,
+                Kind     = _damage < 0 ? DamagePopupKind.Heal : DamagePopupKind.Damage,
                 Follow   = brain.transform,
                 Position = h.point,
                 Amount   = Mathf.Abs(_damage)

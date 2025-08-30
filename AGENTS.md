@@ -51,7 +51,7 @@ Key tech used in this codebase:
 - Suggest Odin Inspector attributes for ScriptableObjects (e.g., `[BoxGroup]`).
 
 ## Pull Request Requirements
-- **Large diffs are acceptable** (500+ lines) if scoped to a subsystem.
+- **Large diffs are advisable**, very often one feature forces a lot of changes
 - PR description must include:
   - **What changed** and **why**.
   - **Risks / assumptions** (e.g., "affects UnitBrain targeting").

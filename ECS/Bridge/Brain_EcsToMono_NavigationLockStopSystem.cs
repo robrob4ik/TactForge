@@ -1,6 +1,7 @@
 ﻿// FILE: Assets/PROJECT/Scripts/Runtime/ECS/HybridSync/Brain_EcsToMono_NavigationLockStopSystem.cs
 // Summary: hard-stop agent while locked (Casting/Attacking), then park destination at self.
 
+using OneBitRob.AI;
 using Unity.Entities;
 using UnityEngine;
 
@@ -20,7 +21,7 @@ namespace OneBitRob.ECS
                 if ((flags & (MovementLockFlags.Casting | MovementLockFlags.Attacking)) == 0)
                     continue;
 
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(e);
+                var brain = UnitBrainRegistry.Get(e);
                 if (!brain) continue;
 
                 // Hard stop the underlying nav body and park destination.

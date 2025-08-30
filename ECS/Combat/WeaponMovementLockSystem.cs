@@ -1,4 +1,5 @@
-﻿using Unity.Collections;
+﻿using OneBitRob.ECS;
+using Unity.Collections;
 using Unity.Entities;
 
 namespace OneBitRob.AI
@@ -19,37 +20,37 @@ namespace OneBitRob.AI
             var ecb = new EntityCommandBuffer(Allocator.Temp);
 
             // Windup-based lock (ranged)
-            foreach (var (w, e) in SystemAPI.Query<RefRO<OneBitRob.ECS.AttackWindup>>().WithEntityAccess())
+            foreach (var (w, e) in SystemAPI.Query<RefRO<AttackWindup>>().WithEntityAccess())
             {
-                var ml = em.HasComponent<OneBitRob.ECS.MovementLock>(e)
-                    ? em.GetComponentData<OneBitRob.ECS.MovementLock>(e)
-                    : new OneBitRob.ECS.MovementLock { Flags = OneBitRob.ECS.MovementLockFlags.None };
+                var ml = em.HasComponent<MovementLock>(e)
+                    ? em.GetComponentData<MovementLock>(e)
+                    : new MovementLock { Flags = MovementLockFlags.None };
 
                 if (w.ValueRO.Active != 0)
-                    ml.Flags |= OneBitRob.ECS.MovementLockFlags.Attacking;
+                    ml.Flags |= MovementLockFlags.Attacking;
                 else
-                    ml.Flags &= ~OneBitRob.ECS.MovementLockFlags.Attacking;
+                    ml.Flags &= ~MovementLockFlags.Attacking;
 
-                if (em.HasComponent<OneBitRob.ECS.MovementLock>(e)) ecb.SetComponent(e, ml);
+                if (em.HasComponent<MovementLock>(e)) ecb.SetComponent(e, ml);
                 else                                               ecb.AddComponent(e, ml);
             }
 
             // Time-window lock (melee)
-            foreach (var (win, e) in SystemAPI.Query<RefRO<OneBitRob.ECS.ActionLockUntil>>().WithEntityAccess())
+            foreach (var (win, e) in SystemAPI.Query<RefRO<ActionLockUntil>>().WithEntityAccess())
             {
                 bool active = now < win.ValueRO.Until;
-                var ml = em.HasComponent<OneBitRob.ECS.MovementLock>(e)
-                    ? em.GetComponentData<OneBitRob.ECS.MovementLock>(e)
-                    : new OneBitRob.ECS.MovementLock { Flags = OneBitRob.ECS.MovementLockFlags.None };
+                var ml = em.HasComponent<MovementLock>(e)
+                    ? em.GetComponentData<MovementLock>(e)
+                    : new MovementLock { Flags = MovementLockFlags.None };
 
-                if (active) ml.Flags |= OneBitRob.ECS.MovementLockFlags.Attacking;
+                if (active) ml.Flags |= MovementLockFlags.Attacking;
                 else
                 {
-                    ml.Flags &= ~OneBitRob.ECS.MovementLockFlags.Attacking;
-                    ecb.RemoveComponent<OneBitRob.ECS.ActionLockUntil>(e);
+                    ml.Flags &= ~MovementLockFlags.Attacking;
+                    ecb.RemoveComponent<ActionLockUntil>(e);
                 }
 
-                if (em.HasComponent<OneBitRob.ECS.MovementLock>(e)) ecb.SetComponent(e, ml);
+                if (em.HasComponent<MovementLock>(e)) ecb.SetComponent(e, ml);
                 else                                               ecb.AddComponent(e, ml);
             }
 

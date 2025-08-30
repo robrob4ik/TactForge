@@ -65,12 +65,12 @@ namespace OneBitRob.AI
             float3 aim = float3.zero;
             bool hasAim = false;
 
-            if (cr.Kind == OneBitRob.ECS.CastKind.AreaOfEffect)
+            if (cr.Kind == CastKind.AreaOfEffect)
             {
                 aim = cr.AoEPosition;
                 hasAim = true;
             }
-            else if (cr.Kind == OneBitRob.ECS.CastKind.SingleTarget && cr.Target != Entity.Null)
+            else if (cr.Kind == CastKind.SingleTarget && cr.Target != Entity.Null)
             {
                 if (_posRO.HasComponent(cr.Target))
                 {
@@ -82,8 +82,8 @@ namespace OneBitRob.AI
             if (!hasAim) return TaskStatus.Failure;
 
             // Face the aim immediately so visual rotation starts right away.
-            var df = new OneBitRob.ECS.DesiredFacing { TargetPosition = aim, HasValue = 1 };
-            if (em.HasComponent<OneBitRob.ECS.DesiredFacing>(e))
+            var df = new DesiredFacing { TargetPosition = aim, HasValue = 1 };
+            if (em.HasComponent<DesiredFacing>(e))
                 em.SetComponentData(e, df);
             else
                 em.AddComponentData(e, df);
@@ -91,7 +91,7 @@ namespace OneBitRob.AI
 #if UNITY_EDITOR
             if (brain) Debug.DrawLine(brain.transform.position, (Vector3)aim, Color.yellow, 0f, false);
 #endif
-            // Do NOT consume CastRequest here — SpellExecutionSystem will pick it up this frame.
+            
             return TaskStatus.Success;
         }
     }

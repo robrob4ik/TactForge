@@ -1,12 +1,11 @@
-﻿// FILE: Assets/PROJECT/Scripts/Runtime/AI/Combat/Spell/SpellWindupAndFireSystem.cs
+﻿
 using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
-using Unity.Mathematics;
 using Unity.Transforms;
 using static Unity.Mathematics.math;
 using float3 = Unity.Mathematics.float3;
-using OneBitRob.FX; // NEW: feedbacks
+using OneBitRob.FX; 
 
 namespace OneBitRob.AI
 {
@@ -158,7 +157,7 @@ namespace OneBitRob.AI
             ecb.Dispose();
         }
 
-        private void FireSpell(ref SystemState state, ref EntityCommandBuffer ecb, Entity e, in SpellConfig cfg, in SpellWindup w)
+         private void FireSpell(ref SystemState state, ref EntityCommandBuffer ecb, Entity e, in SpellConfig cfg, in SpellWindup w)
         {
             var em = state.EntityManager;
             var brain = UnitBrainRegistry.Get(e);
@@ -175,6 +174,8 @@ namespace OneBitRob.AI
                 up    = normalizesafe(mul(rot, new float3(0,1,0)));
                 right = normalizesafe(mul(rot, new float3(1,0,0)));
             }
+
+            var stats = em.HasComponent<UnitRuntimeStats>(e) ? em.GetComponentData<UnitRuntimeStats>(e) : UnitRuntimeStats.Defaults;
 
             float3 aimPos = w.HasAimPoint != 0
                 ? w.AimPoint
@@ -198,6 +199,8 @@ namespace OneBitRob.AI
                             ? brain.GetFriendlyLayerMask().value
                             : brain.GetDamageableLayerMask().value;
 
+                    float radius = max(0f, cfg.ProjectileRadius * max(0.0001f, stats.ProjectileRadiusMult));
+
                     var req = new SpellProjectileSpawnRequest
                     {
                         Origin      = origin,
@@ -205,32 +208,14 @@ namespace OneBitRob.AI
                         Speed       = max(0.01f, cfg.ProjectileSpeed),
                         Damage      = cfg.EffectType == SpellEffectType.Negative ? max(0f, cfg.Amount) : -max(0f, cfg.Amount),
                         MaxDistance = max(0.1f, cfg.ProjectileMaxDistance),
-                        Radius      = max(0f, cfg.ProjectileRadius),
+                        Radius      = radius,
                         ProjectileIdHash = cfg.ProjectileIdHash,
                         LayerMask   = mask,
                         Pierce      = 1,
                         HasValue    = 1
                     };
                     if (em.HasComponent<SpellProjectileSpawnRequest>(e)) ecb.SetComponent(e, req);
-                    else                                                ecb.AddComponent(e, req);
-                    break;
-                }
-
-                case SpellKind.EffectOverTimeTarget:
-                {
-                    if (w.AimTarget == Entity.Null) break;
-                    var dot = new DotOnTarget
-                    {
-                        Target         = w.AimTarget,
-                        AmountPerTick  = max(0f, cfg.Amount),
-                        Interval       = max(0.05f, cfg.TickInterval),
-                        Remaining      = max(0f, cfg.Duration),
-                        NextTick       = 0f,
-                        Positive       = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
-                        EffectVfxIdHash= cfg.EffectVfxIdHash
-                    };
-                    if (em.HasComponent<DotOnTarget>(e)) ecb.SetComponent(e, dot);
-                    else                                  ecb.AddComponent(e, dot);
+                    else                                                                ecb.AddComponent(e, req);
                     break;
                 }
 
@@ -242,23 +227,24 @@ namespace OneBitRob.AI
                             ? brain.GetFriendlyLayerMask().value
                             : brain.GetDamageableLayerMask().value;
 
+                    float areaRadius = cfg.AreaRadius * max(0.0001f, stats.SpellAoeMult);
+
                     var area = new DoTArea
                     {
                         Position       = w.HasAimPoint != 0 ? w.AimPoint : (_posRO.HasComponent(e) ? _posRO[e].Position : float3.zero),
-                        Radius         = math.max(0f, cfg.AreaRadius),
-                        AmountPerTick  = math.max(0f, cfg.Amount),
-                        Interval       = math.max(0.05f, cfg.TickInterval),
-                        Remaining      = math.max(0f, cfg.Duration),
+                        Radius         = max(0f, areaRadius),
+                        AmountPerTick  = max(0f, cfg.Amount),
+                        Interval       = max(0.05f, cfg.TickInterval),
+                        Remaining      = max(0f, cfg.Duration),
                         NextTick       = 0f,
                         Positive       = (byte)(cfg.EffectType == SpellEffectType.Positive ? 1 : 0),
                         AreaVfxIdHash  = cfg.AreaVfxIdHash,
                         LayerMask      = mask,
-                        VfxYOffset     = math.max(0f, cfg.AreaVfxYOffset)
+                        VfxYOffset     = max(0f, cfg.AreaVfxYOffset)
                     };
                     if (em.HasComponent<DoTArea>(e)) ecb.SetComponent(e, area);
-                    else                              ecb.AddComponent(e, area);
+                    else                                           ecb.AddComponent(e, area);
 
-                    // NEW: impact feedback at AoE center (ground)
                     if (brain != null)
                     {
                         var spells = brain.UnitDefinition != null ? brain.UnitDefinition.unitSpells : null;
@@ -282,7 +268,7 @@ namespace OneBitRob.AI
                     var runner = new SpellChainRunner
                     {
                         Remaining        = max(1, cfg.ChainMaxTargets),
-                        Radius           = max(0f, cfg.ChainRadius),
+                        Radius           = max(0f, cfg.ChainRadius /* można też skalać AOE tu jeśli chcesz */),
                         JumpDelay        = max(0f, cfg.ChainJumpDelay),
                         ProjectileSpeed  = max(0.01f, cfg.ProjectileSpeed),
                         Amount           = max(0f, cfg.Amount),
@@ -291,7 +277,7 @@ namespace OneBitRob.AI
                         FromPos          = origin,
                         HasFromPos       = 1,
                         CurrentTarget    = w.AimTarget,
-                        PreviousTarget   = Entity.Null,
+                        PreviousTarget   = Unity.Entities.Entity.Null,
                         Caster           = e,
                         CasterFaction    = SystemAPI.HasComponent<SpatialHashComponents.SpatialHashTarget>(e)
                             ? SystemAPI.GetComponent<SpatialHashComponents.SpatialHashTarget>(e).Faction
@@ -304,7 +290,7 @@ namespace OneBitRob.AI
                     };
 
                     if (em.HasComponent<SpellChainRunner>(e)) ecb.SetComponent(e, runner);
-                    else                                      ecb.AddComponent(e, runner);
+                    else                                                   ecb.AddComponent(e, runner);
                     break;
                 }
 
@@ -330,7 +316,6 @@ namespace OneBitRob.AI
                 }
             }
 
-            // NEW: generic fire feedback at caster (any spell kind)
             if (brain != null)
             {
                 var spells = brain.UnitDefinition != null ? brain.UnitDefinition.unitSpells : null;

@@ -13,7 +13,6 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using static Unity.Mathematics.math;
 using float3 = Unity.Mathematics.float3;
 
 namespace OneBitRob.AI
@@ -87,6 +86,11 @@ namespace OneBitRob.AI
                 cast.Target     = Entity.Null;
                 cast.AoEPosition= float3.zero;
 
+                var stats = em.HasComponent<UnitRuntimeStats>(e) ? em.GetComponentData<UnitRuntimeStats>(e) : UnitRuntimeStats.Defaults;
+
+                var cfgScaled = cfg;
+                cfgScaled.Range = cfg.Range * math.max(0.0001f, stats.SpellRangeMult);
+                
                 switch (cfg.Kind)
                 {
                     // Single-target

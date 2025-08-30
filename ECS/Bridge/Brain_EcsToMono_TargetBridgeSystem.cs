@@ -1,9 +1,8 @@
-﻿// ECS/HybridSync/EcsToMono/Brain_EcsToMono_TargetBridgeSystem.cs
+﻿using OneBitRob.AI;
 using Unity.Entities;
 
 namespace OneBitRob.ECS
 {
-    /// Mirrors Target(Value: Entity) -> UnitBrain.CurrentTarget (GameObject).
     [UpdateInGroup(typeof(EcsToMonoBridgeGroup))]
     public partial struct Brain_EcsToMono_TargetBridgeSystem : ISystem
     {
@@ -11,10 +10,10 @@ namespace OneBitRob.ECS
         {
             foreach (var (target, e) in SystemAPI.Query<RefRO<Target>>().WithEntityAccess())
             {
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(e);
+                var brain = UnitBrainRegistry.Get(e);
                 if (!brain) continue;
 
-                var targetBrain = OneBitRob.AI.UnitBrainRegistry.Get(target.ValueRO.Value);
+                var targetBrain = UnitBrainRegistry.Get(target.ValueRO.Value);
                 brain.CurrentTarget = targetBrain ? targetBrain.gameObject : null;
             }
         }

@@ -1,18 +1,20 @@
 ﻿// ECS/HybridSync/EcsToMono/Brain_EcsToMono_SummonBridgeSystem.cs
 
 using GPUInstancerPro.PrefabModule;
+using OneBitRob.AI;
 using OneBitRob.ECS.GPUI;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace OneBitRob.ECS
 {
     /// Consumes SummonRequest and creates ECS brain + Mono prefab (GPUI) consistently.
     [UpdateInGroup(typeof(EcsToMonoBridgeGroup))]
-    [UpdateAfter(typeof(OneBitRob.AI.SpellWindupAndFireSystem))]
+    [UpdateAfter(typeof(SpellWindupAndFireSystem))]
     public partial struct Brain_EcsToMono_SummonBridgeSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
@@ -24,7 +26,7 @@ namespace OneBitRob.ECS
             {
                 if (req.ValueRO.HasValue == 0) continue;
 
-                var prefab = OneBitRob.ECS.SpellVisualRegistry.GetSummonPrefab(req.ValueRO.PrefabIdHash);
+                var prefab = SpellVisualRegistry.GetSummonPrefab(req.ValueRO.PrefabIdHash);
                 if (prefab != null &&
                     SystemAPI.ManagedAPI.TryGetSingleton<SpawnerData>(out var data) &&
                     SystemAPI.ManagedAPI.TryGetSingleton<GPUIManagerRef>(out var gpuiRef))
@@ -45,7 +47,7 @@ namespace OneBitRob.ECS
                         var gpui = go.GetComponent<GPUIPrefab>();
                         if (gpui) GPUIPrefabAPI.AddPrefabInstanceImmediate(gpuiMgr, gpui);
 
-                        var monoBrain = go.GetComponent<OneBitRob.AI.UnitBrain>();
+                        var monoBrain = go.GetComponent<UnitBrain>();
                         monoBrain?.SetEntity(brainEnt);
 
                         // ECS tags & baseline components

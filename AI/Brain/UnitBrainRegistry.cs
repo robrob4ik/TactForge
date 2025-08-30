@@ -1,11 +1,9 @@
-﻿// Runtime/AI/Brain/UnitBrainRegistry.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Unity.Entities;
 using UnityEngine;
 
 namespace OneBitRob.AI
 {
-    /// Fast bi‑directional lookup between ECS Entity and Mono UnitBrain/GameObject.
     public static class UnitBrainRegistry
     {
         public readonly struct EntityKey

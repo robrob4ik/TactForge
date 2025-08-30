@@ -1,6 +1,7 @@
 ﻿// Runtime/AI/Combat/CombatSubsystem.cs
 using System.Collections.Generic;
 using MoreMountains.Tools;
+using OneBitRob.ECS;
 using OneBitRob.EnigmaEngine;
 using Unity.Entities;
 using UnityEngine;
@@ -43,7 +44,7 @@ namespace OneBitRob.AI
             _character != null &&
             _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
 
-        public void PlayMeleeAttack(OneBitRob.AttackAnimationSettings settings)
+        public void PlayMeleeAttack(AttackAnimationSettings settings)
         {
             if (_anim == null || settings == null || !settings.HasEntries) return;
             var param = settings.SelectParameter(ref _nextMeleeIdx);
@@ -64,7 +65,7 @@ namespace OneBitRob.AI
             if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
         }
 
-        public void PlaySpell(OneBitRob.AttackAnimationSettings settings)
+        public void PlaySpell(AttackAnimationSettings settings)
         {
             if (_anim == null || settings == null || !settings.HasEntries) return;
             var param = settings.SelectParameter(ref _nextSpellIdx);
@@ -111,7 +112,7 @@ namespace OneBitRob.AI
                 return null;
             }
 
-            _projectilePooler = OneBitRob.ECS.ProjectilePoolManager.Resolve(_projectileId);
+            _projectilePooler = ProjectilePoolManager.Resolve(_projectileId);
 #if UNITY_EDITOR
             if (_projectilePooler == null)
                 Debug.LogWarning($"[{name}] No projectile pooler found for id '{_projectileId}'. Add your ProjectilePools prefab to this scene or register the id.");
@@ -124,7 +125,8 @@ namespace OneBitRob.AI
             Vector3 origin, Vector3 direction, GameObject attacker,
             float speed, float damage, float maxDistance,
             int layerMask,
-            float critChance = 0f, float critMultiplier = 1f)
+            float critChance = 0f, float critMultiplier = 1f,
+            float pierceChance = 0f, int pierceMaxTargets = 0)
         {
             var pooler = ResolveProjectilePooler();
             if (pooler == null) return;
@@ -133,19 +135,13 @@ namespace OneBitRob.AI
             if (go == null) return;
 
             var poolable = go.GetComponent<MMPoolableObject>();
-            var proj = go.GetComponent<OneBitRob.ECS.WeaponProjectile>();
-#if UNITY_EDITOR
-            if (proj == null)
-            {
-                Debug.LogError($"[{name}] Pooled projectile must have WeaponProjectile + MMPoolableObject.");
-                return;
-            }
-#endif
+            var proj = go.GetComponent<WeaponProjectile>();
+
             go.transform.position = origin;
             go.transform.forward = (direction.sqrMagnitude < 1e-6f ? Vector3.forward : direction.normalized);
 
             proj.Arm(
-                new OneBitRob.ECS.WeaponProjectile.ArmData
+                new WeaponProjectile.ArmData
                 {
                     Attacker = attacker,
                     Origin = origin,
@@ -155,7 +151,9 @@ namespace OneBitRob.AI
                     MaxDistance = (maxDistance > 0f ? maxDistance : 40f),
                     LayerMask = (layerMask != 0 ? layerMask : (_brain != null ? _brain.GetDamageableLayerMask().value : ~0)),
                     CritChance = Mathf.Clamp01(critChance),
-                    CritMultiplier = Mathf.Max(1f, critMultiplier)
+                    CritMultiplier = Mathf.Max(1f, critMultiplier),
+                    PierceChance = Mathf.Clamp01(pierceChance),
+                    PierceMaxTargets = Mathf.Max(0, pierceMaxTargets)
                 }
             );
 
@@ -168,7 +166,7 @@ namespace OneBitRob.AI
             float speed, float damage, float maxDistance, int layerMask, float radius, bool pierce)
         {
             if (string.IsNullOrEmpty(projectileId)) return;
-            var pooler = OneBitRob.ECS.ProjectilePoolManager.Resolve(projectileId);
+            var pooler = ProjectilePoolManager.Resolve(projectileId);
             if (pooler == null)
             {
 #if UNITY_EDITOR
@@ -181,7 +179,7 @@ namespace OneBitRob.AI
             if (go == null) return;
 
             var poolable = go.GetComponent<MMPoolableObject>();
-            var proj = go.GetComponent<OneBitRob.ECS.SpellProjectile>();
+            var proj = go.GetComponent<SpellProjectile>();
 #if UNITY_EDITOR
             if (proj == null)
             {

@@ -1,4 +1,6 @@
 ﻿// ECS/HybridSync/EcsToMono/Brain_EcsToMono_FacingBridgeSystem.cs
+
+using OneBitRob.AI;
 using Unity.Entities;
 using UnityEngine;
 
@@ -14,7 +16,7 @@ namespace OneBitRob.ECS
             {
                 if (df.ValueRO.HasValue == 0) continue;
 
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(e);
+                var brain = UnitBrainRegistry.Get(e);
                 if (brain)
                 {
                     var facePos = (Vector3)df.ValueRO.TargetPosition;

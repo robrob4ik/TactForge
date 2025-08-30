@@ -124,9 +124,9 @@ namespace OneBitRob.AI
             const float progressEpsilon = 0.05f;
             const float stuckTime = 1.5f;
 
-            if (EntityManager.HasComponent<OneBitRob.ECS.RetargetAssist>(e))
+            if (EntityManager.HasComponent<RetargetAssist>(e))
             {
-                var ra = EntityManager.GetComponentData<OneBitRob.ECS.RetargetAssist>(e);
+                var ra = EntityManager.GetComponentData<RetargetAssist>(e);
 
                 if (ra.LastDistSq <= currDistSq + progressEpsilon)
                     ra.NoProgressTime += dt;
@@ -205,9 +205,9 @@ namespace OneBitRob.AI
             float yieldInterval = math.max(0f, brain.UnitDefinition.moveRecheckYieldInterval);
             if (yieldInterval > 0f)
             {
-                var had = EntityManager.HasComponent<OneBitRob.ECS.BehaviorYieldCooldown>(e);
-                var y = had ? EntityManager.GetComponentData<OneBitRob.ECS.BehaviorYieldCooldown>(e)
-                            : new OneBitRob.ECS.BehaviorYieldCooldown { NextTime = 0 };
+                var had = EntityManager.HasComponent<BehaviorYieldCooldown>(e);
+                var y = had ? EntityManager.GetComponentData<BehaviorYieldCooldown>(e)
+                            : new BehaviorYieldCooldown { NextTime = 0 };
 
                 if (now >= y.NextTime)
                 {

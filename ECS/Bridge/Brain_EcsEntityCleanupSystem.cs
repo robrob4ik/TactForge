@@ -1,6 +1,8 @@
 ﻿// ECS/HybridSync/Cleanup/Brain_EcsEntityCleanupSystem.cs
 using System.Collections.Generic;
 using GPUInstancerPro.PrefabModule;
+using OneBitRob.AI;
+using OneBitRob.FX;
 using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
@@ -22,11 +24,11 @@ namespace OneBitRob.ECS
                 if (EntityManager.HasComponent<ActiveTargetVfx>(entity))
                 {
                     var bind = EntityManager.GetComponentData<ActiveTargetVfx>(entity);
-                    OneBitRob.FX.SpellVfxPoolManager.EndPersistent(bind.Key);
+                    SpellVfxPoolManager.EndPersistent(bind.Key);
                     ecb.RemoveComponent<ActiveTargetVfx>(entity);
                 }
 
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(entity);
+                var brain = UnitBrainRegistry.Get(entity);
                 if (brain && brain.gameObject)
                 {
                     toDestroy.Add(brain.gameObject);

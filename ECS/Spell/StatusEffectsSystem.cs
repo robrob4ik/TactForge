@@ -8,6 +8,8 @@
 //
 // AoE path: unchanged except it already uses persistent area VFX.
 
+using OneBitRob.AI;
+using OneBitRob.FX;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -28,13 +30,13 @@ namespace OneBitRob.ECS
             var ecb = new EntityCommandBuffer(Allocator.Temp);
             float now = (float)SystemAPI.Time.ElapsedTime;
 
-            // ───────── Target DoT/HoT (now persistent visual per Target+EffectId)
+            // Target DoT/HoT (now persistent visual per Target+EffectId)
             foreach (var (dotRW, caster) in SystemAPI.Query<RefRW<DotOnTarget>>().WithEntityAccess())
             {
                 var dot = dotRW.ValueRO;
 
                 // Resolve target UnitBrain for visuals/damage numbers
-                var tb = OneBitRob.AI.UnitBrainRegistry.Get(dot.Target);
+                var tb = UnitBrainRegistry.Get(dot.Target);
 
                 // 1) Maintain a SINGLE persistent VFX for this Target+EffectId across ALL casters
                 //    Key = (target index/version) XOR vfx id hash (salted)
@@ -49,7 +51,7 @@ namespace OneBitRob.ECS
                     if (!hasBind)
                     {
                         // First time for this caster: Begin (refCount++)
-                        OneBitRob.FX.SpellVfxPoolManager.BeginPersistentByHash(dot.EffectVfxIdHash, key, tb.transform.position, tb.transform);
+                        SpellVfxPoolManager.BeginPersistentByHash(dot.EffectVfxIdHash, key, tb.transform.position, tb.transform);
                         ecb.AddComponent(caster, new ActiveTargetVfx { Key = key, IdHash = dot.EffectVfxIdHash, Target = dot.Target });
                     }
                     else
@@ -59,10 +61,10 @@ namespace OneBitRob.ECS
                         // If the target or vfx id changed, release the previous and re-bind
                         if (bind.Target != dot.Target || bind.IdHash != dot.EffectVfxIdHash)
                         {
-                            OneBitRob.FX.SpellVfxPoolManager.EndPersistent(bind.Key);
+                            SpellVfxPoolManager.EndPersistent(bind.Key);
 
                             long newKey = tKey ^ (((long)dot.EffectVfxIdHash) << 1) ^ salt;
-                            OneBitRob.FX.SpellVfxPoolManager.BeginPersistentByHash(dot.EffectVfxIdHash, newKey, tb.transform.position, tb.transform);
+                            SpellVfxPoolManager.BeginPersistentByHash(dot.EffectVfxIdHash, newKey, tb.transform.position, tb.transform);
                             bind.Key = newKey;
                             bind.IdHash = dot.EffectVfxIdHash;
                             bind.Target = dot.Target;
@@ -71,7 +73,7 @@ namespace OneBitRob.ECS
                         else
                         {
                             // Normal path: keep it attached & alive (handles rare auto-despawn)
-                            OneBitRob.FX.SpellVfxPoolManager.MovePersistent(bind.Key, bind.IdHash, tb.transform.position, tb.transform);
+                            SpellVfxPoolManager.MovePersistent(bind.Key, bind.IdHash, tb.transform.position, tb.transform);
                         }
                     }
                 }
@@ -81,7 +83,7 @@ namespace OneBitRob.ECS
                     if (em.HasComponent<ActiveTargetVfx>(caster))
                     {
                         var bind = em.GetComponentData<ActiveTargetVfx>(caster);
-                        OneBitRob.FX.SpellVfxPoolManager.EndPersistent(bind.Key);
+                        SpellVfxPoolManager.EndPersistent(bind.Key);
                         ecb.RemoveComponent<ActiveTargetVfx>(caster);
                     }
                 }
@@ -100,10 +102,10 @@ namespace OneBitRob.ECS
                         float amt = isHot ? -shownAmount : shownAmount;
                         tb.Health.Damage(amt, tb.gameObject, 0f, 0f, Vector3.zero);
 
-                        OneBitRob.FX.DamageNumbersManager.Popup(
-                            new OneBitRob.FX.DamageNumbersParams
+                        DamageNumbersManager.Popup(
+                            new DamageNumbersParams
                             {
-                                Kind = isHot ? OneBitRob.FX.DamagePopupKind.Hot : OneBitRob.FX.DamagePopupKind.Dot,
+                                Kind = isHot ? DamagePopupKind.Hot : DamagePopupKind.Dot,
                                 Follow = tb.transform,
                                 Position = tb.transform.position,
                                 Amount = shownAmount
@@ -120,7 +122,7 @@ namespace OneBitRob.ECS
                     if (em.HasComponent<ActiveTargetVfx>(caster))
                     {
                         var bind = em.GetComponentData<ActiveTargetVfx>(caster);
-                        OneBitRob.FX.SpellVfxPoolManager.EndPersistent(bind.Key);
+                        SpellVfxPoolManager.EndPersistent(bind.Key);
                         ecb.RemoveComponent<ActiveTargetVfx>(caster);
                     }
 
@@ -129,7 +131,7 @@ namespace OneBitRob.ECS
                 else { dotRW.ValueRW = dot; }
             }
 
-            // ───────── Area DoT/HoT (persistent) — unchanged except MovePersistent now passes idHash
+            // ─── Area DoT/HoT (persistent) — unchanged except MovePersistent now passes idHash
             foreach (var (area, e) in SystemAPI.Query<RefRW<DoTArea>>().WithEntityAccess())
             {
                 var a = area.ValueRO;
@@ -145,15 +147,15 @@ namespace OneBitRob.ECS
 
                     if (!em.HasComponent<ActiveAreaVfx>(e))
                     {
-                        OneBitRob.FX.SpellVfxPoolManager.BeginPersistentByHash(a.AreaVfxIdHash, key, (UnityEngine.Vector3)vfxPos, null);
+                        SpellVfxPoolManager.BeginPersistentByHash(a.AreaVfxIdHash, key, (UnityEngine.Vector3)vfxPos, null);
                         ecb.AddComponent(e, new ActiveAreaVfx { Key = key, IdHash = a.AreaVfxIdHash });
                     }
-                    else { OneBitRob.FX.SpellVfxPoolManager.MovePersistent(key, a.AreaVfxIdHash, (UnityEngine.Vector3)vfxPos, null); }
+                    else { SpellVfxPoolManager.MovePersistent(key, a.AreaVfxIdHash, (UnityEngine.Vector3)vfxPos, null); }
                 }
                 else if (em.HasComponent<ActiveAreaVfx>(e))
                 {
                     var av = em.GetComponentData<ActiveAreaVfx>(e);
-                    OneBitRob.FX.SpellVfxPoolManager.EndPersistent(av.Key);
+                    SpellVfxPoolManager.EndPersistent(av.Key);
                     ecb.RemoveComponent<ActiveAreaVfx>(e);
                 }
 
@@ -164,7 +166,7 @@ namespace OneBitRob.ECS
                     if (em.HasComponent<ActiveAreaVfx>(e))
                     {
                         var av = em.GetComponentData<ActiveAreaVfx>(e);
-                        OneBitRob.FX.SpellVfxPoolManager.EndPersistent(av.Key);
+                        SpellVfxPoolManager.EndPersistent(av.Key);
                         ecb.RemoveComponent<ActiveAreaVfx>(e);
                     }
 
@@ -186,16 +188,16 @@ namespace OneBitRob.ECS
                     {
                         var col = s_Cols[i];
                         if (!col) continue;
-                        var tb = col.GetComponentInParent<OneBitRob.AI.UnitBrain>();
+                        var tb = col.GetComponentInParent<UnitBrain>();
                         if (tb == null || tb.Health == null) continue;
 
                         float amt = isHot ? -shownAmount : shownAmount;
                         tb.Health.Damage(amt, tb.gameObject, 0f, 0f, UnityEngine.Vector3.zero);
 
-                        OneBitRob.FX.DamageNumbersManager.Popup(
-                            new OneBitRob.FX.DamageNumbersParams
+                        DamageNumbersManager.Popup(
+                            new DamageNumbersParams
                             {
-                                Kind = isHot ? OneBitRob.FX.DamagePopupKind.Hot : OneBitRob.FX.DamagePopupKind.Dot,
+                                Kind = isHot ? DamagePopupKind.Hot : DamagePopupKind.Dot,
                                 Follow = tb.transform,
                                 Position = tb.transform.position,
                                 Amount = shownAmount
@@ -212,7 +214,7 @@ namespace OneBitRob.ECS
             // Orphan area FX cleanup (unchanged)
             foreach (var (av, e) in SystemAPI.Query<RefRO<ActiveAreaVfx>>().WithNone<DoTArea>().WithEntityAccess())
             {
-                OneBitRob.FX.SpellVfxPoolManager.EndPersistent(av.ValueRO.Key);
+                SpellVfxPoolManager.EndPersistent(av.ValueRO.Key);
                 ecb.RemoveComponent<ActiveAreaVfx>(e);
             }
 

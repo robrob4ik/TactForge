@@ -1,4 +1,6 @@
 ﻿// ECS/HybridSync/MonoToEcs/Brain_MonoToEcs_HealthMirrorSystem.cs
+
+using OneBitRob.AI;
 using Unity.Collections;
 using Unity.Entities;
 
@@ -21,7 +23,7 @@ namespace OneBitRob.ECS
             for (int i = 0; i < ents.Length; i++)
             {
                 var e = ents[i];
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(e);
+                var brain = UnitBrainRegistry.Get(e);
                 if (brain?.Health == null) continue;
 
                 if (!em.HasComponent<HealthMirror>(e))
