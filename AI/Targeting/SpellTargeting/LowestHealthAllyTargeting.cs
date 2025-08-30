@@ -1,5 +1,4 @@
-﻿// FILE: OneBitRob/AI/SpellTargeting/LowestHealthAllyTargeting.cs
-using OneBitRob.Constants;
+﻿using OneBitRob.Constants;
 using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;

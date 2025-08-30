@@ -1,5 +1,4 @@
-﻿// FILE: OneBitRob/AI/SpellTargeting/ClosestEnemySpellTargeting.cs
-using OneBitRob.Constants;
+﻿using OneBitRob.Constants;
 using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
@@ -18,9 +17,7 @@ namespace OneBitRob.AI
             ref ComponentLookup<HealthMirror> _)
         {
             byte selfFaction = factLookup.HasComponent(self) ? factLookup[self].Faction : GameConstants.ALLY_FACTION;
-            byte enemyFaction = (selfFaction == GameConstants.ENEMY_FACTION)
-                ? GameConstants.ALLY_FACTION
-                : GameConstants.ENEMY_FACTION;
+            byte enemyFaction = (selfFaction == GameConstants.ENEMY_FACTION) ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION;
 
             var wanted = new FixedList128Bytes<byte>();
             wanted.Add(enemyFaction);

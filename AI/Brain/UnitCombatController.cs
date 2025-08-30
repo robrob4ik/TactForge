@@ -161,9 +161,7 @@ namespace OneBitRob.AI
             var pooler = ProjectileService.GetPooler(projectileId);
             if (pooler == null)
             {
-#if UNITY_EDITOR
                 Debug.LogWarning($"[{name}] Spell projectile pool '{projectileId}' not found in this scene.");
-#endif
                 return;
             }
 
@@ -172,13 +170,12 @@ namespace OneBitRob.AI
 
             var poolable = go.GetComponent<MMPoolableObject>();
             var proj = go.GetComponent<SpellProjectile>();
-#if UNITY_EDITOR
+
             if (proj == null)
             {
                 Debug.LogError($"[{name}] Spell projectile must have SpellProjectile + MMPoolableObject.");
                 return;
             }
-#endif
             go.transform.position = origin;
             go.transform.forward = (direction.sqrMagnitude < 1e-6f ? Vector3.forward : direction.normalized);
 

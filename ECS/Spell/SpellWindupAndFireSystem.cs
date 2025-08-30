@@ -16,7 +16,7 @@ namespace OneBitRob.AI
         private ComponentLookup<LocalTransform> _transformLookup; // RO
         private ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factionLookup; // RO
 
-        public void OnCreate(ref SystemState state)
+       public void OnCreate(ref SystemState state)
         {
             _castQuery          = state.GetEntityQuery(ComponentType.ReadWrite<CastRequest>(), ComponentType.ReadOnly<SpellConfig>());
             _pendingWindupQuery = state.GetEntityQuery(ComponentType.ReadWrite<SpellWindup>(), ComponentType.ReadOnly<SpellConfig>());
@@ -34,8 +34,17 @@ namespace OneBitRob.AI
             var ecb = new EntityCommandBuffer(Unity.Collections.Allocator.Temp);
             float now = (float)SystemAPI.Time.ElapsedTime;
 
-            // Release pending casts when windup timer finishes
-            var windupEntities = _pendingWindupQuery.ToEntityArray(Unity.Collections.Allocator.Temp);
+            ReleaseFinishedWindups(em, ref ecb, now, ref state);
+            StartNewWindups      (em, ref ecb, now);
+
+            ecb.Playback(em);
+            ecb.Dispose();
+        }
+
+        // ── Phase 1: windups that reach their release time → fire
+        private void ReleaseFinishedWindups(EntityManager em, ref EntityCommandBuffer ecb, float now, ref SystemState state)
+        {
+            using var windupEntities = _pendingWindupQuery.ToEntityArray(Unity.Collections.Allocator.Temp);
             for (int i = 0; i < windupEntities.Length; i++)
             {
                 var entity = windupEntities[i];
@@ -43,7 +52,7 @@ namespace OneBitRob.AI
                 if (windup.Active == 0 || now < windup.ReleaseTime) continue;
 
                 var config = em.GetComponentData<SpellConfig>(entity);
-                FireSpell(ref state, ref ecb, entity, in config, in windup); // Fire & feedbacks
+                FireSpell(ref state, ref ecb, entity, in config, in windup);
 
                 if (em.HasComponent<SpellCooldown>(entity))
                 {
@@ -55,99 +64,73 @@ namespace OneBitRob.AI
                 windup.Active = 0;
                 ecb.SetComponent(entity, windup);
             }
-            windupEntities.Dispose();
+        }
 
-            // Start new windups / set facing / play cast anims / consume CastRequest
-            var castEntities = _castQuery.ToEntityArray(Unity.Collections.Allocator.Temp);
+        // ── Phase 2: consume new CastRequests → rotate/prepare → start windup
+        private void StartNewWindups(EntityManager em, ref EntityCommandBuffer ecb, float now)
+        {
+            using var castEntities = _castQuery.ToEntityArray(Unity.Collections.Allocator.Temp);
             for (int i = 0; i < castEntities.Length; i++)
             {
-                var entity = castEntities[i];
+                var entity  = castEntities[i];
                 var request = em.GetComponentData<CastRequest>(entity);
                 if (request.HasValue == 0) continue;
 
-                var brain = UnitBrainRegistry.Get(entity);
+                var brain  = UnitBrainRegistry.Get(entity);
                 var config = em.GetComponentData<SpellConfig>(entity);
 
                 var windup = em.HasComponent<SpellWindup>(entity) ? em.GetComponentData<SpellWindup>(entity) : default;
-                windup.Active        = 1;
-                windup.ReleaseTime   = now + max(0f, config.CastTime);
+                windup.Active         = 1;
+                windup.ReleaseTime    = now + max(0f, config.CastTime);
                 windup.FacingDeadline = windup.ReleaseTime;
 
-                float3 aimPosition = float3.zero;
-                switch (request.Kind)
+                float3 aimPosition = default;
+                ResolveAimPoint(entity, request, brain, ref aimPosition);
+
+                // Face aim immediately
+                if (em.HasComponent<DesiredFacing>(entity))
                 {
-                    case CastKind.SingleTarget:
-                        windup.HasAimPoint = 0;
-                        windup.AimTarget   = request.Target;
-                        if (_transformLookup.HasComponent(request.Target)) aimPosition = _transformLookup[request.Target].Position;
+                    var df = em.GetComponentData<DesiredFacing>(entity);
+                    df.TargetPosition = aimPosition;
+                    df.HasValue = 1;
+                    ecb.SetComponent(entity, df);
+                }
+                else ecb.AddComponent(entity, new DesiredFacing { TargetPosition = aimPosition, HasValue = 1 });
 
-                        if (brain != null)
-                        {
-                            brain.CurrentSpellTarget = UnitBrainRegistry.GetGameObject(request.Target);
-                            brain.CurrentSpellTargets = null;
-                            brain.CurrentSpellTargetPosition = null;
-                        }
-                        break;
-
-                    case CastKind.AreaOfEffect:
-                        windup.HasAimPoint = 1;
-                        windup.AimPoint    = request.AoEPosition;
-                        aimPosition        = request.AoEPosition;
-
-                        if (brain != null)
-                        {
-                            brain.CurrentSpellTarget = null;
-                            brain.CurrentSpellTargets = null;
-                            brain.CurrentSpellTargetPosition = request.AoEPosition;
-                        }
-                        break;
-
-                    default:
-                        windup.Active = 0;
-                        break;
+                // Kick prepare anim/feedback on caster if any
+                if (brain != null && brain.UnitDefinition != null)
+                {
+                    var spells = brain.UnitDefinition.unitSpells;
+                    if (spells != null && spells.Count > 0 && spells[0] != null)
+                    {
+                        var def = spells[0];
+                        brain.UnitCombatController?.PlaySpell(def.animations);
+                        float3 casterPos = _transformLookup.HasComponent(entity) ? _transformLookup[entity].Position : default;
+                        FeedbackService.TryPlay(def.prepareFeedback, brain.transform, (Vector3)casterPos);
+                    }
                 }
 
-                if (windup.Active != 0)
-                {
-                    // Face aim position immediately
-                    if (em.HasComponent<DesiredFacing>(entity))
-                    {
-                        var desiredFacing = em.GetComponentData<DesiredFacing>(entity);
-                        desiredFacing.TargetPosition = aimPosition;
-                        desiredFacing.HasValue = 1;
-                        ecb.SetComponent(entity, desiredFacing);
-                    }
-                    else
-                    {
-                        ecb.AddComponent(entity, new DesiredFacing { TargetPosition = aimPosition, HasValue = 1 });
-                    }
+                // write windup + consume request
+                if (em.HasComponent<SpellWindup>(entity)) ecb.SetComponent(entity, windup);
+                else                                      ecb.AddComponent(entity, windup);
 
-                    // Trigger spell animation if any and prepare feedback at caster
-                    if (brain != null && brain.UnitDefinition != null)
-                    {
-                        var spells = brain.UnitDefinition.unitSpells;
-                        if (spells != null && spells.Count > 0 && spells[0] != null)
-                        {
-                            var def = spells[0];
-                            brain.UnitCombatController?.PlaySpell(def.animations);
-
-                            float3 casterPos = _transformLookup.HasComponent(entity) ? _transformLookup[entity].Position : float3.zero;
-                            FeedbackService.TryPlay(def.prepareFeedback, brain.transform, (Vector3)casterPos);
-                        }
-                    }
-
-                    if (em.HasComponent<SpellWindup>(entity)) ecb.SetComponent(entity, windup);
-                    else                                      ecb.AddComponent(entity, windup);
-                }
-
-                // consume request
                 request.HasValue = 0;
                 ecb.SetComponent(entity, request);
             }
-            castEntities.Dispose();
+        }
 
-            ecb.Playback(em);
-            ecb.Dispose();
+        private void ResolveAimPoint(Entity entity, in CastRequest request, UnitBrain brain, ref float3 aimPosition)
+        {
+            if (request.Kind == CastKind.AreaOfEffect)
+            {
+                aimPosition = request.AoEPosition;
+                if (brain != null) { brain.CurrentSpellTarget = null; brain.CurrentSpellTargets = null; brain.CurrentSpellTargetPosition = request.AoEPosition; }
+            }
+            else if (request.Kind == CastKind.SingleTarget && request.Target != Entity.Null)
+            {
+                aimPosition = _transformLookup.HasComponent(request.Target) ? _transformLookup[request.Target].Position : aimPosition;
+                if (brain != null) { brain.CurrentSpellTarget = UnitBrainRegistry.GetGameObject(request.Target); brain.CurrentSpellTargets = null; brain.CurrentSpellTargetPosition = null; }
+            }
         }
 
         private void FireSpell(ref SystemState state, ref EntityCommandBuffer ecb, Entity caster, in SpellConfig config, in SpellWindup windup)

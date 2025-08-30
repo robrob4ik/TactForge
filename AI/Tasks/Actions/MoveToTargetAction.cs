@@ -1,4 +1,5 @@
-﻿using OneBitRob.Constants;
+﻿// File: Runtime/AI/Systems/MoveToTargetSystem.cs
+using OneBitRob.Constants;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
@@ -25,8 +26,6 @@ namespace OneBitRob.AI
     {
         ComponentLookup<LocalTransform> _posRO;
         ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
-
-        // New lookups reused for gating
         ComponentLookup<InAttackRange> _inRangeRO;
         ComponentLookup<MovementLock>  _lockRO;
         ComponentLookup<AttackWindup>  _windRO;
@@ -60,73 +59,119 @@ namespace OneBitRob.AI
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
         {
             float dt = (float)SystemAPI.Time.DeltaTime;
+            double now = SystemAPI.Time.ElapsedTime;
 
-            // Lock → park and run
+            if (IsBlocked(e)) { ParkAtSelf(e); return TaskStatus.Running; }
+            if (IsInRange(e)) { ParkAtSelf(e); return TaskStatus.Success; }
+
+            if (!TryGetValidTarget(e, out var target))
+            {
+                ParkAtSelf(e);
+                return TaskStatus.Failure;
+            }
+
+            float3 selfPos = _posRO[e].Position;
+            float3 targetPos = _posRO[target].Position;
+
+            // „stuck assist” – bez zmian
+            UpdateRetargetAssist(e, brain, dt, selfPos, target, ref targetPos);
+
+            // okazjonalny retarget – bez zmian
+            MaybeRetarget(e, brain, now, selfPos, ref target, ref targetPos);
+
+            SetDesiredDestination(e, targetPos);
+
+            if (Arrived(selfPos, targetPos, brain.UnitDefinition.stoppingDistance))
+            { ParkAtSelf(e); return TaskStatus.Success; }
+
+            if (ShouldYield(e, brain, now)) return TaskStatus.Failure;
+
+            return TaskStatus.Running;
+        }
+
+        private bool IsBlocked(Entity e)
+        {
             bool weaponWindup = _windRO.HasComponent(e) && _windRO[e].Active != 0;
             bool anyLock = _lockRO.HasComponent(e) &&
                            (_lockRO[e].Flags & (MovementLockFlags.Casting | MovementLockFlags.Attacking)) != 0;
+            return weaponWindup || anyLock;
+        }
 
-            if (weaponWindup || anyLock)
-            {
-                ParkAtSelf(e);
-                return TaskStatus.Running;
-            }
+        private bool IsInRange(Entity e)
+            => _inRangeRO.HasComponent(e) && _inRangeRO[e].Value != 0;
 
-            // In range → park and succeed
-            if (_inRangeRO.HasComponent(e) && _inRangeRO[e].Value != 0)
-            {
-                ParkAtSelf(e);
-                return TaskStatus.Success;
-            }
-
-            // Normal chase….
-            if (!EntityManager.HasComponent<Target>(e))
-            {
-                ParkAtSelf(e);
-                return TaskStatus.Failure;
-            }
-
-            var target = EntityManager.GetComponentData<Target>(e).Value;
+        private bool TryGetValidTarget(Entity e, out Entity target)
+        {
+            target = EntityManager.HasComponent<Target>(e) ? EntityManager.GetComponentData<Target>(e).Value : Entity.Null;
             if (target == Entity.Null || !_posRO.HasComponent(target))
             {
-                EntityManager.SetComponentData(e, new Target { Value = Entity.Null });
-                ParkAtSelf(e);
-                return TaskStatus.Failure;
+                if (EntityManager.HasComponent<Target>(e))
+                    EntityManager.SetComponentData(e, new Target { Value = Entity.Null });
+                return false;
             }
-            
-            // Opportunistic retargeting (kept) …
-            double now = SystemAPI.Time.ElapsedTime;
-            float switchInterval = math.max(0f, brain.UnitDefinition.retargetCheckInterval);
+            return true;
+        }
 
+        private void MaybeRetarget(Entity e, UnitBrain brain, double now, float3 selfPos, ref Entity target, ref float3 targetPos)
+        {
+            float switchInterval = math.max(0f, brain.UnitDefinition.retargetCheckInterval);
             bool canCheck = true;
             if (switchInterval > 0f)
             {
-                RetargetCooldown cd;
-                bool hadCd = EntityManager.HasComponent<RetargetCooldown>(e);
-                cd = hadCd ? EntityManager.GetComponentData<RetargetCooldown>(e)
-                           : new RetargetCooldown { NextTime = 0 };
-
+                var had = EntityManager.HasComponent<RetargetCooldown>(e);
+                var cd  = had ? EntityManager.GetComponentData<RetargetCooldown>(e) : new RetargetCooldown { NextTime = 0 };
                 canCheck = now >= cd.NextTime;
                 if (canCheck)
                 {
                     cd.NextTime = now + switchInterval;
-                    if (hadCd) EntityManager.SetComponentData(e, cd);
-                    else       _ecb.AddComponent(e, cd);
+                    if (had) EntityManager.SetComponentData(e, cd);
+                    else     _ecb.AddComponent(e, cd);
                 }
             }
 
-            float3 selfPos = _posRO[e].Position;
-            float3 currPos = _posRO[target].Position;
-            float stop = brain.UnitDefinition.stoppingDistance;
-            float currDistSq = math.distancesq(selfPos, currPos);
+            if (!canCheck) return;
 
-            // No-progress assist (kept) …
-            const float progressEpsilon = 0.05f;
-            const float stuckTime = 1.5f;
+            var wanted = default(FixedList128Bytes<byte>);
+            wanted.Add(brain.UnitDefinition.isEnemy ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION);
+
+            float range = brain.UnitDefinition.targetDetectionRange > 0 ? brain.UnitDefinition.targetDetectionRange : 100f;
+            float stop  = brain.UnitDefinition.stoppingDistance;
+            float currDistSq = math.distancesq(selfPos, targetPos);
+
+            if (currDistSq > (stop * stop * 4f))
+            {
+                var candidate = SpatialHashSearch.GetClosest(selfPos, range, wanted, ref _posRO, ref _factRO);
+                if (candidate != Entity.Null && candidate != target)
+                {
+                    float minSwitch = math.max(0f, brain.UnitDefinition.autoTargetMinSwitchDistance);
+                    bool shouldSwitch = true;
+                    if (minSwitch > 0f)
+                    {
+                        float distCand = math.distance(_posRO[candidate].Position, selfPos);
+                        float distCurr = math.sqrt(currDistSq);
+                        shouldSwitch = (distCurr - distCand) >= minSwitch;
+                    }
+
+                    if (shouldSwitch)
+                    {
+                        target = candidate;
+                        targetPos = _posRO[candidate].Position;
+                        EntityManager.SetComponentData(e, new Target { Value = candidate });
+                    }
+                }
+            }
+        }
+
+        private void UpdateRetargetAssist(Entity e, UnitBrain brain, float dt, float3 selfPos, Entity target, ref float3 targetPos)
+        {
+            float currDistSq = math.distancesq(selfPos, targetPos);
 
             if (EntityManager.HasComponent<RetargetAssist>(e))
             {
                 var ra = EntityManager.GetComponentData<RetargetAssist>(e);
+
+                const float progressEpsilon = 0.05f;
+                const float stuckTime = 1.5f;
 
                 if (ra.LastDistSq <= currDistSq + progressEpsilon)
                     ra.NoProgressTime += dt;
@@ -142,9 +187,7 @@ namespace OneBitRob.AI
                     var wanted = default(FixedList128Bytes<byte>);
                     wanted.Add(brain.UnitDefinition.isEnemy ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION);
 
-                    float range = brain.UnitDefinition.targetDetectionRange > 0
-                        ? brain.UnitDefinition.targetDetectionRange
-                        : 100f;
+                    float range = brain.UnitDefinition.targetDetectionRange > 0 ? brain.UnitDefinition.targetDetectionRange : 100f;
 
                     var candidate = SpatialHashSearch.GetClosest(selfPos, range, wanted, ref _posRO, ref _factRO);
                     if (candidate != Entity.Null && candidate != target)
@@ -154,72 +197,31 @@ namespace OneBitRob.AI
                         ra.NoProgressTime = 0f;
                         ra.LastDistSq = float.MaxValue;
                         EntityManager.SetComponentData(e, ra);
+                        targetPos = _posRO[candidate].Position;
                     }
                 }
             }
+        }
 
-            if (canCheck)
-            {
-                var wanted = default(FixedList128Bytes<byte>);
-                wanted.Add(brain.UnitDefinition.isEnemy ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION);
+        private static bool Arrived(float3 selfPos, float3 targetPos, float stopDist)
+            => math.distancesq(selfPos, targetPos) <= stopDist * stopDist;
 
-                float range = brain.UnitDefinition.targetDetectionRange > 0 ? brain.UnitDefinition.targetDetectionRange : 100f;
-
-                if (currDistSq > (stop * stop * 4f))
-                {
-                    var candidate = SpatialHashSearch.GetClosest(selfPos, range, wanted, ref _posRO, ref _factRO);
-                    if (candidate != Entity.Null && candidate != target)
-                    {
-                        float minSwitch = math.max(0f, brain.UnitDefinition.autoTargetMinSwitchDistance);
-                        bool shouldSwitch = true;
-
-                        if (minSwitch > 0f)
-                        {
-                            float distCand = math.distance(_posRO[candidate].Position, selfPos);
-                            float distCurr = math.sqrt(currDistSq);
-                            shouldSwitch = (distCurr - distCand) >= minSwitch;
-                        }
-
-                        if (shouldSwitch)
-                        {
-                            target = candidate;
-                            EntityManager.SetComponentData(e, new Target { Value = candidate });
-                        }
-                    }
-                }
-            }
-
-            // Push desired destination toward target (agent’s StoppingDistance will handle spacing)
-            var targetPos = _posRO[target].Position;
-            SetDesiredDestination(e, targetPos);
-
-            // Arrival check (stoppingDistance)
-            float stopDist = brain.UnitDefinition.stoppingDistance;
-            if (math.distancesq(selfPos, targetPos) <= stopDist * stopDist)
-            {
-                ParkAtSelf(e);
-                return TaskStatus.Success;
-            }
-            
-            // Periodic yield (kept)
+        private bool ShouldYield(Entity e, UnitBrain brain, double now)
+        {
             float yieldInterval = math.max(0f, brain.UnitDefinition.moveRecheckYieldInterval);
-            if (yieldInterval > 0f)
+            if (yieldInterval <= 0f) return false;
+
+            var had = EntityManager.HasComponent<BehaviorYieldCooldown>(e);
+            var y   = had ? EntityManager.GetComponentData<BehaviorYieldCooldown>(e) : new BehaviorYieldCooldown { NextTime = 0 };
+
+            if (now >= y.NextTime)
             {
-                var had = EntityManager.HasComponent<BehaviorYieldCooldown>(e);
-                var y = had ? EntityManager.GetComponentData<BehaviorYieldCooldown>(e)
-                            : new BehaviorYieldCooldown { NextTime = 0 };
-
-                if (now >= y.NextTime)
-                {
-                    y.NextTime = now + yieldInterval;
-                    if (had) EntityManager.SetComponentData(e, y);
-                    else     _ecb.AddComponent(e, y);
-
-                    return TaskStatus.Failure;
-                }
+                y.NextTime = now + yieldInterval;
+                if (had) EntityManager.SetComponentData(e, y);
+                else     _ecb.AddComponent(e, y);
+                return true;
             }
-
-            return TaskStatus.Running;
+            return false;
         }
 
         private void ParkAtSelf(Entity e)

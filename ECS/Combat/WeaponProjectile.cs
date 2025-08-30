@@ -1,5 +1,4 @@
-﻿// File: /WeaponProjectile.cs
-
+﻿// File: Runtime/ECS/WeaponProjectile.cs
 using System.Collections.Generic;
 using MoreMountains.Tools;
 using OneBitRob.AI;
@@ -87,71 +86,86 @@ namespace OneBitRob.ECS
         protected override void Update()
         {
             base.Update();
+            StepOrDespawn();
+        }
 
-            if (_remaining <= 0f)
-            {
-                Despawn();
-                return;
-            }
+        private void StepOrDespawn()
+        {
+            if (_remaining <= 0f) { Despawn(); return; }
 
             float stepLen = Mathf.Min(_speed * Time.deltaTime, _remaining);
 
-            int maskToUse = (_mask == 0) ? ~0 : _mask;
-            int count = Physics.RaycastNonAlloc(
-                _lastPos, _dir, s_Hits, stepLen, maskToUse, QueryTriggerInteraction.Collide
-            );
+            int count = TryRaycastStep(stepLen, out RaycastHit bestHit);
+            if (count > 0 && bestHit.collider != null)
+            {
+#if UNITY_EDITOR
+                Debug.DrawLine(_lastPos, _lastPos + _dir * bestHit.distance, new Color(1f, 0.95f, 0.2f, 0.95f), 0.40f, false);
+#endif
+                if (!ResolveImpactAndMaybePierce(bestHit))
+                {
+                    // nie przebijamy – zatrzymaj na miejscu trafienia
+                    Advance(bestHit.distance);
+                    Despawn();
+                }
+                return;
+            }
 
+            // brak trafień – po prostu leć
+            Advance(stepLen);
+        }
+
+        private int TryRaycastStep(float stepLen, out RaycastHit bestHit)
+        {
+            bestHit = default;
+            int maskToUse = (_mask == 0) ? ~0 : _mask;
+
+            int count = Physics.RaycastNonAlloc(_lastPos, _dir, s_Hits, stepLen, maskToUse, QueryTriggerInteraction.Collide);
             if (count == 0 && maskToUse != ~0)
             {
-                count = Physics.RaycastNonAlloc(
-                    _lastPos, _dir, s_Hits, stepLen, ~0, QueryTriggerInteraction.Collide
-                );
+                count = Physics.RaycastNonAlloc(_lastPos, _dir, s_Hits, stepLen, ~0, QueryTriggerInteraction.Collide);
             }
+            if (count <= 0) return 0;
 
-            if (count > 0)
+            int best = ClosestValidEnemyHit(count);
+            if (best >= 0)
             {
-                int best = ClosestValidEnemyHit(count);
-                if (best >= 0)
-                {
-                    var h = s_Hits[best];
-
-                    int key = ExtractEntityKey(h.collider);
-                    if (key != 0) _hitEntityKeys.Add(key);
-
-#if UNITY_EDITOR
-                    Debug.DrawLine(_lastPos, _lastPos + _dir * h.distance, new Color(1f, 0.95f, 0.2f, 0.95f), 0.40f, false);
-#endif
-                    OnImpact(h);
-
-                    // Decide piercing
-                    bool canPierceMore = _piercedCount < _pierceMaxTargets;
-                    bool rollPierce = _pierceChance > 0f && Random.value < _pierceChance;
-
-                    if (canPierceMore && rollPierce)
-                    {
-                        _piercedCount++;
-                        // advance slightly to avoid re-hitting same contact
-                        Vector3 newPos = _lastPos + _dir * (h.distance + 0.02f);
-                        transform.position = newPos;
-                        _lastPos = newPos;
-                        _remaining -= (h.distance + 0.02f);
-                        return; // keep flying
-                    }
-
-                    transform.position = _lastPos + _dir * h.distance;
-                    Despawn();
-                    return;
-                }
+                bestHit = s_Hits[best];
+                // zapamiętaj, że ten byt już trafiony (anti-double)
+                int key = ExtractEntityKey(bestHit.collider);
+                if (key != 0) _hitEntityKeys.Add(key);
+                return count;
             }
 
-            transform.position = _lastPos + _dir * stepLen;
-            _lastPos = transform.position;
-            _remaining -= stepLen;
+            return 0;
+        }
+
+        private bool ResolveImpactAndMaybePierce(RaycastHit hit)
+        {
+            OnImpact(hit);
+
+            bool canPierceMore = _piercedCount < _pierceMaxTargets;
+            bool rollPierce = _pierceChance > 0f && Random.value < _pierceChance;
+            if (canPierceMore && rollPierce)
+            {
+                _piercedCount++;
+                // przesuwamy troszkę dalej, aby nie uderzyć w ten sam collider
+                float advance = hit.distance + 0.02f;
+                Advance(advance);
+                return true; // kontynuuj lot
+            }
+            return false; // nie przebijamy
+        }
+
+        private void Advance(float distance)
+        {
+            Vector3 newPos = _lastPos + _dir * distance;
+            transform.position = newPos;
+            _lastPos = newPos;
+            _remaining -= distance;
         }
 
         private int ClosestValidEnemyHit(int count)
         {
-            /* unchanged logic */
             float bestDist = float.MaxValue;
             int best = -1;
 
@@ -218,10 +232,8 @@ namespace OneBitRob.ECS
         private void Despawn()
         {
             var poolable = GetComponent<MMPoolableObject>();
-            if (poolable != null)
-                poolable.Destroy();
-            else
-                gameObject.SetActive(false);
+            if (poolable != null) poolable.Destroy();
+            else gameObject.SetActive(false);
         }
     }
 }

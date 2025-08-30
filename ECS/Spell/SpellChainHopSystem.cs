@@ -1,4 +1,5 @@
-﻿using OneBitRob.ECS;
+﻿// File: Runtime/AI/Systems/SpellChainHopSystem.cs
+using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -9,7 +10,6 @@ using quaternion = Unity.Mathematics.quaternion;
 
 namespace OneBitRob.AI
 {
-    /// Processes chain spells hop-by-hop by spawning a short projectile to the next target and scheduling the next hop.
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     [UpdateAfter(typeof(SpellWindupAndFireSystem))]
     public partial struct SpellChainHopSystem : ISystem
@@ -38,84 +38,99 @@ namespace OneBitRob.AI
             var em  = state.EntityManager;
             var now = (float)SystemAPI.Time.ElapsedTime;
 
-            var ents = _q.ToEntityArray(Allocator.Temp);
+            using var ents = _q.ToEntityArray(Allocator.Temp);
             var ecb  = new EntityCommandBuffer(Allocator.Temp);
 
             for (int i = 0; i < ents.Length; i++)
             {
-                var caster = ents[i];
-                var run = em.GetComponentData<SpellChainRunner>(caster);
-
-                if (run.Remaining <= 0 || run.CurrentTarget == Entity.Null)
-                { ecb.RemoveComponent<SpellChainRunner>(caster); continue; }
-
-                if (now < run.NextTime) continue;
-
-                var cfg = _cfgRO.HasComponent(caster) ? _cfgRO[caster] : default;
-                float height = max(0.5f, cfg.MuzzleLocalOffset.y);
-
-                float3 selfPos = float3.zero;
-                quaternion rot = quaternion.identity;
-                if (_posRO.TryGetComponent(caster, out var ltCaster))
-                {
-                    selfPos = ltCaster.Position;
-                    rot     = ltCaster.Rotation;
-                }
-
-                float3 from;
-                if (run.HasFromPos != 0) from = run.FromPos;
-                else
-                {
-                    float3 fwd   = normalizesafe(mul(rot, new float3(0, 0, 1)));
-                    float3 up    = normalizesafe(mul(rot, new float3(0, 1, 0)));
-                    float3 right = normalizesafe(mul(rot, new float3(1, 0, 0)));
-                    from = selfPos
-                           + fwd   * max(0f, cfg.MuzzleForward)
-                           + right * cfg.MuzzleLocalOffset.x
-                           + up    * cfg.MuzzleLocalOffset.y
-                           + fwd   * cfg.MuzzleLocalOffset.z;
-                }
-
-                if (!_posRO.HasComponent(run.CurrentTarget))
-                { ecb.RemoveComponent<SpellChainRunner>(caster); continue; }
-
-                float3 groundTo = _posRO[run.CurrentTarget].Position;
-                float3 to       = groundTo + new float3(0, height, 0);
-                float3 dir      = normalizesafe(to - from, new float3(0, 0, 1));
-                float  dist     = distance(to, from);
-
-                var req = new SpellProjectileSpawnRequest
-                {
-                    Origin      = from,
-                    Direction   = dir,
-                    Speed       = max(0.01f, run.ProjectileSpeed),
-                    Damage      = run.Positive != 0 ? -run.Amount : run.Amount,
-                    MaxDistance = max(0.1f, dist + 0.25f),
-                    Radius      = 0f,
-                    ProjectileIdHash = run.ProjectileIdHash,
-                    LayerMask   = run.LayerMask,
-                    Pierce      = 0,
-                    HasValue    = 1
-                };
-                if (em.HasComponent<SpellProjectileSpawnRequest>(caster)) ecb.SetComponent(caster, req);
-                else                                                      ecb.AddComponent(caster, req);
-
-                run.Remaining--;
-                run.PreviousTarget = run.CurrentTarget;
-                run.FromPos        = to;
-                run.HasFromPos     = 1;
-                run.CurrentTarget  = FindNextByCasterIntent(in run);
-                run.NextTime       = now + (dist / max(0.01f, run.ProjectileSpeed)) + run.JumpDelay;
-
-                if (run.Remaining <= 0 || run.CurrentTarget == Entity.Null)
-                    ecb.RemoveComponent<SpellChainRunner>(caster);
-                else
-                    ecb.SetComponent(caster, run);
+                ProcessRunner(ents[i], em, now, ref ecb);
             }
 
             ecb.Playback(em);
             ecb.Dispose();
-            ents.Dispose();
+        }
+
+        private void ProcessRunner(Entity caster, EntityManager em, float now, ref EntityCommandBuffer ecb)
+        {
+            var run = em.GetComponentData<SpellChainRunner>(caster);
+            if (run.Remaining <= 0 || run.CurrentTarget == Entity.Null)
+            { ecb.RemoveComponent<SpellChainRunner>(caster); return; }
+
+            if (now < run.NextTime) return;
+
+            var cfg = _cfgRO.HasComponent(caster) ? _cfgRO[caster] : default;
+            float height = max(0.5f, cfg.MuzzleLocalOffset.y);
+
+            GetCasterPose(caster, out float3 selfPos, out quaternion rot);
+
+            float3 from = ComputeFromPosition(in run, in cfg, selfPos, rot);
+
+            if (!_posRO.HasComponent(run.CurrentTarget))
+            { ecb.RemoveComponent<SpellChainRunner>(caster); return; }
+
+            float3 groundTo = _posRO[run.CurrentTarget].Position;
+            float3 to       = groundTo + new float3(0, height, 0);
+            float3 dir      = normalizesafe(to - from, new float3(0, 0, 1));
+            float  dist     = distance(to, from);
+
+            var req = BuildProjectileRequest(in run, from, dir, dist);
+            if (em.HasComponent<SpellProjectileSpawnRequest>(caster)) ecb.SetComponent(caster, req);
+            else                                                      ecb.AddComponent(caster, req);
+
+            AdvanceRunner(ref run, to, now, dist, em);
+            if (run.Remaining <= 0 || run.CurrentTarget == Entity.Null)
+                ecb.RemoveComponent<SpellChainRunner>(caster);
+            else
+                ecb.SetComponent(caster, run);
+        }
+
+        private void GetCasterPose(Entity caster, out float3 pos, out quaternion rot)
+        {
+            pos = float3.zero; rot = quaternion.identity;
+            if (_posRO.TryGetComponent(caster, out var ltCaster))
+            { pos = ltCaster.Position; rot = ltCaster.Rotation; }
+        }
+
+        private static float3 ComputeFromPosition(in SpellChainRunner run, in SpellConfig cfg, float3 selfPos, quaternion rot)
+        {
+            if (run.HasFromPos != 0) return run.FromPos;
+
+            float3 fwd   = normalizesafe(mul(rot, new float3(0, 0, 1)));
+            float3 up    = normalizesafe(mul(rot, new float3(0, 1, 0)));
+            float3 right = normalizesafe(mul(rot, new float3(1, 0, 0)));
+
+            return selfPos
+                   + fwd   * max(0f, cfg.MuzzleForward)
+                   + right * cfg.MuzzleLocalOffset.x
+                   + up    * cfg.MuzzleLocalOffset.y
+                   + fwd   * cfg.MuzzleLocalOffset.z;
+        }
+
+        private static SpellProjectileSpawnRequest BuildProjectileRequest(in SpellChainRunner run, float3 from, float3 dir, float dist)
+        {
+            return new SpellProjectileSpawnRequest
+            {
+                Origin      = from,
+                Direction   = dir,
+                Speed       = max(0.01f, run.ProjectileSpeed),
+                Damage      = run.Positive != 0 ? -run.Amount : run.Amount,
+                MaxDistance = max(0.1f, dist + 0.25f),
+                Radius      = 0f,
+                ProjectileIdHash = run.ProjectileIdHash,
+                LayerMask   = run.LayerMask,
+                Pierce      = 0,
+                HasValue    = 1
+            };
+        }
+
+        private void AdvanceRunner(ref SpellChainRunner run, float3 to, float now, float dist, EntityManager em)
+        {
+            run.Remaining--;
+            run.PreviousTarget = run.CurrentTarget;
+            run.FromPos        = to;
+            run.HasFromPos     = 1;
+            run.CurrentTarget  = FindNextByCasterIntent(in run);
+            run.NextTime       = now + (dist / max(0.01f, run.ProjectileSpeed)) + run.JumpDelay;
         }
 
         private Entity FindNextByCasterIntent(in SpellChainRunner run)
