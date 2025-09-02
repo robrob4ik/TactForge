@@ -6,8 +6,7 @@ using OneBitRob.ECS;
 namespace OneBitRob.AI
 {
     [NodeDescription("Unit’s combat style is Melee (pure ECS)")]
-    public class IsMeleeConditional
-        : AbstractTaskAction<IsMeleeComponent, IsMeleeTag, IsMeleeSystem>, IConditional
+    public class IsMeleeConditional : AbstractTaskAction<IsMeleeComponent, IsMeleeTag, IsMeleeSystem>, IConditional
     {
         protected override IsMeleeComponent CreateBufferElement(ushort runtimeIndex) => new() { Index = runtimeIndex };
     }
@@ -17,8 +16,7 @@ namespace OneBitRob.AI
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    public partial class IsMeleeSystem
-        : TaskProcessorSystem<IsMeleeComponent, IsMeleeTag>
+    public partial class IsMeleeSystem : TaskProcessorSystem<IsMeleeComponent, IsMeleeTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain _)
         {

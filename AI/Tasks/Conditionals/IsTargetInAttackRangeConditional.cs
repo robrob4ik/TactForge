@@ -6,8 +6,7 @@ using OneBitRob.ECS;
 namespace OneBitRob.AI
 {
     [NodeDescription("Success when target is within attack range (pure ECS flag)")]
-    public class IsTargetInAttackRangeConditional
-        : AbstractTaskAction<IsTargetInAttackRangeComponent, IsTargetInAttackRangeTag, IsTargetInAttackRangeSystem>, IConditional
+    public class IsTargetInAttackRangeConditional : AbstractTaskAction<IsTargetInAttackRangeComponent, IsTargetInAttackRangeTag, IsTargetInAttackRangeSystem>, IConditional
     {
         protected override IsTargetInAttackRangeComponent CreateBufferElement(ushort runtimeIndex) => new() { Index = runtimeIndex };
     }
@@ -17,8 +16,7 @@ namespace OneBitRob.AI
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    public partial class IsTargetInAttackRangeSystem
-        : TaskProcessorSystem<IsTargetInAttackRangeComponent, IsTargetInAttackRangeTag>
+    public partial class IsTargetInAttackRangeSystem : TaskProcessorSystem<IsTargetInAttackRangeComponent, IsTargetInAttackRangeTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain _)
         {

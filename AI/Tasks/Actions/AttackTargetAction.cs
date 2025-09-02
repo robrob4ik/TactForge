@@ -20,13 +20,14 @@ namespace OneBitRob.AI
             var em = EntityManager;
 
             // 1) Guards
-            if (TaskGuards.IsBlockedByCastOrAttack(em, e))          return TaskStatus.Failure;
-            if (!TryGetValidTarget(em, e, out var target))          return TaskStatus.Failure;
+            if (TaskGuards.IsBlockedByCastOrAttack(em, e))          
+                return TaskStatus.Failure;
+            if (!TryGetValidTarget(em, e, out var target))          
+                return TaskStatus.Failure;
 
             // 2) Enqueue the attack request for this frame
             UpsertAttackRequest(em, e, target);
 
-            // 3) Done
             return TaskStatus.Success;
         }
 

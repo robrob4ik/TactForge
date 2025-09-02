@@ -4,12 +4,11 @@ using OneBitRob.FX;
 
 namespace OneBitRob
 {
-    [CreateAssetMenu(menuName = "TactForge/Definition/Weapon (Ranged)", fileName = "RangedWeaponDefinition")]
+    [CreateAssetMenu(menuName = "TactForge/Definition/Ranged Weapon Definition", fileName = "RangedWeaponDefinition")]
     public class RangedWeaponDefinition : WeaponDefinition
     {
         [BoxGroup("Muzzle")]
         [LabelText("Muzzle Forward (Local Z)"), SuffixLabel("units", true)]
-        [InfoBox("Forward offset in local Z. Keep 0 if you use muzzleLocalOffset.z instead.", InfoMessageType.None)]
         [MinValue(0f)]
         public float muzzleForward = 0.60f;
 
@@ -36,7 +35,6 @@ namespace OneBitRob
         public TwoStageAttackAnimationSettings animations;
 
         [BoxGroup("Projectile Pool Key")]
-        [InfoBox("Key used to choose a scene pool in ProjectilePools (e.g. 'arrow', 'mage_orb').")]
         public string projectileId = "arrow";
 
         [BoxGroup("Feedbacks")]

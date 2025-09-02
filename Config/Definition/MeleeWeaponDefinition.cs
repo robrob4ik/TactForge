@@ -4,7 +4,7 @@ using OneBitRob.FX;
 
 namespace OneBitRob
 {
-    [CreateAssetMenu(menuName = "TactForge/Definition/Weapon (Melee)", fileName = "MeleeWeaponDefinition")]
+    [CreateAssetMenu(menuName = "TactForge/Definition/Melee Weapon Definition", fileName = "MeleeWeaponDefinition")]
     public class MeleeWeaponDefinition : WeaponDefinition
     {
         [BoxGroup("Arc & Targets")]

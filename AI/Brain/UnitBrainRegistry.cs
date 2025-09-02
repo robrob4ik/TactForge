@@ -47,7 +47,7 @@ namespace OneBitRob.AI
 
         public static bool TryGetEntity(GameObject go, out Entity ent)
         {
-            ent = Entity.Null; // ✅ ensure assigned on all paths
+            ent = Entity.Null;
             if (!go) return false;
             return _goToEntity.TryGetValue(go.GetInstanceID(), out ent);
         }

@@ -1,6 +1,4 @@
-﻿// FILE: OneBitRob/AI/HasCastDecisionConditional.cs
-
-using OneBitRob.ECS;
+﻿using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
@@ -8,11 +6,9 @@ using Unity.Entities;
 namespace OneBitRob.AI
 {
     [NodeDescription("Success only if SpellDecisionSystem produced a CastRequest this frame")]
-    public class HasCastDecisionConditional
-        : AbstractTaskAction<HasCastDecisionComponent, HasCastDecisionTag, HasCastDecisionSystem>, IConditional
+    public class HasCastDecisionConditional : AbstractTaskAction<HasCastDecisionComponent, HasCastDecisionTag, HasCastDecisionSystem>, IConditional
     {
-        protected override HasCastDecisionComponent CreateBufferElement(ushort runtimeIndex)
-            => new HasCastDecisionComponent { Index = runtimeIndex };
+        protected override HasCastDecisionComponent CreateBufferElement(ushort runtimeIndex) => new HasCastDecisionComponent { Index = runtimeIndex };
     }
 
     public struct HasCastDecisionComponent : IBufferElementData, ITaskCommand
@@ -24,10 +20,9 @@ namespace OneBitRob.AI
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellPlanSystem))]   // decision exists…
-    [UpdateBefore(typeof(SpellWindupAndFireSystem))] // …before execution consumes it
-    public partial class HasCastDecisionSystem
-        : TaskProcessorSystem<HasCastDecisionComponent, HasCastDecisionTag>
+    [UpdateAfter(typeof(SpellPlanSystem))]
+    [UpdateBefore(typeof(SpellWindupAndFireSystem))]
+    public partial class HasCastDecisionSystem : TaskProcessorSystem<HasCastDecisionComponent, HasCastDecisionTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain _)
         {

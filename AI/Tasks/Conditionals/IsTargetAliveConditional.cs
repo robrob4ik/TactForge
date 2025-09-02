@@ -6,8 +6,7 @@ using OneBitRob.ECS;
 namespace OneBitRob.AI
 {
     [NodeDescription("Returns Success while the current target is alive (pure ECS)")]
-    public class IsTargetAliveConditional
-        : AbstractTaskAction<IsTargetAliveComponent, IsTargetAliveTag, IsTargetAliveSystem>, IConditional
+    public class IsTargetAliveConditional : AbstractTaskAction<IsTargetAliveComponent, IsTargetAliveTag, IsTargetAliveSystem>, IConditional
     {
         protected override IsTargetAliveComponent CreateBufferElement(ushort runtimeIndex) => new() { Index = runtimeIndex };
     }
@@ -17,8 +16,7 @@ namespace OneBitRob.AI
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    public partial class IsTargetAliveSystem
-        : TaskProcessorSystem<IsTargetAliveComponent, IsTargetAliveTag>
+    public partial class IsTargetAliveSystem : TaskProcessorSystem<IsTargetAliveComponent, IsTargetAliveTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain _)
         {

@@ -69,7 +69,6 @@ namespace OneBitRob.AI
             if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
         }
 
-#if UNITY_EDITOR
         private bool AnimatorHasTrigger(string param)
         {
             if (_anim == null) return false;
@@ -82,9 +81,6 @@ namespace OneBitRob.AI
                 Debug.LogWarning($"[{name}] Animator missing Trigger parameter '{param}'. Check your AttackAnimationSet.");
             return false;
         }
-#else
-        private bool AnimatorHasTrigger(string _) => true;
-#endif
         
         private MMObjectPooler ResolveProjectilePooler()
         {
@@ -98,21 +94,17 @@ namespace OneBitRob.AI
 
             if (string.IsNullOrEmpty(_projectileId))
             {
-#if UNITY_EDITOR
                 Debug.LogWarning($"[{name}] No projectileId available yet (UnitDefinition/weapon not ready?). Will retry next call.");
-#endif
                 return null;
             }
 
             _projectilePooler = ProjectileService.GetPooler(_projectileId);
-#if UNITY_EDITOR
             if (_projectilePooler == null)
                 Debug.LogWarning($"[{name}] No projectile pooler found for id '{_projectileId}'. Add your ProjectilePools prefab to this scene or register the id.");
-#endif
+
             return _projectilePooler;
         }
-
-        // ─────────────────────────────────────────── Ranged projectile (with crit)
+        
         public void FireProjectile(
             Vector3 origin, Vector3 direction, GameObject attacker,
             float speed, float damage, float maxDistance,
@@ -153,9 +145,7 @@ namespace OneBitRob.AI
             poolable?.TriggerOnSpawnComplete();
         }
 
-        // ───────── Spell projectile
-        public void FireSpellProjectile(string projectileId, Vector3 origin, Vector3 direction, GameObject attacker,
-            float speed, float damage, float maxDistance, int layerMask, float radius, bool pierce)
+        public void FireSpellProjectile(string projectileId, Vector3 origin, Vector3 direction, GameObject attacker, float speed, float damage, float maxDistance, int layerMask, float radius, bool pierce)
         {
             if (string.IsNullOrEmpty(projectileId)) return;
             var pooler = ProjectileService.GetPooler(projectileId);

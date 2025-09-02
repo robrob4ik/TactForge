@@ -1,5 +1,4 @@
-﻿
-using UnityEngine;
+﻿using UnityEngine;
 using Sirenix.OdinInspector;
 using OneBitRob.FX;
 
@@ -44,7 +43,7 @@ namespace OneBitRob
         [BoxGroup("General")]
         [LabelText("Range"), SuffixLabel("units", true)]
         [MinValue(0f)]
-        public float Range = 12f; // cast distance
+        public float Range = 12f;
 
         [BoxGroup("General")]
         public AttackAnimationSettings animations;

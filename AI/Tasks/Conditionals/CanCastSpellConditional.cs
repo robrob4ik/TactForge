@@ -25,8 +25,7 @@ namespace OneBitRob.AI
             var em = EntityManager;
             if (!em.HasComponent<SpellState>(e))
                 return TaskStatus.Failure;
-
-            // Symmetry with attack gating: if we're mid-attack windup or locked for attack, don't allow casting
+            
             if (em.HasComponent<AttackWindup>(e) && em.GetComponentData<AttackWindup>(e).Active != 0)
                 return TaskStatus.Failure;
 

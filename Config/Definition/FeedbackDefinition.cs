@@ -2,7 +2,7 @@
 
 namespace OneBitRob.FX
 {
-    [CreateAssetMenu(menuName = "TactForge/Config/Feedbacks/Feedback Definition", fileName = "FeedbackDefinition")]
+    [CreateAssetMenu(menuName = "TactForge/Definition/Feedback Definition", fileName = "FeedbackDefinition")]
     public sealed class FeedbackDefinition : ScriptableObject
     {
         [Header("Pool (preferred) + Fallback")]

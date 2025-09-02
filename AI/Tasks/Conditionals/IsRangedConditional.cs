@@ -6,8 +6,7 @@ using OneBitRob.ECS;
 namespace OneBitRob.AI
 {
     [NodeDescription("Unit’s combat style is Ranged (pure ECS)")]
-    public class IsRangedConditional
-        : AbstractTaskAction<IsRangedComponent, IsRangedTag, IsRangedSystem>, IConditional
+    public class IsRangedConditional : AbstractTaskAction<IsRangedComponent, IsRangedTag, IsRangedSystem>, IConditional
     {
         protected override IsRangedComponent CreateBufferElement(ushort runtimeIndex) => new() { Index = runtimeIndex };
     }
@@ -17,8 +16,7 @@ namespace OneBitRob.AI
 
     [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    public partial class IsRangedSystem
-        : TaskProcessorSystem<IsRangedComponent, IsRangedTag>
+    public partial class IsRangedSystem : TaskProcessorSystem<IsRangedComponent, IsRangedTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain _)
         {

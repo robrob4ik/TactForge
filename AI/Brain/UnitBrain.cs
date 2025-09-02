@@ -42,8 +42,6 @@ namespace OneBitRob.AI
         public bool DebugDrawFacing = true;
         public bool DebugDrawSpell = true;
 
-        [SerializeField] private bool logLayerAssignSummary = false;
-        [SerializeField] private bool logNavAssignSummary = false;
 #endif
 
         public GameObject CurrentTarget { get; set; }
@@ -152,11 +150,8 @@ namespace OneBitRob.AI
                 Character.CharacterModel.layer = layer;
 
 #if UNITY_EDITOR
-            if (logLayerAssignSummary)
-            {
                 string layerName = LayerMask.LayerToName(layer);
                 Debug.Log($"[UnitBrain] '{name}' set {changed}/{total} colliders to layer {layer} ({layerName}). Reason={reason}", this);
-            }
 #endif
         }
 
@@ -170,7 +165,6 @@ namespace OneBitRob.AI
                 body.IsStopped = false;
                 _navAgent.Body = body;
 #if UNITY_EDITOR
-                if (logNavAssignSummary)
                     Debug.Log($"[UnitBrain] '{name}' nav init: cleared IsStopped on AgentBody.", this);
 #endif
             }
