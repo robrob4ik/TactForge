@@ -1,7 +1,4 @@
-﻿// FILE: Assets/PROJECT/Scripts/Runtime/ECS/HybridSync/Brain_EcsToMono_NavigationLockStopSystem.cs
-// Summary: hard-stop agent while locked (Casting/Attacking), then park destination at self.
-
-using OneBitRob.AI;
+﻿using OneBitRob.AI;
 using Unity.Entities;
 using UnityEngine;
 

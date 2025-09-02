@@ -11,7 +11,7 @@ namespace OneBitRob.AI
             Entity self,
             in SpellConfig config,
             ref ComponentLookup<LocalTransform> posLookup,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factionLookup,
+            ref ComponentLookup<SpatialHashTarget> factionLookup,
             ref ComponentLookup<HealthMirror> healthLookup
         );
 
@@ -19,7 +19,7 @@ namespace OneBitRob.AI
             Entity self,
             in SpellConfig config,
             ref ComponentLookup<LocalTransform> posLookup,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factionLookup,
+            ref ComponentLookup<SpatialHashTarget> factionLookup,
             out float3 point
         );
     }

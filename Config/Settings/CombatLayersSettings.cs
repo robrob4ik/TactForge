@@ -2,7 +2,7 @@
 
 namespace OneBitRob.Config
 {
-    [CreateAssetMenu(menuName = "TactForge/Combat Layers", fileName = "CombatLayersProfile")]
+    [CreateAssetMenu(menuName = "TactForge/Config/Combat Layers", fileName = "CombatLayersProfile")]
     public class CombatLayersSettings : ScriptableObject
     {
         [Header("Physics Layers (indices)")]

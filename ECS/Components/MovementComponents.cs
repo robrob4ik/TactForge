@@ -1,5 +1,4 @@
-﻿// Assets/PROJECT/Scripts/Runtime/ECS/Core/Components/MovementComponents.cs
-using System;
+﻿using System;
 using Unity.Entities;
 using Unity.Mathematics;
 

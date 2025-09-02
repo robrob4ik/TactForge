@@ -18,7 +18,7 @@ namespace OneBitRob
         public Sprite icon;
     }
    
-    [CreateAssetMenu(fileName = "IconLibrary", menuName = "TactForge/Config/Libraries/Icon Library")]
+    [CreateAssetMenu(fileName = "IconLibrary", menuName = "TactForge/Registry/Icon Library")]
     public class IconRegistry : SerializedScriptableObject
     {
         [TableList] public List<TraitIconMapping> traitIcons = new();

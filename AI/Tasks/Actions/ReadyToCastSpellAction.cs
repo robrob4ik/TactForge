@@ -1,7 +1,4 @@
-﻿// Runtime/AI/BehaviorTasks/Spell/ReadyToCastSpell.cs
-// Requests an ECS decision this frame.
-
-using OneBitRob.ECS;
+﻿using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;

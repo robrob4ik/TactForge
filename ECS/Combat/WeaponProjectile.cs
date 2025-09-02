@@ -1,5 +1,4 @@
-﻿// File: Runtime/ECS/WeaponProjectile.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MoreMountains.Tools;
 using OneBitRob.AI;
 using OneBitRob.FX;
@@ -43,17 +42,17 @@ namespace OneBitRob.ECS
         private int _piercedCount;
 
         private Vector3 _lastPos;
+        private bool _didImmediateOverlapCheck;
 
         private static readonly RaycastHit[] s_Hits = new RaycastHit[32];
+        private static readonly Collider[]    s_Overlap = new Collider[32];
         private readonly List<int> _hitEntityKeys = new List<int>(8);
 
         public void Arm(ArmData data)
         {
             _attacker = data.Attacker;
             _attackerBrain = _attacker ? _attacker.GetComponent<UnitBrain>() : null;
-            _attackerIsEnemy = _attackerBrain && _attackerBrain.UnitDefinition
-                ? _attackerBrain.UnitDefinition.isEnemy
-                : false;
+            _attackerIsEnemy = _attackerBrain&& _attackerBrain.UnitDefinition && _attackerBrain.UnitDefinition.isEnemy;
 
             _dir = (data.Direction.sqrMagnitude < 1e-6f ? Vector3.forward : data.Direction.normalized);
             _speed = Mathf.Max(0.01f, data.Speed);
@@ -73,6 +72,7 @@ namespace OneBitRob.ECS
             transform.position = data.Origin;
             transform.forward = _dir;
             _lastPos = transform.position;
+            _didImmediateOverlapCheck = false;
         }
 
         protected override void OnEnable()
@@ -81,6 +81,7 @@ namespace OneBitRob.ECS
             _lastPos = transform.position;
             _hitEntityKeys.Clear();
             _piercedCount = 0;
+            _didImmediateOverlapCheck = false;
         }
 
         protected override void Update()
@@ -93,9 +94,30 @@ namespace OneBitRob.ECS
         {
             if (_remaining <= 0f) { Despawn(); return; }
 
+            // Handle "spawned inside target" edge-case once.
+            if (!_didImmediateOverlapCheck)
+            {
+                _didImmediateOverlapCheck = true;
+                if (TryImmediateOverlapHit())
+                    return; // impact handled (may despawn)
+            }
+
             float stepLen = Mathf.Min(_speed * Time.deltaTime, _remaining);
 
             int count = TryRaycastStep(stepLen, out RaycastHit bestHit);
+
+            // Fallback: tiny sphere cast if the ray found nothing (close ranges, thin colliders)
+            if (count <= 0)
+            {
+                count = Physics.SphereCastNonAlloc(_lastPos, 0.05f, _dir, s_Hits, stepLen, (_mask == 0 ? ~0 : _mask), QueryTriggerInteraction.Collide);
+                if (count > 0)
+                {
+                    int best = ClosestValidEnemyHit(count);
+                    if (best >= 0) bestHit = s_Hits[best];
+                    else count = 0;
+                }
+            }
+
             if (count > 0 && bestHit.collider != null)
             {
 #if UNITY_EDITOR
@@ -103,15 +125,51 @@ namespace OneBitRob.ECS
 #endif
                 if (!ResolveImpactAndMaybePierce(bestHit))
                 {
-                    // nie przebijamy – zatrzymaj na miejscu trafienia
                     Advance(bestHit.distance);
                     Despawn();
                 }
                 return;
             }
 
-            // brak trafień – po prostu leć
+            // no hits – fly forward
             Advance(stepLen);
+        }
+
+        private bool TryImmediateOverlapHit()
+        {
+            int maskToUse = (_mask == 0) ? ~0 : _mask;
+            int count = Physics.OverlapSphereNonAlloc(_lastPos, 0.08f, s_Overlap, maskToUse, QueryTriggerInteraction.Collide);
+            if (count == 0 && maskToUse != ~0)
+                count = Physics.OverlapSphereNonAlloc(_lastPos, 0.08f, s_Overlap, ~0, QueryTriggerInteraction.Collide);
+            if (count <= 0) return false;
+
+            // pick first valid enemy collider
+            for (int i = 0; i < count; i++)
+            {
+                var col = s_Overlap[i];
+                if (!col) continue;
+
+                var brain = col.GetComponentInParent<UnitBrain>();
+                if (brain == null) continue;
+
+                bool targetIsEnemy = brain.UnitDefinition && brain.UnitDefinition.isEnemy;
+                if (targetIsEnemy == _attackerIsEnemy) continue;
+
+                ApplyImpact(brain, _lastPos);
+
+                if (_piercedCount < _pierceMaxTargets && _pierceChance > 0f && UnityEngine.Random.value < _pierceChance)
+                {
+                    _piercedCount++;
+                    Advance(0.02f);
+                    return false; // keep flying;
+                }
+                else
+                {
+                    Despawn();
+                    return true;
+                }
+            }
+            return false;
         }
 
         private int TryRaycastStep(float stepLen, out RaycastHit bestHit)
@@ -121,39 +179,18 @@ namespace OneBitRob.ECS
 
             int count = Physics.RaycastNonAlloc(_lastPos, _dir, s_Hits, stepLen, maskToUse, QueryTriggerInteraction.Collide);
             if (count == 0 && maskToUse != ~0)
-            {
                 count = Physics.RaycastNonAlloc(_lastPos, _dir, s_Hits, stepLen, ~0, QueryTriggerInteraction.Collide);
-            }
             if (count <= 0) return 0;
 
             int best = ClosestValidEnemyHit(count);
             if (best >= 0)
             {
                 bestHit = s_Hits[best];
-                // zapamiętaj, że ten byt już trafiony (anti-double)
                 int key = ExtractEntityKey(bestHit.collider);
                 if (key != 0) _hitEntityKeys.Add(key);
                 return count;
             }
-
             return 0;
-        }
-
-        private bool ResolveImpactAndMaybePierce(RaycastHit hit)
-        {
-            OnImpact(hit);
-
-            bool canPierceMore = _piercedCount < _pierceMaxTargets;
-            bool rollPierce = _pierceChance > 0f && Random.value < _pierceChance;
-            if (canPierceMore && rollPierce)
-            {
-                _piercedCount++;
-                // przesuwamy troszkę dalej, aby nie uderzyć w ten sam collider
-                float advance = hit.distance + 0.02f;
-                Advance(advance);
-                return true; // kontynuuj lot
-            }
-            return false; // nie przebijamy
         }
 
         private void Advance(float distance)
@@ -203,30 +240,43 @@ namespace OneBitRob.ECS
             return ent == Unity.Entities.Entity.Null ? brain.gameObject.GetInstanceID() : (ent.Index ^ (ent.Version << 8));
         }
 
-        private void OnImpact(RaycastHit hit)
+        private bool ResolveImpactAndMaybePierce(RaycastHit hit)
         {
             var brain = hit.collider.GetComponentInParent<UnitBrain>();
-            if (brain != null && brain.Health != null)
+            if (brain != null) ApplyImpact(brain, hit.point);
+
+            bool canPierceMore = _piercedCount < _pierceMaxTargets;
+            bool rollPierce = _pierceChance > 0f && UnityEngine.Random.value < _pierceChance;
+            if (canPierceMore && rollPierce)
             {
-                bool isCrit = _critChance > 0f && Random.value < _critChance;
-                float dmg = isCrit ? _baseDamage * _critMultiplier : _baseDamage;
-
-                Vector3 dir = _dir;
-                brain.Health.Damage(dmg, _attacker, 0f, 0f, dir);
-
-                DamageNumbersManager.Popup(
-                    new DamageNumbersParams
-                    {
-                        Kind = isCrit ? DamagePopupKind.CritDamage : DamagePopupKind.Damage,
-                        Position = hit.point,
-                        Follow = brain.transform,
-                        Amount = dmg
-                    }
-                );
-
-                var rangedDef = _attackerBrain != null ? _attackerBrain.UnitDefinition?.weapon as OneBitRob.RangedWeaponDefinition : null;
-                if (rangedDef != null && rangedDef.impactFeedback != null) { FeedbackService.TryPlay(rangedDef.impactFeedback, brain.transform, hit.point); }
+                _piercedCount++;
+                float advance = hit.distance + 0.02f;
+                Advance(advance);
+                return true; // keep flying
             }
+            return false; // stop
+        }
+
+        private void ApplyImpact(UnitBrain targetBrain, Vector3 point)
+        {
+            if (targetBrain?.Health == null) return;
+
+            bool isCrit = (_critChance > 0f) && (Random.value < _critChance);
+            float damage = isCrit ? _baseDamage * Mathf.Max(1f, _critMultiplier) : _baseDamage;
+
+            targetBrain.Health.Damage(damage, _attacker, 0f, 0f, _dir);
+
+            DamageNumbersManager.Popup(new DamageNumbersParams
+            {
+                Kind     = isCrit ? DamagePopupKind.CritDamage : DamagePopupKind.Damage,
+                Follow   = targetBrain.transform,
+                Position = point,
+                Amount   = damage
+            });
+
+            var rangedDef = _attackerBrain != null ? _attackerBrain.UnitDefinition?.weapon as OneBitRob.RangedWeaponDefinition : null;
+            if (rangedDef != null && rangedDef.impactFeedback != null)
+                FeedbackService.TryPlay(rangedDef.impactFeedback, targetBrain.transform, point);
         }
 
         private void Despawn()

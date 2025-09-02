@@ -1,9 +1,7 @@
 ﻿using OneBitRob.ECS;
 using OneBitRob.VFX;
-using Opsive.BehaviorDesigner.Runtime.Components;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
-using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
@@ -94,9 +92,9 @@ namespace OneBitRob.AI
             if (hasSpell)
             {
                 var spell = spells[0];
-                int projHash = VisualAssetRegistry.RegisterProjectile(spell.ProjectileId);
+                int projHash   = VisualAssetRegistry.RegisterProjectile(spell.ProjectileId);
                 int effectHash = VisualAssetRegistry.RegisterVfx(spell.EffectVfxId);
-                int areaVfxHash = VisualAssetRegistry.RegisterVfx(spell.AreaVfxId);
+                int areaVfxHash= VisualAssetRegistry.RegisterVfx(spell.AreaVfxId);
                 int summonHash = VisualAssetRegistry.RegisterSummon(spell.SummonPrefab);
 
                 float amount = (spell.Kind == SpellKind.EffectOverTimeArea || spell.Kind == SpellKind.EffectOverTimeTarget)
@@ -105,46 +103,42 @@ namespace OneBitRob.AI
 
                 var config = new SpellConfig
                 {
-                    Kind = spell.Kind,
-                    EffectType = spell.EffectType,
-                    AcquireMode = spell.AcquireMode,
+                    Kind         = spell.Kind,
+                    EffectType   = spell.EffectType,
+                    AcquireMode  = spell.AcquireMode,
 
-                    CastTime = spell.FireDelaySeconds,
-                    Cooldown = spell.Cooldown,
-                    Range = spell.Range,
-                    RequiresLineOfSight = 0,
-                    TargetLayerMask = 0,
+                    CastTime     = spell.FireDelaySeconds,
+                    Cooldown     = spell.Cooldown,
+                    Range        = spell.Range,
 
-                    RequireFacing = 0,
-                    FaceToleranceDeg = 0f,
-                    MaxExtraFaceDelay = 0f,
+                    Amount              = amount,
 
-                    Amount = amount,
-
-                    ProjectileSpeed = spell.ProjectileSpeed,
+                    ProjectileSpeed     = spell.ProjectileSpeed,
                     ProjectileMaxDistance = spell.ProjectileMaxDistance,
-                    ProjectileRadius = spell.ProjectileRadius,
-                    ProjectileIdHash = projHash,
-                    MuzzleForward = spell.MuzzleForward,
-                    MuzzleLocalOffset = new float3(spell.MuzzleLocalOffset.x, spell.MuzzleLocalOffset.y, spell.MuzzleLocalOffset.z),
-                    AreaRadius = spell.Kind == SpellKind.EffectOverTimeArea ? spell.AreaRadius : 0f,
-                    Duration = spell.Duration,
-                    TickInterval = spell.TickInterval,
-                    EffectVfxIdHash = effectHash,
-                    AreaVfxIdHash = areaVfxHash,
-                    AreaVfxYOffset = spell.AreaVfxYOffset,
+                    ProjectileRadius    = spell.ProjectileRadius,
+                    ProjectileIdHash    = projHash,
+                    MuzzleForward       = spell.MuzzleForward,
+                    MuzzleLocalOffset   = new float3(spell.MuzzleLocalOffset.x, spell.MuzzleLocalOffset.y, spell.MuzzleLocalOffset.z),
 
-                    ChainMaxTargets = spell.ChainMaxTargets,
-                    ChainRadius = spell.ChainRadius,
-                    ChainJumpDelay = spell.ChainPerJumpDelay,
+                    AreaRadius          = (spell.Kind == SpellKind.EffectOverTimeArea ? spell.AreaRadius : 0f),
+                    Duration            = spell.Duration,
+                    TickInterval        = spell.TickInterval,
+                    EffectVfxIdHash     = effectHash,
+                    AreaVfxIdHash       = areaVfxHash,
+                    AreaVfxYOffset      = spell.AreaVfxYOffset,
 
-                    SummonPrefabHash = summonHash
+                    ChainMaxTargets     = spell.ChainMaxTargets,
+                    ChainRadius         = spell.ChainRadius,
+                    ChainJumpDelay      = spell.ChainPerJumpDelay,
+
+                    SummonPrefabHash    = summonHash,
+
+                    // NEW
+                    PostCastAttackLockSeconds = Mathf.Max(0f, spell.PostCastAttackLockSeconds)
                 };
 
-                if (em.HasComponent<SpellConfig>(e))
-                    em.SetComponentData(e, config);
-                else
-                    em.AddComponentData(e, config);
+                if (em.HasComponent<SpellConfig>(e)) em.SetComponentData(e, config);
+                else                                 em.AddComponentData(e, config);
 
                 if (!em.HasComponent<SpellDecisionRequest>(e)) em.AddComponentData(e, new SpellDecisionRequest { HasValue = 0 });
                 if (!em.HasComponent<SpellWindup>(e)) em.AddComponentData(e, new SpellWindup { Active = 0, ReleaseTime = 0f });

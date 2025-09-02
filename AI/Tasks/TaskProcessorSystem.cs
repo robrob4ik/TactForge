@@ -26,10 +26,10 @@ namespace OneBitRob.AI
             var queue  = new NativeQueue<Entity>(Allocator.TempJob);
             var writer = queue.AsParallelWriter();
 
-            var cmdHandle    = GetBufferTypeHandle<TCmd>(true);           // read-only
-            var taskHandle   = GetBufferTypeHandle<TaskComponent>(false); // read-write
-            var entityHandle = GetEntityTypeHandle();                     // read-only
-            var tagHandle    = GetComponentTypeHandle<TTag>(true);        // read-only (presence/enabled)
+            var cmdHandle    = GetBufferTypeHandle<TCmd>(true);
+            var taskHandle   = GetBufferTypeHandle<TaskComponent>(false);
+            var entityHandle = GetEntityTypeHandle();
+            var tagHandle    = GetComponentTypeHandle<TTag>(true);
 
             Dependency = new CollectRunningJob<TCmd, TTag>
             {

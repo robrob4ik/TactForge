@@ -57,8 +57,7 @@ namespace OneBitRob.AI
 
             if (count == 0 && maskToUse != ~0)
             {
-                count = Physics.OverlapSphereNonAlloc(
-                    (Vector3)req.Origin, req.Range, s_SphereOverlapHits, ~0, QueryTriggerInteraction.Collide);
+                count = Physics.OverlapSphereNonAlloc((Vector3)req.Origin, req.Range, s_SphereOverlapHits, ~0, QueryTriggerInteraction.Collide);
             }
             return count;
         }
@@ -82,7 +81,7 @@ namespace OneBitRob.AI
                 if (!col) continue;
 
                 if (attackerBrain && col.transform.root == attackerBrain.transform.root)
-                    continue; // own root
+                    continue; 
 
                 if (!ShouldAffectTarget(col, attackerIsEnemy, req, forward, cosHalfSq, rangeSq, out var targetBrain, out var to))
                     continue;
@@ -106,15 +105,15 @@ namespace OneBitRob.AI
             { to = default; return false; }
 
             bool targetIsEnemy = targetBrain.UnitDefinition != null && targetBrain.UnitDefinition.isEnemy;
-            if (attackerIsEnemy == targetIsEnemy) { to = default; return false; } // no FF
+            if (attackerIsEnemy == targetIsEnemy) { to = default; return false; }
 
             to = (float3)targetBrain.transform.position - req.Origin;
             float sq = lengthsq(to);
             if (sq > rangeSq) return false;
 
             float dot = math.dot(forward, to);
-            if (dot <= 0f) return false;                 // behind
-            if ((dot * dot) < (cosHalfSq * sq)) return false; // outside cone
+            if (dot <= 0f) return false;   
+            if ((dot * dot) < (cosHalfSq * sq)) return false;
 
             return true;
         }

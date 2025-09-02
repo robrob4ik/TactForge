@@ -1,5 +1,4 @@
-﻿// Runtime/FX/DamageNumbersManager.cs
-using DamageNumbersPro;
+﻿using DamageNumbersPro;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -55,19 +54,10 @@ namespace OneBitRob.FX
             if (_instance && _instance != this) { Destroy(gameObject); return; }
             _instance = this;
             DontDestroyOnLoad(gameObject);
-            // NOTE: Prewarm happens when a profile is injected (SetProfile) or if one was serialized already.
+         
             if (profile) TryPrewarm();
         }
 
-        // Optional: let a system pick the camera explicitly (e.g., your camera bootstrap)
-        public static void SetCamera(Camera cam)
-        {
-            var mgr = Ensure();
-            _overrideCamera = cam;
-            mgr._cachedCamera = cam;
-        }
-
-        // Inject the profile (called by GameConfigInstaller). Triggers prewarm once.
         public static void SetProfile(DamageNumbersSettings p)
         {
             var mgr = Ensure();
@@ -75,7 +65,6 @@ namespace OneBitRob.FX
             if (mgr.profile) mgr.TryPrewarm();
         }
 
-        // Public entry point
         public static void Popup(in DamageNumbersParams p) => Ensure().PopupInternal(in p);
 
         // ───────────────────────────────────────────────────────── Prewarm
@@ -83,11 +72,9 @@ namespace OneBitRob.FX
         {
             if (profile == null)
             {
-#if UNITY_EDITOR
                 if (!_warnedNoProfile)
-                    Debug.LogWarning("[DamageNumbersManager] No DamageNumbersProfile assigned. " +
-                                     "Assign via GameConfigInstaller or call DamageNumbersManager.SetProfile(profile).");
-#endif
+                    Debug.LogWarning("[DamageNumbersManager] No DamageNumbersProfile assigned. Assign via GameConfigInstaller or call DamageNumbersManager.SetProfile(profile).");
+
                 _warnedNoProfile = true;
                 return;
             }
@@ -110,16 +97,13 @@ namespace OneBitRob.FX
             Prewarm(profile.missPrefab);
         }
 
-        // ───────────────────────────────────────────────────────── Spawn
         private void PopupInternal(in DamageNumbersParams p)
         {
             if (profile == null)
             {
-#if UNITY_EDITOR
                 if (!_warnedNoProfile)
-                    Debug.LogWarning("[DamageNumbersManager] No DamageNumbersProfile set — ignoring popup. " +
-                                     "Assign via GameConfigInstaller or DamageNumbersManager.SetProfile(profile).");
-#endif
+                    Debug.LogWarning("[DamageNumbersManager] No DamageNumbersProfile set — ignoring popup. Assign via GameConfigInstaller or DamageNumbersManager.SetProfile(profile).");
+
                 _warnedNoProfile = true;
                 return;
             }
@@ -127,7 +111,6 @@ namespace OneBitRob.FX
             float abs = Mathf.Abs(p.Amount);
             if (abs < profile.minAbsoluteValue) return;
 
-            // Distance culling (best-effort). If no camera, don't cull (spawn anyway).
             if (profile.cullByCameraDistance)
             {
                 var pos = p.Follow ? p.Follow.position : p.Position;
@@ -136,17 +119,16 @@ namespace OneBitRob.FX
                 {
                     float maxSq = profile.maxSpawnDistance * profile.maxSpawnDistance;
                     if ((cam.transform.position - pos).sqrMagnitude > maxSq)
-                        return; // too far
+                        return;
                 }
             }
 
             var prefab = ResolvePrefab(p.Kind);
             if (!prefab)
             {
-#if UNITY_EDITOR
                 if (profile.logMissingPrefabWarnings)
                     Debug.LogWarning($"[DamageNumbersManager] Missing prefab for {p.Kind}.");
-#endif
+
                 return;
             }
 
@@ -175,42 +157,33 @@ namespace OneBitRob.FX
             };
         }
 
-        // ───────────────────────────────────────────────────────── Camera discovery (simple)
         private Camera GetCullCamera()
         {
-            // 1) Explicit override
             if (_overrideCamera && _overrideCamera.isActiveAndEnabled)
             {
                 _cachedCamera = _overrideCamera;
                 return _cachedCamera;
             }
 
-            // 2) Cached one still valid?
             if (_cachedCamera && _cachedCamera.isActiveAndEnabled)
                 return _cachedCamera;
 
-            // 3) MainCamera
             var cam = Camera.main;
             if (!cam)
             {
-                // 4) First camera in scene (includes inactive in newer Unity)
-#if UNITY_2023_1_OR_NEWER || UNITY_6000_0_OR_NEWER
                 cam = FindFirstObjectByType<Camera>(FindObjectsInactive.Include);
-#else
-                cam = Object.FindObjectOfType<Camera>(true);
-#endif
+
             }
 
             _cachedCamera = cam;
 
-#if UNITY_EDITOR
             if (!cam && !_warnedNoCamera)
             {
                 Debug.LogWarning("[DamageNumbersManager] No camera found. Distance culling will be skipped until a camera exists. " +
                                  "Tip: tag your gameplay camera 'MainCamera' or call DamageNumbersManager.SetCamera(cam).");
                 _warnedNoCamera = true;
             }
-#endif
+
             return cam;
         }
     }

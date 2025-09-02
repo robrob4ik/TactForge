@@ -18,7 +18,7 @@ namespace OneBitRob.ECS
 
 
             manager.AddComponentObject(m_Entity, transform);
-            manager.AddComponentData(m_Entity, new SpatialHashComponents.SpatialHashSettings { CellSize = CellSize });
+            manager.AddComponentData(m_Entity, new SpatialHashSettings { CellSize = CellSize });
         }
     }
 
@@ -27,7 +27,7 @@ namespace OneBitRob.ECS
         public override void Bake(SpatialHashSettingsAuthoring authoring)
         {
             var e = GetEntity(TransformUsageFlags.None);
-            AddComponent(e, new SpatialHashComponents.SpatialHashSettings { CellSize = authoring.CellSize });
+            AddComponent(e, new SpatialHashSettings { CellSize = authoring.CellSize });
         }
     }
 }

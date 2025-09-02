@@ -8,22 +8,38 @@ namespace OneBitRob.Config
 
         public static void Set(CombatLayersSettings settings) => _settings = settings;
 
-        // Indices
+        // Indices (authoritative)
         public static int PlayerLayerIndex => _settings.PlayerLayer;
         public static int AllyLayerIndex   => _settings.AllyLayer;
         public static int EnemyLayerIndex  => _settings.EnemyLayer;
 
-        // Single-bit masks
-        public static LayerMask PlayerMask => _settings.PlayerMask;
-        public static LayerMask AllyMask   =>_settings.AllyMask;
-        public static LayerMask EnemyMask  => _settings.EnemyMask;
+        // Single-bit masks computed from indices (never trust serialized masks)
+        public static LayerMask PlayerMask => (LayerMask)(1 << PlayerLayerIndex);
+        public static LayerMask AllyMask   => (LayerMask)(1 << AllyLayerIndex);
+        public static LayerMask EnemyMask  => (LayerMask)(1 << EnemyLayerIndex);
 
         // Helpers
         public static int FactionLayerIndexFor(bool isEnemy) => isEnemy ? EnemyLayerIndex : AllyLayerIndex;
 
-        public static LayerMask FriendlyMaskFor(bool isEnemy) => isEnemy ? EnemyMask : (AllyMask | PlayerMask);
+        public static LayerMask FriendlyMaskFor(bool isEnemy)
+        {
+            // Enemy considers Enemy as friendly; Ally considers Ally + Player as friendly
+            if (isEnemy)
+                return EnemyMask;
+            int mask = ((int)AllyMask) | ((int)PlayerMask);
+            return (LayerMask)mask;
+        }
 
-        public static LayerMask HostileMaskFor(bool isEnemy) => isEnemy ? (AllyMask | PlayerMask) : EnemyMask;
+        public static LayerMask HostileMaskFor(bool isEnemy)
+        {
+            // Enemy hits Ally+Player; Ally hits Enemy
+            if (isEnemy)
+            {
+                int mask = ((int)AllyMask) | ((int)PlayerMask);
+                return (LayerMask)mask;
+            }
+            return EnemyMask;
+        }
 
         public static LayerMask TargetMaskFor(bool isEnemy) => HostileMaskFor(isEnemy);
     }

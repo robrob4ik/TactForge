@@ -13,15 +13,15 @@ namespace OneBitRob.AI
         where TTag : unmanaged, IComponentData, IEnableableComponent
     {
         [ReadOnly]
-        public BufferTypeHandle<TCmd> CmdHandle; // read
+        public BufferTypeHandle<TCmd> CmdHandle;
 
-        public BufferTypeHandle<TaskComponent> TaskHandle; // write
-
-        [ReadOnly]
-        public EntityTypeHandle EntityHandle; // read
+        public BufferTypeHandle<TaskComponent> TaskHandle;
 
         [ReadOnly]
-        public ComponentTypeHandle<TTag> TagHandle; // presence/enabled mask
+        public EntityTypeHandle EntityHandle;
+
+        [ReadOnly]
+        public ComponentTypeHandle<TTag> TagHandle;
 
         public NativeQueue<Entity>.ParallelWriter QueueWriter;
 

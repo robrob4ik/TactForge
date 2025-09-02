@@ -9,8 +9,7 @@ namespace OneBitRob.AI
     public class CanCastSpellConditional
         : AbstractTaskAction<CanCastSpellComponent, CanCastSpellTag, CanCastSpellSystem>, IConditional
     {
-        protected override CanCastSpellComponent CreateBufferElement(ushort runtimeIndex)
-            => new CanCastSpellComponent { Index = runtimeIndex };
+        protected override CanCastSpellComponent CreateBufferElement(ushort runtimeIndex) => new CanCastSpellComponent { Index = runtimeIndex };
     }
 
     public struct CanCastSpellComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }

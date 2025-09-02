@@ -1,5 +1,4 @@
-﻿// File: Runtime/AI/Systems/WeaponAttackSystem.cs
-using OneBitRob.ECS;
+﻿using OneBitRob.ECS;
 using OneBitRob.FX;
 using Unity.Collections;
 using Unity.Entities;
@@ -15,7 +14,7 @@ namespace OneBitRob.AI
     [UpdateAfter(typeof(SpellWindupAndFireSystem))]
     public partial struct WeaponAttackSystem : ISystem
     {
-        private ComponentLookup<LocalTransform> _transformLookup; // RO
+        private ComponentLookup<LocalTransform> _transformLookup;
         private EntityQuery _attackRequestQuery;
         private EntityQuery _windupQuery;
 

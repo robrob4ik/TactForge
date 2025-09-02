@@ -1,6 +1,4 @@
-﻿// ECS/HybridSync/EcsToMono/Brain_EcsToMono_SummonBridgeSystem.cs
-
-using GPUInstancerPro.PrefabModule;
+﻿using GPUInstancerPro.PrefabModule;
 using OneBitRob.AI;
 using OneBitRob.ECS.GPUI;
 using OneBitRob.VFX;
@@ -8,12 +6,10 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using Unity.VisualScripting;
 using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    /// Consumes SummonRequest and creates ECS brain + Mono prefab (GPUI) consistently.
     [UpdateInGroup(typeof(EcsToMonoBridgeGroup))]
     [UpdateAfter(typeof(SpellWindupAndFireSystem))]
     public partial struct Brain_EcsToMono_SummonBridgeSystem : ISystem
@@ -38,8 +34,7 @@ namespace OneBitRob.ECS
                     for (int i = 0; i < count; i++)
                     {
                         var brainEnt = em.Instantiate(data.EntityPrefab);
-                        var pos = req.ValueRO.Position
-                                  + new float3(UnityEngine.Random.Range(-0.5f, 0.5f), 0f, UnityEngine.Random.Range(-0.5f, 0.5f));
+                        var pos = req.ValueRO.Position + new float3(UnityEngine.Random.Range(-0.5f, 0.5f), 0f, UnityEngine.Random.Range(-0.5f, 0.5f));
 
                         em.SetComponentData(brainEnt, LocalTransform.FromPositionRotationScale(pos, quaternion.identity, 1f));
 
@@ -53,10 +48,10 @@ namespace OneBitRob.ECS
 
                         // ECS tags & baseline components
                         em.AddComponent(brainEnt, ComponentType.ReadOnly<AgentTag>());
-                        em.AddComponentData(brainEnt, new SpatialHashComponents.SpatialHashTarget { Faction = req.ValueRO.Faction });
+                        em.AddComponentData(brainEnt, new SpatialHashTarget { Faction = req.ValueRO.Faction });
 
-                        if (req.ValueRO.Faction == OneBitRob.Constants.GameConstants.ALLY_FACTION)  em.AddComponent<AllyTag>(brainEnt);
-                        else if (req.ValueRO.Faction == OneBitRob.Constants.GameConstants.ENEMY_FACTION) em.AddComponent<EnemyTag>(brainEnt);
+                        if (req.ValueRO.Faction == Constants.GameConstants.ALLY_FACTION)  em.AddComponent<AllyTag>(brainEnt);
+                        else if (req.ValueRO.Faction == Constants.GameConstants.ENEMY_FACTION) em.AddComponent<EnemyTag>(brainEnt);
 
                         em.AddComponentData(brainEnt, new Target { Value = Entity.Null });
                         em.AddComponentData(brainEnt, new DesiredDestination { Position = pos, HasValue = 0 });
@@ -68,9 +63,9 @@ namespace OneBitRob.ECS
                         int hp = monoBrain && monoBrain.UnitDefinition ? monoBrain.UnitDefinition.health : 100;
                         em.AddComponentData(brainEnt, new HealthMirror { Current = hp, Max = hp });
 
-                        byte style = 1; // melee default
+                        byte style = 1;
                         var weapon = monoBrain && monoBrain.UnitDefinition ? monoBrain.UnitDefinition.weapon : null;
-                        if (weapon is OneBitRob.RangedWeaponDefinition) style = 2;
+                        if (weapon is RangedWeaponDefinition) style = 2;
                         em.AddComponentData(brainEnt, new CombatStyle { Value = style });
 
                         // Basic combat state
@@ -93,7 +88,7 @@ namespace OneBitRob.ECS
                     }
                 }
 
-                req.ValueRW = default; // consume
+                req.ValueRW = default;
             }
 
             ecb.Playback(em);

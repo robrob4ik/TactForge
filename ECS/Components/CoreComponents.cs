@@ -1,5 +1,4 @@
-﻿// Assets/PROJECT/Scripts/Runtime/ECS/Core/Components/CoreTags.cs
-using Unity.Entities;
+﻿using Unity.Entities;
 
 namespace OneBitRob.ECS
 {
@@ -8,7 +7,7 @@ namespace OneBitRob.ECS
     public struct EnemyTag : IComponentData {}
 
     public struct Alive       : IComponentData { public byte Value; }
-    public struct CombatStyle : IComponentData { public byte Value; } // 1=melee, 2=ranged (as in your code)
+    public struct CombatStyle : IComponentData { public byte Value; }
     
     public struct DestroyEntityTag : IComponentData { }
     

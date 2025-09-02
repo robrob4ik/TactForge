@@ -1,6 +1,4 @@
-﻿// FILE: Assets/PROJECT/Scripts/Runtime/ECS/Components/SpellComponents.cs
-using System;
-using Unity.Entities;
+﻿using Unity.Entities;
 using Unity.Mathematics;
 
 namespace OneBitRob.ECS
@@ -26,12 +24,6 @@ namespace OneBitRob.ECS
         public float CastTime;
         public float Cooldown;
         public float Range;
-        public byte  RequiresLineOfSight;
-        public int   TargetLayerMask;
-
-        public byte  RequireFacing;
-        public float FaceToleranceDeg;
-        public float MaxExtraFaceDelay;
 
         public float Amount;
 
@@ -49,7 +41,7 @@ namespace OneBitRob.ECS
         public float TickInterval;
         public int   EffectVfxIdHash;
         public int   AreaVfxIdHash;
-        public float AreaVfxYOffset;     // <-- NEW: VFX-only vertical offset
+        public float AreaVfxYOffset;
 
         // Chain
         public int   ChainMaxTargets;
@@ -58,6 +50,9 @@ namespace OneBitRob.ECS
 
         // Summon
         public int   SummonPrefabHash;
+
+        // NEW: time window to block weapon attacks after spell
+        public float PostCastAttackLockSeconds;
     }
 
     public struct SpellDecisionRequest : IComponentData { public byte HasValue; }

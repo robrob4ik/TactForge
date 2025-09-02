@@ -1,10 +1,8 @@
-﻿// FILE: Assets/PROJECT/Scripts/ECS/Spatial/SpatialHashBuildSystem.cs
-using Unity.Burst;
+﻿using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using static OneBitRob.ECS.SpatialHashComponents;
 
 namespace OneBitRob.ECS
 {

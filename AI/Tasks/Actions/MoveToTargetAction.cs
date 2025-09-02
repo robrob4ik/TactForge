@@ -1,5 +1,4 @@
-﻿// File: Runtime/AI/Systems/MoveToTargetSystem.cs
-using OneBitRob.Constants;
+﻿using OneBitRob.Constants;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
@@ -25,7 +24,7 @@ namespace OneBitRob.AI
     public partial class MoveToTargetSystem : TaskProcessorSystem<MoveToTargetComponent, MoveToTargetTag>
     {
         ComponentLookup<LocalTransform> _posRO;
-        ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
+        ComponentLookup<SpatialHashTarget> _factRO;
         ComponentLookup<InAttackRange> _inRangeRO;
         ComponentLookup<MovementLock>  _lockRO;
         ComponentLookup<AttackWindup>  _windRO;
@@ -36,7 +35,7 @@ namespace OneBitRob.AI
         {
             base.OnCreate();
             _posRO   = GetComponentLookup<LocalTransform>(true);
-            _factRO  = GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
+            _factRO  = GetComponentLookup<SpatialHashTarget>(true);
             _inRangeRO = GetComponentLookup<InAttackRange>(true);
             _lockRO    = GetComponentLookup<MovementLock>(true);
             _windRO    = GetComponentLookup<AttackWindup>(true);
@@ -73,12 +72,8 @@ namespace OneBitRob.AI
             float3 selfPos = _posRO[e].Position;
             float3 targetPos = _posRO[target].Position;
 
-            // „stuck assist” – bez zmian
             UpdateRetargetAssist(e, brain, dt, selfPos, target, ref targetPos);
-
-            // okazjonalny retarget – bez zmian
             MaybeRetarget(e, brain, now, selfPos, ref target, ref targetPos);
-
             SetDesiredDestination(e, targetPos);
 
             if (Arrived(selfPos, targetPos, brain.UnitDefinition.stoppingDistance))

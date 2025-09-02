@@ -1,6 +1,7 @@
 ﻿using OneBitRob.ECS;
 using OneBitRob.FX;
 using Unity.Entities;
+using Unity.Mathematics;
 using Unity.Transforms;
 using static Unity.Mathematics.math;
 using UnityEngine;
@@ -13,15 +14,15 @@ namespace OneBitRob.AI
     {
         private EntityQuery _castQuery;
         private EntityQuery _pendingWindupQuery;
-        private ComponentLookup<LocalTransform> _transformLookup; // RO
-        private ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factionLookup; // RO
+        private ComponentLookup<LocalTransform> _transformLookup; 
+        private ComponentLookup<SpatialHashTarget> _factionLookup; 
 
-       public void OnCreate(ref SystemState state)
+        public void OnCreate(ref SystemState state)
         {
             _castQuery          = state.GetEntityQuery(ComponentType.ReadWrite<CastRequest>(), ComponentType.ReadOnly<SpellConfig>());
             _pendingWindupQuery = state.GetEntityQuery(ComponentType.ReadWrite<SpellWindup>(), ComponentType.ReadOnly<SpellConfig>());
             _transformLookup    = state.GetComponentLookup<LocalTransform>(true);
-            _factionLookup      = state.GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
+            _factionLookup      = state.GetComponentLookup<SpatialHashTarget>(true);
             state.RequireForUpdate(_castQuery);
         }
 
@@ -41,7 +42,6 @@ namespace OneBitRob.AI
             ecb.Dispose();
         }
 
-        // ── Phase 1: windups that reach their release time → fire
         private void ReleaseFinishedWindups(EntityManager em, ref EntityCommandBuffer ecb, float now, ref SystemState state)
         {
             using var windupEntities = _pendingWindupQuery.ToEntityArray(Unity.Collections.Allocator.Temp);
@@ -52,12 +52,12 @@ namespace OneBitRob.AI
                 if (windup.Active == 0 || now < windup.ReleaseTime) continue;
 
                 var config = em.GetComponentData<SpellConfig>(entity);
-                FireSpell(ref state, ref ecb, entity, in config, in windup);
+                FireSpell(ref state, ref ecb, entity, in config, in windup, now);
 
                 if (em.HasComponent<SpellCooldown>(entity))
                 {
                     var cd = em.GetComponentData<SpellCooldown>(entity);
-                    cd.NextTime = now + max(0f, config.Cooldown);
+                    cd.NextTime = now + math.max(0f, config.Cooldown);
                     ecb.SetComponent(entity, cd);
                 }
 
@@ -66,7 +66,6 @@ namespace OneBitRob.AI
             }
         }
 
-        // ── Phase 2: consume new CastRequests → rotate/prepare → start windup
         private void StartNewWindups(EntityManager em, ref EntityCommandBuffer ecb, float now)
         {
             using var castEntities = _castQuery.ToEntityArray(Unity.Collections.Allocator.Temp);
@@ -81,11 +80,24 @@ namespace OneBitRob.AI
 
                 var windup = em.HasComponent<SpellWindup>(entity) ? em.GetComponentData<SpellWindup>(entity) : default;
                 windup.Active         = 1;
-                windup.ReleaseTime    = now + max(0f, config.CastTime);
+                windup.ReleaseTime    = now + math.max(0f, config.CastTime);
                 windup.FacingDeadline = windup.ReleaseTime;
 
+                // ── Resolve aim and WRITE it into windup ───────────────────────
                 float3 aimPosition = default;
-                ResolveAimPoint(entity, request, brain, ref aimPosition);
+                if (request.Kind == CastKind.AreaOfEffect)
+                {
+                    aimPosition       = request.AoEPosition;
+                    windup.AimPoint   = request.AoEPosition;
+                    windup.AimTarget  = Entity.Null;
+                    windup.HasAimPoint= 1;
+                }
+                else if (request.Kind == CastKind.SingleTarget && request.Target != Entity.Null)
+                {
+                    windup.AimTarget   = request.Target;
+                    windup.HasAimPoint = 0;
+                    aimPosition = _transformLookup.HasComponent(request.Target) ? _transformLookup[request.Target].Position : aimPosition;
+                }
 
                 // Face aim immediately
                 if (em.HasComponent<DesiredFacing>(entity))
@@ -97,7 +109,7 @@ namespace OneBitRob.AI
                 }
                 else ecb.AddComponent(entity, new DesiredFacing { TargetPosition = aimPosition, HasValue = 1 });
 
-                // Kick prepare anim/feedback on caster if any
+                // Prepare animation/feedback
                 if (brain != null && brain.UnitDefinition != null)
                 {
                     var spells = brain.UnitDefinition.unitSpells;
@@ -110,7 +122,7 @@ namespace OneBitRob.AI
                     }
                 }
 
-                // write windup + consume request
+                // write windup + consume the request
                 if (em.HasComponent<SpellWindup>(entity)) ecb.SetComponent(entity, windup);
                 else                                      ecb.AddComponent(entity, windup);
 
@@ -119,23 +131,9 @@ namespace OneBitRob.AI
             }
         }
 
-        private void ResolveAimPoint(Entity entity, in CastRequest request, UnitBrain brain, ref float3 aimPosition)
+        private void FireSpell(ref SystemState state, ref EntityCommandBuffer ecb, Entity caster, in SpellConfig config, in SpellWindup windup, float now)
         {
-            if (request.Kind == CastKind.AreaOfEffect)
-            {
-                aimPosition = request.AoEPosition;
-                if (brain != null) { brain.CurrentSpellTarget = null; brain.CurrentSpellTargets = null; brain.CurrentSpellTargetPosition = request.AoEPosition; }
-            }
-            else if (request.Kind == CastKind.SingleTarget && request.Target != Entity.Null)
-            {
-                aimPosition = _transformLookup.HasComponent(request.Target) ? _transformLookup[request.Target].Position : aimPosition;
-                if (brain != null) { brain.CurrentSpellTarget = UnitBrainRegistry.GetGameObject(request.Target); brain.CurrentSpellTargets = null; brain.CurrentSpellTargetPosition = null; }
-            }
-        }
-
-        private void FireSpell(ref SystemState state, ref EntityCommandBuffer ecb, Entity caster, in SpellConfig config, in SpellWindup windup)
-        {
-            var em = state.EntityManager;
+            var em    = state.EntityManager;
             var brain = UnitBrainRegistry.Get(caster);
 
             float3 selfPos = _transformLookup.HasComponent(caster) ? _transformLookup[caster].Position : float3.zero;
@@ -162,29 +160,28 @@ namespace OneBitRob.AI
                 case SpellKind.ProjectileLine:
                 {
                     float3 origin = selfPos
-                        + fwd   * max(0f, config.MuzzleForward)
+                        + fwd   * math.max(0f, config.MuzzleForward)
                         + right * config.MuzzleLocalOffset.x
                         + up    * config.MuzzleLocalOffset.y
                         + fwd   * config.MuzzleLocalOffset.z;
 
                     float3 dir = normalizesafe(aimPos - origin, fwd); dir.y = 0;
 
-                    // Compute mask per cast (no reliance on TargetLayerMask)
                     int mask = ~0;
                     if (brain != null)
                         mask = config.EffectType == SpellEffectType.Positive
                             ? brain.GetFriendlyLayerMask().value
                             : brain.GetDamageableLayerMask().value;
 
-                    float radius = max(0f, config.ProjectileRadius * max(0.0001f, stats.ProjectileRadiusMult));
+                    float radius = math.max(0f, config.ProjectileRadius * math.max(0.0001f, stats.ProjectileRadiusMult));
 
                     var spawnRequest = new SpellProjectileSpawnRequest
                     {
                         Origin      = origin,
                         Direction   = dir,
-                        Speed       = max(0.01f, config.ProjectileSpeed),
-                        Damage      = config.EffectType == SpellEffectType.Negative ? max(0f, config.Amount) : -max(0f, config.Amount),
-                        MaxDistance = max(0.1f, config.ProjectileMaxDistance),
+                        Speed       = math.max(0.01f, config.ProjectileSpeed),
+                        Damage      = config.EffectType == SpellEffectType.Negative ? math.max(0f, config.Amount) : -math.max(0f, config.Amount),
+                        MaxDistance = math.max(0.1f, config.ProjectileMaxDistance),
                         Radius      = radius,
                         ProjectileIdHash = config.ProjectileIdHash,
                         LayerMask   = mask,
@@ -204,24 +201,20 @@ namespace OneBitRob.AI
                             ? brain.GetFriendlyLayerMask().value
                             : brain.GetDamageableLayerMask().value;
 
-                    float areaRadius = config.AreaRadius * max(0.0001f, stats.SpellAoeMult);
-
-                    // Light validation (replacement for the deleted guard system)
-                    if (areaRadius <= 0f)
-                        Debug.LogWarning($"[Spell] AoE AreaRadius is 0 on caster {caster.Index}:{caster.Version}. Check SpellDefinition.");
+                    float areaRadius = config.AreaRadius * math.max(0.0001f, stats.SpellAoeMult);
 
                     var area = new DoTArea
                     {
                         Position       = windup.HasAimPoint != 0 ? windup.AimPoint : (_transformLookup.HasComponent(caster) ? _transformLookup[caster].Position : float3.zero),
-                        Radius         = max(0f, areaRadius),
-                        AmountPerTick  = max(0f, config.Amount),
-                        Interval       = max(0.05f, config.TickInterval),
-                        Remaining      = max(0f, config.Duration),
+                        Radius         = math.max(0f, areaRadius),
+                        AmountPerTick  = math.max(0f, config.Amount),
+                        Interval       = math.max(0.05f, config.TickInterval),
+                        Remaining      = math.max(0f, config.Duration),
                         NextTick       = 0f,
                         Positive       = (byte)(config.EffectType == SpellEffectType.Positive ? 1 : 0),
                         AreaVfxIdHash  = config.AreaVfxIdHash,
                         LayerMask      = mask,
-                        VfxYOffset     = max(0f, config.AreaVfxYOffset)
+                        VfxYOffset     = math.max(0f, config.AreaVfxYOffset)
                     };
                     if (em.HasComponent<DoTArea>(caster)) ecb.SetComponent(caster, area);
                     else                                   ecb.AddComponent(caster, area);
@@ -241,18 +234,18 @@ namespace OneBitRob.AI
                 case SpellKind.Chain:
                 {
                     float3 origin = selfPos
-                                    + fwd   * max(0f, config.MuzzleForward)
-                                    + right * config.MuzzleLocalOffset.x
-                                    + up    * config.MuzzleLocalOffset.y
-                                    + fwd   * config.MuzzleLocalOffset.z;
+                        + fwd   * math.max(0f, config.MuzzleForward)
+                        + right * config.MuzzleLocalOffset.x
+                        + up    * config.MuzzleLocalOffset.y
+                        + fwd   * config.MuzzleLocalOffset.z;
 
                     var chainRunner = new SpellChainRunner
                     {
-                        Remaining        = max(1, config.ChainMaxTargets),
-                        Radius           = max(0f, config.ChainRadius),
-                        JumpDelay        = max(0f, config.ChainJumpDelay),
-                        ProjectileSpeed  = max(0.01f, config.ProjectileSpeed),
-                        Amount           = max(0f, config.Amount),
+                        Remaining        = math.max(1, config.ChainMaxTargets),
+                        Radius           = math.max(0f, config.ChainRadius),
+                        JumpDelay        = math.max(0f, config.ChainJumpDelay),
+                        ProjectileSpeed  = math.max(0.01f, config.ProjectileSpeed),
+                        Amount           = math.max(0f, config.Amount),
                         Positive         = (byte)(config.EffectType == SpellEffectType.Positive ? 1 : 0),
                         ProjectileIdHash = config.ProjectileIdHash,
                         FromPos          = origin,
@@ -260,8 +253,8 @@ namespace OneBitRob.AI
                         CurrentTarget    = windup.AimTarget,
                         PreviousTarget   = Entity.Null,
                         Caster           = caster,
-                        CasterFaction    = SystemAPI.HasComponent<SpatialHashComponents.SpatialHashTarget>(caster)
-                            ? SystemAPI.GetComponent<SpatialHashComponents.SpatialHashTarget>(caster).Faction
+                        CasterFaction    = SystemAPI.HasComponent<SpatialHashTarget>(caster)
+                            ? SystemAPI.GetComponent<SpatialHashTarget>(caster).Faction
                             : (byte)Constants.GameConstants.ALLY_FACTION,
                         LayerMask        = (brain != null
                             ? (config.EffectType == SpellEffectType.Positive
@@ -282,8 +275,8 @@ namespace OneBitRob.AI
                         PrefabIdHash = config.SummonPrefabHash,
                         Position     = aimPos,
                         Count        = 1,
-                        Faction      = SystemAPI.HasComponent<SpatialHashComponents.SpatialHashTarget>(caster)
-                            ? SystemAPI.GetComponent<SpatialHashComponents.SpatialHashTarget>(caster).Faction
+                        Faction      = SystemAPI.HasComponent<SpatialHashTarget>(caster)
+                            ? SystemAPI.GetComponent<SpatialHashTarget>(caster).Faction
                             : (byte)0,
                         HasValue     = (config.SummonPrefabHash != 0 ? 1 : 0)
                     };
@@ -291,10 +284,20 @@ namespace OneBitRob.AI
                     if (summon.HasValue != 0)
                     {
                         if (em.HasComponent<SummonRequest>(caster)) ecb.SetComponent(caster, summon);
-                        else                                      ecb.AddComponent(caster, summon);
+                        else                                       ecb.AddComponent(caster, summon);
                     }
                     break;
                 }
+            }
+
+            // Post-cast attack lock to avoid immediate weapon fire
+            if (config.PostCastAttackLockSeconds > 0f)
+            {
+                var lockUntil = new ActionLockUntil { Until = now + config.PostCastAttackLockSeconds };
+                if (em.HasComponent<ActionLockUntil>(caster)) 
+                    ecb.SetComponent(caster, lockUntil);
+                else                                          
+                    ecb.AddComponent(caster, lockUntil);
             }
 
             if (brain != null)

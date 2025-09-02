@@ -15,7 +15,7 @@ namespace OneBitRob.AI
     public partial struct SpellPlanSystem : ISystem
     {
         ComponentLookup<LocalTransform> _posRO;
-        ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
+        ComponentLookup<SpatialHashTarget> _factRO;
         ComponentLookup<HealthMirror> _hpRO;
 
         EntityQuery _q;
@@ -23,7 +23,7 @@ namespace OneBitRob.AI
         public void OnCreate(ref SystemState state)
         {
             _posRO = state.GetComponentLookup<LocalTransform>(true);
-            _factRO = state.GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
+            _factRO = state.GetComponentLookup<SpatialHashTarget>(true);
             _hpRO = state.GetComponentLookup<HealthMirror>(true);
 
             _q = state.GetEntityQuery(
@@ -42,7 +42,7 @@ namespace OneBitRob.AI
             state.RequireForUpdate(_q);
         }
 
-        public void OnUpdate(ref SystemState state)
+       public void OnUpdate(ref SystemState state)
         {
             _posRO.Update(ref state);
             _factRO.Update(ref state);
@@ -62,7 +62,6 @@ namespace OneBitRob.AI
                 var wind = em.GetComponentData<SpellWindup>(e);
                 var cool = em.GetComponentData<SpellCooldown>(e);
 
-                // Can't plan while winding up or cooling down
                 if (wind.Active != 0 || now < cool.NextTime)
                 {
                     decide.HasValue = 0;
@@ -72,35 +71,22 @@ namespace OneBitRob.AI
 
                 var cfg  = em.GetComponentData<SpellConfig>(e);
                 var cast = em.GetComponentData<CastRequest>(e);
-                cast.HasValue   = 0;
-                cast.Kind       = CastKind.None;
-                cast.Target     = Entity.Null;
-                cast.AoEPosition= float3.zero;
+                cast.HasValue    = 0;
+                cast.Kind        = CastKind.None;
+                cast.Target      = Entity.Null;
+                cast.AoEPosition = float3.zero;
 
                 var stats = em.HasComponent<UnitRuntimeStats>(e) ? em.GetComponentData<UnitRuntimeStats>(e) : UnitRuntimeStats.Defaults;
-
                 var cfgScaled = cfg;
                 cfgScaled.Range = cfg.Range * math.max(0.0001f, stats.SpellRangeMult);
-                
+
                 switch (cfg.Kind)
                 {
-                    // Single-target
                     case SpellKind.ProjectileLine:
                     case SpellKind.Chain:
-                    {
-                        var tgt = SelectSingleTarget(e, cfg);
-                        if (tgt != Entity.Null)
-                        {
-                            cast.Kind   = CastKind.SingleTarget;
-                            cast.Target = tgt;
-                            cast.HasValue = 1;
-                        }
-                        break;
-                    }
-
                     case SpellKind.EffectOverTimeTarget:
                     {
-                        var tgt = SelectSingleTarget(e, cfg);
+                        var tgt = SelectSingleTarget(e, cfgScaled);
                         if (tgt != Entity.Null)
                         {
                             cast.Kind   = CastKind.SingleTarget;
@@ -110,14 +96,13 @@ namespace OneBitRob.AI
                         break;
                     }
 
-                    // AoE
                     case SpellKind.EffectOverTimeArea:
                     {
-                        if (TrySelectAoE(e, cfg, out var point))
+                        if (TrySelectAoE(e, cfgScaled, out var point))
                         {
-                            cast.Kind = CastKind.AreaOfEffect;
+                            cast.Kind        = CastKind.AreaOfEffect;
                             cast.AoEPosition = point;
-                            cast.HasValue = 1;
+                            cast.HasValue    = 1;
                         }
                         break;
                     }
@@ -126,16 +111,16 @@ namespace OneBitRob.AI
                     {
                         if (_posRO.HasComponent(e))
                         {
-                            cast.Kind = CastKind.AreaOfEffect;
+                            cast.Kind        = CastKind.AreaOfEffect;
                             cast.AoEPosition = _posRO[e].Position;
-                            cast.HasValue = 1;
+                            cast.HasValue    = 1;
                         }
                         break;
                     }
                 }
 
                 em.SetComponentData(e, cast);
-                decide.HasValue = 0; // always consume the request
+                decide.HasValue = 0;
                 em.SetComponentData(e, decide);
             }
 
@@ -150,7 +135,7 @@ namespace OneBitRob.AI
                 case SpellAcquireMode.LowestHealthAlly:
                     return new LowestHealthAllyTargeting().GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
 
-                case SpellAcquireMode.DensestEnemyCluster: // single-target fallback → use closest enemy
+                case SpellAcquireMode.DensestEnemyCluster:
                 case SpellAcquireMode.ClosestEnemy:
                 default:
                     return new ClosestEnemySpellTargeting().GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
@@ -164,6 +149,7 @@ namespace OneBitRob.AI
             {
                 case SpellAcquireMode.DensestEnemyCluster:
                     return new DensestEnemyClusterTargeting().TryGetAOETargetPoint(self, in cfg, ref _posRO, ref _factRO, out point);
+
                 case SpellAcquireMode.LowestHealthAlly:
                 case SpellAcquireMode.ClosestEnemy:
                 default:

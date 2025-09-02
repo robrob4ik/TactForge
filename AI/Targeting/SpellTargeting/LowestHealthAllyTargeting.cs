@@ -13,7 +13,7 @@ namespace OneBitRob.AI
             Entity self,
             in SpellConfig config,
             ref ComponentLookup<LocalTransform> posLookup,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factLookup,
+            ref ComponentLookup<SpatialHashTarget> factLookup,
             ref ComponentLookup<HealthMirror> healthLookup)
         {
             byte selfFaction = factLookup.HasComponent(self) ? factLookup[self].Faction : GameConstants.ALLY_FACTION;
@@ -56,7 +56,7 @@ namespace OneBitRob.AI
             Entity _,
             in SpellConfig __,
             ref ComponentLookup<LocalTransform> ___,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> ____,
+            ref ComponentLookup<SpatialHashTarget> ____,
             out float3 point)
         {
             point = default;

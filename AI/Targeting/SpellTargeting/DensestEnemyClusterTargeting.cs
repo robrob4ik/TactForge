@@ -13,7 +13,7 @@ namespace OneBitRob.AI
             Entity _,
             in SpellConfig __,
             ref ComponentLookup<LocalTransform> ___,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> ____,
+            ref ComponentLookup<SpatialHashTarget> ____,
             ref ComponentLookup<HealthMirror> _____)
             => Entity.Null;
 
@@ -21,7 +21,7 @@ namespace OneBitRob.AI
             Entity self,
             in SpellConfig config,
             ref ComponentLookup<LocalTransform> posLookup,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factLookup,
+            ref ComponentLookup<SpatialHashTarget> factLookup,
             out float3 point)
         {
             point = default;

@@ -32,7 +32,6 @@ namespace OneBitRob.VFX
         private static VfxPoolManager _instance;
         private static Dictionary<string, MMObjectPooler> _map;
 
-        // Persistent management
         private struct PersistentEntry { public int IdHash; public string Id; public GameObject Go; }
         private static readonly Dictionary<long, PersistentEntry> _active = new(64);
         private static readonly Dictionary<long, int>             _refs   = new(64);

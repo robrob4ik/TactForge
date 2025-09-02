@@ -32,8 +32,7 @@ namespace OneBitRob.ECS
 
                 var stats = UnitRuntimeStats.Defaults;
 
-                DynamicBuffer<StatModifier> mods =
-                    em.HasBuffer<StatModifier>(e) ? em.GetBuffer<StatModifier>(e) : default;
+                DynamicBuffer<StatModifier> mods = em.HasBuffer<StatModifier>(e) ? em.GetBuffer<StatModifier>(e) : default;
 
                 if (mods.IsCreated)
                 {
@@ -57,9 +56,8 @@ namespace OneBitRob.ECS
 
         private static void Apply(ref UnitRuntimeStats s, in StatModifier m)
         {
-            // Multipliers: prefer Mul; Add is interpreted as (1 + add)
             float MulFrom(StatOp op, float value) => op == StatOp.Mul ? value : (1f + value);
-            float AddFrom(StatOp op, float value) => value; // additive stays as is
+            float AddFrom(StatOp op, float value) => value;
 
             switch (m.Kind)
             {

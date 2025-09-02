@@ -4,8 +4,6 @@ using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 using Unity.Transforms;
-using Unity.Mathematics;
-using static Unity.Mathematics.math;
 using UnityEngine;
 using float3 = Unity.Mathematics.float3;
 
@@ -28,10 +26,9 @@ namespace OneBitRob.AI
     }
 
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellPlanSystem))] // decision ready…
-    [UpdateBefore(typeof(SpellWindupAndFireSystem))] // …before execution consumes it
-    public partial class CastSpellSystem
-        : TaskProcessorSystem<CastSpellComponent, CastSpellTag>
+    [UpdateAfter(typeof(SpellPlanSystem))]
+    [UpdateBefore(typeof(SpellWindupAndFireSystem))]
+    public partial class CastSpellSystem : TaskProcessorSystem<CastSpellComponent, CastSpellTag>
     {
         ComponentLookup<LocalTransform> _posRO;
 

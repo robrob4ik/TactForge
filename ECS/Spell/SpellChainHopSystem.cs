@@ -13,7 +13,7 @@ namespace OneBitRob.AI
     public partial struct SpellChainHopSystem : ISystem
     {
         ComponentLookup<LocalTransform> _posRO;
-        ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
+        ComponentLookup<SpatialHashTarget> _factRO;
         ComponentLookup<SpellConfig> _cfgRO;
 
         EntityQuery _q;
@@ -21,7 +21,7 @@ namespace OneBitRob.AI
         public void OnCreate(ref SystemState state)
         {
             _posRO  = state.GetComponentLookup<LocalTransform>(true);
-            _factRO = state.GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
+            _factRO = state.GetComponentLookup<SpatialHashTarget>(true);
             _cfgRO  = state.GetComponentLookup<SpellConfig>(true);
             _q      = state.GetEntityQuery(ComponentType.ReadWrite<SpellChainRunner>());
             state.RequireForUpdate(_q);

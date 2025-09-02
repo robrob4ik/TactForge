@@ -29,7 +29,9 @@ namespace OneBitRob.AI
         [SerializeField, Tooltip("Set all child colliders to Ally/Enemy faction layer at Awake/Enable/Start depending on flags.")]
         private bool autoAssignFactionLayer = true;
 
-        [SerializeField] private bool reassignOnEnable = true;
+        [SerializeField]
+        private bool reassignOnEnable = true;
+
         [SerializeField, Tooltip("If true, minimal nav init runs on Start (does NOT change tunables).")]
         private bool applyNavFromDefinitionOnStart = true;
 
@@ -38,6 +40,7 @@ namespace OneBitRob.AI
 
         [Header("Debug")]
         public bool DebugDrawCombatGizmos = true;
+
         public bool DebugAlwaysDraw = false;
         public bool DebugDrawFacing = true;
         public bool DebugDrawSpell = true;
@@ -46,9 +49,6 @@ namespace OneBitRob.AI
 
         public GameObject CurrentTarget { get; set; }
         public Vector3 CurrentTargetPosition { get; private set; }
-        public GameObject CurrentSpellTarget { get; set; }
-        public List<GameObject> CurrentSpellTargets { get; set; }
-        public Vector3? CurrentSpellTargetPosition { get; set; }
         public float NextAllowedAttackTime { get; set; }
 
         public Entity GetEntity() => _entity;
@@ -68,12 +68,12 @@ namespace OneBitRob.AI
             UnitDefinition = defProvider.unitDefinition;
             _isEnemy = UnitDefinition.isEnemy;
 
-            Character       = GetComponent<EnigmaCharacter>();
+            Character = GetComponent<EnigmaCharacter>();
             UnitCombatController = GetComponent<UnitCombatController>();
-            HandleWeapon    = Character ? Character.FindAbility<EnigmaCharacterHandleWeapon>() : null;
-            _navMove        = Character ? Character.FindAbility<EnigmaCharacterAgentsNavigationMovement>() : null;
-            _navAgent       = GetComponent<AgentAuthoring>();
-            Health          = GetComponent<EnigmaHealth>();
+            HandleWeapon = Character ? Character.FindAbility<EnigmaCharacterHandleWeapon>() : null;
+            _navMove = Character ? Character.FindAbility<EnigmaCharacterAgentsNavigationMovement>() : null;
+            _navAgent = GetComponent<AgentAuthoring>();
+            Health = GetComponent<EnigmaHealth>();
 
             if (Health != null)
             {
@@ -84,31 +84,25 @@ namespace OneBitRob.AI
 
             RecomputeMasks();
 
-            if (autoAssignFactionLayer)
-                AssignFactionLayers("Awake");
+            if (autoAssignFactionLayer) AssignFactionLayers("Awake");
 
             if (HandleWeapon != null)
             {
-                // Use hostiles for scan/selection.
                 HandleWeapon.SetTargetLayerMask(_targetMask);
-                // Put owner/hurtboxes on own faction layer for any internal filters.
                 HandleWeapon.SetDamageableLayer(CombatLayers.FactionLayerIndexFor(_isEnemy));
             }
         }
 
         private void Start()
         {
-            if (autoAssignFactionLayer)
-                AssignFactionLayers("Start");
+            if (autoAssignFactionLayer) AssignFactionLayers("Start");
 
-            if (applyNavFromDefinitionOnStart)
-                ApplyNavFromDefinition();
+            if (applyNavFromDefinitionOnStart) ApplyNavFromDefinition();
         }
 
         private void OnEnable()
         {
-            if (autoAssignFactionLayer && reassignOnEnable)
-                AssignFactionLayers("OnEnable");
+            if (autoAssignFactionLayer && reassignOnEnable) AssignFactionLayers("OnEnable");
         }
 
         private void OnDisable()
@@ -121,10 +115,7 @@ namespace OneBitRob.AI
             if (_entity != Entity.Null) UnitBrainRegistry.Unregister(_entity, gameObject);
         }
 
-        private void RecomputeMasks()
-        {
-            _targetMask = CombatLayers.TargetMaskFor(_isEnemy); // == Hostile
-        }
+        private void RecomputeMasks() { _targetMask = CombatLayers.TargetMaskFor(_isEnemy); }
 
         private void AssignFactionLayers(string reason)
         {
@@ -146,12 +137,11 @@ namespace OneBitRob.AI
                 }
             }
 
-            if (Character && Character.CharacterModel)
-                Character.CharacterModel.layer = layer;
+            if (Character && Character.CharacterModel) Character.CharacterModel.layer = layer;
 
 #if UNITY_EDITOR
-                string layerName = LayerMask.LayerToName(layer);
-                Debug.Log($"[UnitBrain] '{name}' set {changed}/{total} colliders to layer {layer} ({layerName}). Reason={reason}", this);
+            string layerName = LayerMask.LayerToName(layer);
+            Debug.Log($"[UnitBrain] '{name}' set {changed}/{total} colliders to layer {layer} ({layerName}). Reason={reason}", this);
 #endif
         }
 
@@ -164,9 +154,8 @@ namespace OneBitRob.AI
             {
                 body.IsStopped = false;
                 _navAgent.Body = body;
-#if UNITY_EDITOR
-                    Debug.Log($"[UnitBrain] '{name}' nav init: cleared IsStopped on AgentBody.", this);
-#endif
+
+                Debug.Log($"[UnitBrain] '{name}' nav init: cleared IsStopped on AgentBody.", this);
             }
         }
 
@@ -177,7 +166,7 @@ namespace OneBitRob.AI
             var body = _navAgent.Body;
             if (!body.IsStopped)
             {
-                body.Stop();           
+                body.Stop();
                 _navAgent.Body = body;
             }
         }
@@ -203,7 +192,10 @@ namespace OneBitRob.AI
 
         public float RemainingDistance() => _navAgent ? _navAgent.Body.RemainingDistance : 0f;
 
-        public void Setup() { /* hook for future */ }
+        public void Setup()
+        {
+            /* hook for future */
+        }
 
         public void SetEntity(Entity entity)
         {
@@ -211,9 +203,9 @@ namespace OneBitRob.AI
             UnitBrainRegistry.Register(entity, this);
         }
 
-        public LayerMask GetHostileLayerMask()   => CombatLayers.HostileMaskFor(_isEnemy);
-        public LayerMask GetFriendlyLayerMask()  => CombatLayers.FriendlyMaskFor(_isEnemy);
-        public LayerMask GetDamageableLayerMask()=> GetHostileLayerMask();
+        public LayerMask GetHostileLayerMask() => CombatLayers.HostileMaskFor(_isEnemy);
+        public LayerMask GetFriendlyLayerMask() => CombatLayers.FriendlyMaskFor(_isEnemy);
+        public LayerMask GetDamageableLayerMask() => GetHostileLayerMask();
 
 #if UNITY_EDITOR
         private void OnDrawGizmos()

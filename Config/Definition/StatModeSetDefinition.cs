@@ -5,7 +5,6 @@ namespace OneBitRob
 {
     public enum StatKind : byte
     {
-        // Multipliers
         AttackSpeedMult_Ranged,
         AttackSpeedMult_Melee,
         AttackRangeMult_Ranged,
@@ -18,7 +17,7 @@ namespace OneBitRob
 
         // Additives
         CritChance_Add,
-        CritMultiplier_Mul,     // treated as multiplier
+        CritMultiplier_Mul,
         RangedPierceChance_Add,
         RangedPierceMax_Add
     }

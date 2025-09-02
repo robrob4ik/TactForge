@@ -1,6 +1,4 @@
-﻿// File: OneBitRob/VFX/ProjectileService.cs
-
-using MoreMountains.Tools;
+﻿using MoreMountains.Tools;
 using OneBitRob.ECS;
 using UnityEngine;
 

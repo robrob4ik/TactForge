@@ -1,5 +1,4 @@
-﻿// ECS/HybridSync/Cleanup/Brain_EcsEntityCleanupSystem.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using GPUInstancerPro.PrefabModule;
 using OneBitRob.AI;
 using OneBitRob.VFX;
@@ -9,7 +8,6 @@ using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    /// Destroys ECS entity & matching Mono GameObject when DestroyEntityTag is present.
     [UpdateInGroup(typeof(LateSimulationSystemGroup), OrderLast = true)]
     public partial class Brain_EcsEntityCleanupSystem : SystemBase
     {

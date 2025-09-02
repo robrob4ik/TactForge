@@ -1,5 +1,4 @@
-﻿// Assets/PROJECT/Scripts/Runtime/ECS/Core/Components/HealthComponents.cs
-using Unity.Entities;
+﻿using Unity.Entities;
 
 namespace OneBitRob.ECS
 {

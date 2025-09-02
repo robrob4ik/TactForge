@@ -1,6 +1,4 @@
-﻿// FILE: OneBitRob/ECS/SpawnerSystem.cs
-
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using GPUInstancerPro.PrefabModule;
 using OneBitRob.ECS.GPUI;
 using Opsive.BehaviorDesigner.Runtime;
@@ -105,7 +103,7 @@ namespace OneBitRob.ECS
                     // ─────────────────────────────────────────────────────────────
                     // Baseline tags & targeting membership (must exist immediately)
                     state.EntityManager.AddComponent(e, ComponentType.ReadOnly<AgentTag>());
-                    state.EntityManager.AddComponentData(e, new SpatialHashComponents.SpatialHashTarget { Faction = faction });
+                    state.EntityManager.AddComponentData(e, new SpatialHashTarget { Faction = faction });
 
                     if (faction == Constants.GameConstants.ALLY_FACTION)
                         state.EntityManager.AddComponent<AllyTag>(e);

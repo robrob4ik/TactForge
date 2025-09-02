@@ -2,7 +2,7 @@
 
 namespace OneBitRob.Debugging
 {
-    [CreateAssetMenu(menuName = "TactForge/Debug Settings", fileName = "DebugSettings")]
+    [CreateAssetMenu(menuName = "TactForge/Config/Debug Settings", fileName = "DebugSettings")]
     public sealed class DebugSettings : ScriptableObject
     {
         [Header("Visibility")]

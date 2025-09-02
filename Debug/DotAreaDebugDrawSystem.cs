@@ -7,7 +7,6 @@ using UnityEngine;
 
 namespace OneBitRob.AI.Debugging
 {
-    /// <summary>Draws a simple wire ring for every active DoTArea.</summary>
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [WorldSystemFilter(WorldSystemFilterFlags.Default | WorldSystemFilterFlags.Editor)]
     public partial struct DoTAreaDebugDrawSystem : ISystem

@@ -1,5 +1,4 @@
-﻿// FILE: Assets/PROJECT/Scripts/ECS/Spatial/SpatialHashSearch.cs
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -14,7 +13,7 @@ namespace OneBitRob.ECS
             float maxDistance,
             FixedList128Bytes<byte> acceptedFactions,
             ref ComponentLookup<LocalTransform> transforms,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> targets)
+            ref ComponentLookup<SpatialHashTarget> targets)
         {
             var grid = SpatialHashBuildSystem.Grid;
             float cellSize = SpatialHashBuildSystem.CellSize;
@@ -64,7 +63,7 @@ namespace OneBitRob.ECS
             FixedList128Bytes<byte> acceptedFactions,
             NativeList<Entity> results,
             ref ComponentLookup<LocalTransform> transforms,
-            ref ComponentLookup<SpatialHashComponents.SpatialHashTarget> factions)
+            ref ComponentLookup<SpatialHashTarget> factions)
         {
             var grid = SpatialHashBuildSystem.Grid;
             float cellSize = SpatialHashBuildSystem.CellSize;

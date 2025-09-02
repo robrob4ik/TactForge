@@ -2,10 +2,8 @@
 
 namespace OneBitRob.VFX
 {
-    /// Facade for gameplay code. Knows only hashes and calls pool manager + registry for you.
     public static class VfxService
     {
-        // One-shot by hash
         public static void PlayByHash(int vfxIdHash, Vector3 position, Transform follow = null)
         {
             if (vfxIdHash == 0) return;

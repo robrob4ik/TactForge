@@ -1,12 +1,11 @@
-﻿// File: OneBitRob/ECS/Stats/StatModifier.cs
-using Unity.Entities;
+﻿using Unity.Entities;
 
 namespace OneBitRob.ECS
 {
     public struct StatModifier : IBufferElementData
     {
-        public OneBitRob.StatKind Kind;
-        public OneBitRob.StatOp   Op;
+        public StatKind Kind;
+        public StatOp   Op;
         public float              Value;
     }
 
@@ -15,7 +14,6 @@ namespace OneBitRob.ECS
     
     public struct UnitRuntimeStats : IComponentData
     {
-        // Multipliers (defaults = 1)
         public float RangedAttackSpeedMult;
         public float MeleeAttackSpeedMult;
         public float AttackRangeMult_Ranged;
@@ -26,9 +24,8 @@ namespace OneBitRob.ECS
         public float SpellRangeMult;
         public float ProjectileRadiusMult;
 
-        // Additives (defaults = 0)
         public float CritChanceAdd;
-        public float CritMultiplierMult; // multiplier, default 1 (but placed here)
+        public float CritMultiplierMult; 
         public float RangedPierceChanceAdd;
         public int   RangedPierceMaxAdd;
 

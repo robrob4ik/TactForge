@@ -1,5 +1,4 @@
-﻿// File: OneBitRob/FX/FeedbackPoolManager.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
 

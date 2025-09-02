@@ -29,13 +29,13 @@ namespace OneBitRob.AI
     public partial class FindTargetSystem : TaskProcessorSystem<FindTargetComponent, FindTargetTag>
     {
         ComponentLookup<LocalTransform> _posRO;
-        ComponentLookup<SpatialHashComponents.SpatialHashTarget> _factRO;
+        ComponentLookup<SpatialHashTarget> _factRO;
 
         protected override void OnCreate()
         {
             base.OnCreate();
             _posRO = GetComponentLookup<LocalTransform>(true);
-            _factRO = GetComponentLookup<SpatialHashComponents.SpatialHashTarget>(true);
+            _factRO = GetComponentLookup<SpatialHashTarget>(true);
         }
 
         protected override void OnUpdate()
@@ -57,8 +57,7 @@ namespace OneBitRob.AI
             var closest = SpatialHashSearch.GetClosest(selfPos, range, wanted, ref _posRO, ref _factRO);
             if (closest == Entity.Null) return TaskStatus.Failure;
 
-            // Hysteresis: only replace an existing valid target if the new one is
-            // at least autoTargetMinSwitchDistance units closer.
+            // Hysteresis: only replace an existing valid target if the new one is at least autoTargetMinSwitchDistance units closer.
             if (EntityManager.HasComponent<Target>(e))
             {
                 var current = EntityManager.GetComponentData<Target>(e).Value;

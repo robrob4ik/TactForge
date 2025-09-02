@@ -1,5 +1,4 @@
-﻿// File: OneBitRob/FX/FeedbackService.cs
-using System.Collections;
+﻿using System.Collections;
 using MoreMountains.Feedbacks;
 using MoreMountains.Tools;
 using UnityEngine;
@@ -19,7 +18,7 @@ namespace OneBitRob.FX
             // 1) Resolve pooled instance if possible
             if (definition.HasPoolId)
             {
-                pooler = FeedbackPoolManager.GetPooler(definition.poolId); // <-- unified
+                pooler = FeedbackPoolManager.GetPooler(definition.poolId);
                 if (pooler != null)
                 {
                     go = pooler.GetPooledGameObject();
