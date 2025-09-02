@@ -1,7 +1,4 @@
-﻿// Runtime/AI/BehaviorTasks/Spell/CastSpell.cs
-// Commits the cast: face the aim now; ECS executor will windup/fire.
-
-using OneBitRob.Debugging;
+﻿using OneBitRob.Debugging;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Opsive.GraphDesigner.Runtime;

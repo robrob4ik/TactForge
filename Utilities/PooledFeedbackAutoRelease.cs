@@ -1,5 +1,4 @@
-﻿// FILE: Assets/PROJECT/Scripts/Runtime/FX/Feedbacks/MMFeedbacksAutoRelease.cs
-using System.Collections;
+﻿using System.Collections;
 using MoreMountains.Tools;
 using MoreMountains.Feedbacks;
 using UnityEngine;

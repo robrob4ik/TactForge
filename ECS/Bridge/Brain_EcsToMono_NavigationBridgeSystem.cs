@@ -1,4 +1,5 @@
-﻿using OneBitRob.Debugging;
+﻿using OneBitRob.AI;
+using OneBitRob.Debugging;
 using Unity.Entities;
 using UnityEngine;
 
@@ -15,13 +16,12 @@ namespace OneBitRob.ECS
             {
                 if (desiredDestination.ValueRO.HasValue == 0) continue;
 
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(entity);
+                var brain = UnitBrainRegistry.Get(entity);
                 if (!brain) { desiredDestination.ValueRW = default; continue; }
 
-                bool casting = em.HasComponent<MovementLock>(entity) &&
-                               (em.GetComponentData<MovementLock>(entity).Flags & MovementLockFlags.Casting) != 0;
+                bool casting = em.HasComponent<MovementLock>(entity) && (em.GetComponentData<MovementLock>(entity).Flags & MovementLockFlags.Casting) != 0;
 
-                Vector3 wanted = casting ? brain.transform.position : (Vector3)desiredDestination.ValueRO.Position;
+                Vector3 wanted = casting ? brain.transform.position : desiredDestination.ValueRO.Position;
 
                 // avoid noise
                 if ((wanted - brain.CurrentTargetPosition).sqrMagnitude > 0.0004f)

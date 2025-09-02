@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace OneBitRob
 {
-    [CreateAssetMenu(menuName = "TactForge/Config/Attack Animation Profile", fileName = "AttackAnimationProfile")]
+    [CreateAssetMenu(menuName = "TactForge/Attack Animation Set/Attack Animation Profile", fileName = "AttackAnimationProfile")]
     public class AttackAnimationSettings : ScriptableObject
     {
         public AttackAnimationSelect mode = AttackAnimationSelect.Sequential;

@@ -5,7 +5,6 @@ namespace OneBitRob
 {
     public abstract class WeaponDefinition : ScriptableObject
     {
-        // Common
         [BoxGroup("Common")]
         [LabelText("Attack Range"), SuffixLabel("units", true)]
         [MinValue(0f)]
@@ -20,14 +19,11 @@ namespace OneBitRob
         [MinValue(0f)]
         public float attackCooldown = 1f;
 
-        // Variance
         [BoxGroup("Variance")]
-        [InfoBox("Random ± added to attackCooldown each use. Example: 0.05 → 1s becomes [0.95..1.05]s.", InfoMessageType.None)]
         [LabelText("Cooldown Jitter"), SuffixLabel("s", true)]
         [MinValue(0f)]
         public float attackCooldownJitter = 0.2f;
 
-        // Criticals
         [BoxGroup("Criticals")]
         [LabelText("Crit Chance"), PropertyRange(0f, 1f)]
         public float critChance = 0f;

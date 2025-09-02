@@ -1,4 +1,5 @@
-﻿using Unity.Collections;
+﻿using OneBitRob.AI;
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Transforms;
 using UnityEngine;
@@ -15,7 +16,7 @@ namespace OneBitRob.ECS
                          .WithAll<AgentTag>()
                          .WithEntityAccess())
             {
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(entity);
+                var brain = UnitBrainRegistry.Get(entity);
                 if (!brain) continue;
 
                 var t = brain.transform;

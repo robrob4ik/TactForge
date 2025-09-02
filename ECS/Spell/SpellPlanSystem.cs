@@ -1,11 +1,4 @@
-﻿// Phase: PLAN — picks a cast (target or AoE point) and writes CastRequest.
-// Renamed from SpellDecisionSystem for consistency with Plan → Aim → Execute.
-
-// Notes:
-// - Negative AoE: no self fallback. If no enemy point, no cast.
-// - Positive AoE (heals/buffs): may fallback to self.
-
-using OneBitRob.ECS;
+﻿using OneBitRob.ECS;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
@@ -17,8 +10,8 @@ namespace OneBitRob.AI
 {
     [BurstCompile]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateBefore(typeof(CastSpellSystem))]        // Aim happens after plan
-    [UpdateBefore(typeof(SpellWindupAndFireSystem))]  // Execute consumes the plan
+    [UpdateBefore(typeof(CastSpellSystem))]
+    [UpdateBefore(typeof(SpellWindupAndFireSystem))]
     public partial struct SpellPlanSystem : ISystem
     {
         ComponentLookup<LocalTransform> _posRO;

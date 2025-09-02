@@ -3,7 +3,7 @@ namespace OneBitRob.ECS
 {
     using UnityEngine;
 
-    [CreateAssetMenu(menuName = "SO/AI/Spawning/SpawnDefinition")]
+    [CreateAssetMenu(menuName = "TactForge/Definition/Spawner Config")]
     public class SpawnerSettings : ScriptableObject
     {
         [Tooltip("Allies prefabs to spawn")]

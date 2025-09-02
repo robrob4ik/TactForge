@@ -1,21 +1,17 @@
-﻿// File: OneBitRob/ECS/ProjectilePoolManager.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
 
 namespace OneBitRob.ECS
 {
-    /// <summary>
-    /// Scene-level ID -> MMObjectPooler resolver for projectile prefabs.
-    /// </summary>
     [DefaultExecutionOrder(-9999)]
     public class ProjectilePoolManager : MonoBehaviour
     {
         [System.Serializable]
         public struct Entry
         {
-            public string Id;               // e.g. "arrow", "mage_orb"
-            public MMObjectPooler Pooler;   // MMSimpleObjectPooler or MMMultipleObjectPooler
+            public string Id;               
+            public MMObjectPooler Pooler;
         }
 
         [Tooltip("Map of projectile ids to MM poolers. Setup once per scene.")]
@@ -81,9 +77,5 @@ namespace OneBitRob.ECS
             var pooler = GetPooler(id);
             return pooler ? pooler.GetPooledGameObject() : null;
         }
-
-        /// Legacy API (kept for back-compat)
-        [System.Obsolete("Use GetPooler(id) instead.")]
-        public static MMObjectPooler Resolve(string id) => GetPooler(id);
     }
 }

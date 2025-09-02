@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace OneBitRob.FX
 {
-    [CreateAssetMenu(menuName = "TactForge/Config/Damage Numbers Profile", fileName = "DamageNumbersProfile")]
+    [CreateAssetMenu(menuName = "TactForge/Damage Numbers Profile", fileName = "DamageNumbersProfile")]
     public class DamageNumbersSettings : ScriptableObject
     {
         [Header("Prefabs (Mesh / Worldspace)")]

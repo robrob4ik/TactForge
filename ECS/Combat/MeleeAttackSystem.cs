@@ -125,7 +125,6 @@ namespace OneBitRob.AI
 
                 var forward = math.normalizesafe(math.mul(selfLT.Rotation, new float3(0,0,1)));
 
-                // Natychmiastowe trafienie – zgodnie z oryginałem BEZ ustawiania cooldownu tutaj.
                 var hit = BuildMeleeHitRequest(e, brain, in melee, in stats, selfLT.Position, forward);
                 ecb.SetOrAdd(em, e, hit);
 

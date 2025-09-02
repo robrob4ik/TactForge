@@ -26,7 +26,6 @@ namespace OneBitRob
     [CreateAssetMenu(menuName = "TactForge/Definition/Spell", fileName = "SpellDefinition")]
     public class SpellDefinition : ScriptableObject
     {
-        // General
         [BoxGroup("General")]
         [LabelText("Spell Name")]
         public string  SpellName = "Spell";
@@ -58,13 +57,11 @@ namespace OneBitRob
         [MinValue(0f)]
         public float Cooldown = 2f;
 
-        // Damage / Heal (instant)
         [BoxGroup("Damage+Heal (instant)")]
         [LabelText("Effect Amount")]
         [MinValue(0f)]
         public float EffectAmount = 10f;
 
-        // DoT / HoT
         [BoxGroup("DoT+HoT")]
         [ShowIf("@Kind == SpellKind.EffectOverTimeTarget || Kind == SpellKind.EffectOverTimeArea")]
         [LabelText("Tick Amount"), MinValue(0f)]
@@ -80,13 +77,11 @@ namespace OneBitRob
         [LabelText("Tick Interval"), SuffixLabel("s", true), MinValue(0.05f)]
         public float TickInterval = 0.25f;
 
-        // AOE
         [BoxGroup("AOE")]
         [ShowIf("@Kind == SpellKind.EffectOverTimeArea")]
         [LabelText("Area Radius"), SuffixLabel("units", true), MinValue(0f)]
         public float AreaRadius = 3f;
 
-        // Projectile
         [BoxGroup("Projectile")]
         [ShowIf("@Kind == SpellKind.ProjectileLine")]
         [LabelText("Projectile Id")]
@@ -107,7 +102,6 @@ namespace OneBitRob
         [LabelText("Radius"), SuffixLabel("units", true), MinValue(0f)]
         public float ProjectileRadius = 0f;
 
-        // Muzzle (Projectile)
         [BoxGroup("Projectile Muzzle")]
         [ShowIf("@Kind == SpellKind.ProjectileLine")]
         [LabelText("Muzzle Forward (Local Z)"), SuffixLabel("units", true), MinValue(0f)]
@@ -118,7 +112,6 @@ namespace OneBitRob
         [LabelText("Muzzle Local Offset (XYZ)")]
         public Vector3 MuzzleLocalOffset = Vector3.zero;
 
-        // VFX & AOE Visuals
         [BoxGroup("VFX & AOE Visuals")]
         [LabelText("Effect VFX Id")]
         public string EffectVfxId = "";
@@ -132,7 +125,6 @@ namespace OneBitRob
         [InfoBox("Vertical offset for the AOE VFX only (damage center remains at ground).")]
         public float AreaVfxYOffset = 0.04f;
 
-        // Chain
         [BoxGroup("Chain")]
         [ShowIf("@Kind == SpellKind.Chain")]
         [MinValue(1)]
@@ -148,7 +140,6 @@ namespace OneBitRob
         [LabelText("Per Jump Delay"), SuffixLabel("s", true), MinValue(0f)]
         public float ChainPerJumpDelay = 0.05f;
 
-        // Summon
         [BoxGroup("Summon")]
         [ShowIf("@Kind == SpellKind.Summon")]
         [LabelText("Summon Prefab"), AssetsOnly]
@@ -158,15 +149,13 @@ namespace OneBitRob
         [ShowIf("@Kind == SpellKind.Summon")]
         [MinValue(1)]
         public int SummonCount = 1;
-
-        // Debug
+        
         [BoxGroup("Debug")]
         public bool  DebugDraw = true;
 
         [BoxGroup("Debug")]
         public Color DebugColor = new Color(0.8f, 0.2f, 1f, 0.5f);
-
-        // Feedbacks
+        
         [BoxGroup("Feedbacks")]
         [LabelText("Prepare Feedback")]
         [AssetsOnly] public FeedbackDefinition prepareFeedback;

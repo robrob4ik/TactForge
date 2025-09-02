@@ -1,5 +1,5 @@
-﻿using Unity.Entities;
-using Unity.Mathematics;
+﻿using OneBitRob.AI;
+using Unity.Entities;
 using UnityEngine;
 
 namespace OneBitRob.ECS
@@ -13,7 +13,7 @@ namespace OneBitRob.ECS
             {
                 if (desiredFacing.ValueRO.HasValue == 0) continue;
 
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(entity);
+                var brain = UnitBrainRegistry.Get(entity);
                 if (brain)
                 {
                     var facePos = (Vector3)desiredFacing.ValueRO.TargetPosition;

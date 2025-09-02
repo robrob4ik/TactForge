@@ -1,5 +1,4 @@
-﻿// Runtime/UI/IconLibrary.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
 

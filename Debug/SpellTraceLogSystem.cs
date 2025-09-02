@@ -1,7 +1,4 @@
-﻿// Runtime/AI/Systems/SpellTraceLogSystem.cs
-using Unity.Entities;
-using Unity.Mathematics;
-using OneBitRob.AI.Debugging;
+﻿using Unity.Entities;
 using OneBitRob.ECS;
 using UnityEngine;
 

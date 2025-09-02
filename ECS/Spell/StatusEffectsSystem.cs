@@ -1,4 +1,5 @@
-﻿using OneBitRob.FX;
+﻿using OneBitRob.AI;
+using OneBitRob.FX;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -25,7 +26,7 @@ namespace OneBitRob.ECS
             {
                 var dot = dotRW.ValueRO;
 
-                var tb = OneBitRob.AI.UnitBrainRegistry.Get(dot.Target);
+                var tb = UnitBrainRegistry.Get(dot.Target);
 
                 // Maintain single persistent VFX for this Target+EffectId across all casters
                 if (dot.EffectVfxIdHash != 0 && dot.Target != Entity.Null && tb != null)
@@ -168,7 +169,7 @@ namespace OneBitRob.ECS
                     {
                         var col = s_Cols[i];
                         if (!col) continue;
-                        var tb = col.GetComponentInParent<OneBitRob.AI.UnitBrain>();
+                        var tb = col.GetComponentInParent<UnitBrain>();
                         if (tb == null || tb.Health == null) continue;
 
                         float amt = isHot ? -shownAmount : shownAmount;

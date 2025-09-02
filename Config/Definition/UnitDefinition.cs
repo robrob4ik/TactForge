@@ -1,4 +1,3 @@
-// File: OneBitRob/UnitDefinition.cs
 using System.Collections.Generic;
 using OneBitRob.FX;
 using Sirenix.OdinInspector;
@@ -18,12 +17,10 @@ namespace OneBitRob
     [CreateAssetMenu(menuName = "TactForge/Definition/Unit", fileName = "UnitDefinition")]
     public class UnitDefinition : ScriptableObject
     {
-        // Visual & Prefab
         [BoxGroup("Visual & Prefab")]
         [LabelText("Unit Model"), AssetsOnly]
         public GameObject unitModel;
 
-        // Classification
         [BoxGroup("Classification")]
         [ListDrawerSettings(Expanded = true)]
         public List<UnitTrait> traits = new();
@@ -32,7 +29,6 @@ namespace OneBitRob
         [ListDrawerSettings(Expanded = true)]
         public List<UnitClass> classes = new();
 
-        // Shop Settings
         [BoxGroup("Shop Settings")]
         [PropertyRange(1, 5)]
         public int price = 1;
@@ -45,7 +41,6 @@ namespace OneBitRob
         [LabelText("Unit Name")]
         public string unitName;
 
-        // Base Stats
         [BoxGroup("Base Stats")]
         [MinValue(1)]
         public int health = 100;
@@ -63,7 +58,6 @@ namespace OneBitRob
         [BoxGroup("Base Stats")]
         public MovementType movementType = MovementType.Normal;
 
-        // Agent
         [BoxGroup("Agent")]
         [LabelText("Stopping Distance"), SuffixLabel("units", true)]
         [MinValue(0f)]
@@ -84,37 +78,30 @@ namespace OneBitRob
         [MinValue(0f)]
         public float retargetCheckInterval = 1f;
 
-        // AI
         [BoxGroup("AI")]
         [InfoBox("While chasing, periodically return Failure from MoveToTarget to let BT re-evaluate (0 = off).")]
         [LabelText("Move Recheck Yield Interval"), SuffixLabel("s", true)]
         [MinValue(0f)]
         public float moveRecheckYieldInterval = 3f;
 
-        // Team
         [BoxGroup("Team")]
         [LabelText("Is Enemy")]
         public bool isEnemy = false;
 
-        // Strategies
         [BoxGroup("Strategies")]
         public TargetingStrategyType targetingStrategy;
 
-        // Combat
         [BoxGroup("Combat")]
         public WeaponDefinition weapon;
 
-        // Spells (unique per unit)
         [BoxGroup("Spells (unique per unit)")]
         [ListDrawerSettings(Expanded = false)]
         public List<SpellDefinition> unitSpells;
 
-        // Feedbacks
         [BoxGroup("Feedbacks")]
         [LabelText("Death Feedback")]
         [AssetsOnly] public FeedbackDefinition deathFeedback;
 
-        // Scaling / Stats
         [BoxGroup("Scaling")]
         [LabelText("Base Scaling (Stat Mod Set)")]
         [AssetsOnly] public StatModSetDefinition baseScaling;

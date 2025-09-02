@@ -11,8 +11,8 @@ namespace OneBitRob.ECS.GPUI
         void Awake()
         {
             var em      = World.DefaultGameObjectInjectionWorld.EntityManager;
-            var entity  = em.CreateEntity();                             // empty entity
-            em.AddComponentObject(entity, new GPUIManagerRef             // <-- Add *managed* component
+            var entity  = em.CreateEntity();                             
+            em.AddComponentObject(entity, new GPUIManagerRef             
             {
                 Value = prefabManager
             });

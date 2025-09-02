@@ -81,8 +81,5 @@ namespace OneBitRob.FX
             return pooler ? pooler.GetPooledGameObject() : null;
         }
 
-        /// Legacy API (kept for back-compat)
-        [System.Obsolete("Use GetPooler(id) instead.")]
-        public static MMObjectPooler Resolve(string id) => GetPooler(id);
     }
 }

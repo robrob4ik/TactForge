@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace OneBitRob
 {
-    [CreateAssetMenu(menuName = "TactForge/Config/Two-Stage Attack Animation Profile", fileName = "TwoStageAttackAnimationProfile")]
+    [CreateAssetMenu(menuName = "TactForge/Attack Animation Set/Two-Stage Attack Animation Profile", fileName = "TwoStageAttackAnimationProfile")]
     public class TwoStageAttackAnimationSettings : ScriptableObject
     {
         [Header("Prepare (windup)")]

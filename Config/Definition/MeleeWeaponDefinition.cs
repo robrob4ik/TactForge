@@ -13,17 +13,12 @@ namespace OneBitRob
 
         [BoxGroup("Arc & Targets")]
         [MinValue(1)]
-        public int   maxTargets   = 3;
+        public int maxTargets = 3;
 
         [BoxGroup("Arc & Targets")]
         [LabelText("Invincibility After Hit"), SuffixLabel("s", true)]
         [MinValue(0f)]
         public float invincibility = 0.10f;
-
-        [BoxGroup("Timing")]
-        [LabelText("Lock While Firing"), SuffixLabel("s", true)]
-        [MinValue(0f)]
-        public float lockWhileFiringSeconds = 0.25f;
 
         [BoxGroup("Animations")]
         public AttackAnimationSettings attackAnimations;

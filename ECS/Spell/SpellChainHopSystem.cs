@@ -1,8 +1,6 @@
-﻿// File: Runtime/AI/Systems/SpellChainHopSystem.cs
-using OneBitRob.ECS;
+﻿using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
-using Unity.Mathematics;
 using Unity.Transforms;
 using static Unity.Mathematics.math;
 using float3 = Unity.Mathematics.float3;

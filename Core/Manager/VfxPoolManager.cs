@@ -1,14 +1,10 @@
-﻿// File: OneBitRob/VFX/VfxPoolManager.cs
+﻿
 using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
 
 namespace OneBitRob.VFX
 {
-    /// <summary>
-    /// Scene-level ID->pool resolver for VFX (one-shots and persistent).
-    /// Keeps persistent instances alive using ref counting.
-    /// </summary>
     [DefaultExecutionOrder(-9999)]
     public sealed class VfxPoolManager : MonoBehaviour
     {
@@ -71,8 +67,6 @@ namespace OneBitRob.VFX
                     _map[e.Id] = e.Pooler;
         }
 
-        // ─── Consistency helpers (match other managers) ─────────────────────
-
         public static MMObjectPooler GetPooler(string id)
         {
             Ensure();
@@ -95,9 +89,7 @@ namespace OneBitRob.VFX
             var pool = GetPooler(id);
             return pool ? pool.GetPooledGameObject() : null;
         }
-
-        // ─── One-shots ──────────────────────────────────────────────────────
-
+        
         public static void PlayById(string id, Vector3 position, Transform follow = null)
         {
             var pool = GetPooler(id);
@@ -119,9 +111,7 @@ namespace OneBitRob.VFX
             go.SetActive(true);
             go.GetComponent<MMPoolableObject>()?.TriggerOnSpawnComplete();
         }
-
-        // ─── Persistent (ref-counted) ───────────────────────────────────────
-
+        
         public static void BeginPersistent(string id, long key, Vector3 position, Transform follow = null)
         {
             Ensure();
@@ -207,9 +197,7 @@ namespace OneBitRob.VFX
                 _active.Remove(key);
             }
         }
-
-        // ─── Helpers ────────────────────────────────────────────────────────
-
+        
         private void PreparePersistent(GameObject go, Vector3 position, Transform follow)
         {
             Move(go, position, follow);

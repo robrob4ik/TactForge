@@ -1,5 +1,4 @@
-﻿// File: OneBitRob/Definitions/StatModSetDefinition.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace OneBitRob
@@ -34,7 +33,7 @@ namespace OneBitRob
         public float    Value;
     }
 
-    [CreateAssetMenu(menuName = "TactForge/Config/Stats/Stat Mod Set", fileName = "StatModSet")]
+    [CreateAssetMenu(menuName = "TactForge/Stats/Stat Mod Set", fileName = "StatModSet")]
     public sealed class StatModSetDefinition : ScriptableObject
     {
         [Tooltip("Ordered list of stat modifiers (applied top-to-bottom).")]
