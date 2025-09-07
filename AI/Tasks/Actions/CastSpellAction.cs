@@ -10,8 +10,7 @@ using float3 = Unity.Mathematics.float3;
 namespace OneBitRob.AI
 {
     [NodeDescription("CastSpellAction")]
-    public class CastSpellAction
-        : AbstractTaskAction<CastSpellComponent, CastSpellTag, CastSpellSystem>, IAction
+    public class CastSpellAction : AbstractTaskAction<CastSpellComponent, CastSpellTag, CastSpellSystem>, IAction
     {
         protected override CastSpellComponent CreateBufferElement(ushort runtimeIndex) => new CastSpellComponent { Index = runtimeIndex };
     }
@@ -25,9 +24,7 @@ namespace OneBitRob.AI
     {
     }
 
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellPlanSystem))]
-    [UpdateBefore(typeof(SpellWindupAndFireSystem))]
+    [UpdateInGroup(typeof(AICastPhaseGroup))]
     public partial class CastSpellSystem : TaskProcessorSystem<CastSpellComponent, CastSpellTag>
     {
         ComponentLookup<LocalTransform> _posRO;

@@ -8,7 +8,7 @@ using OneBitRob.VFX;
 
 namespace OneBitRob.ECS
 {
-    [UpdateInGroup(typeof(SimulationSystemGroup))]
+    [UpdateInGroup(typeof(AIResolvePhaseGroup))]
     public partial struct StatusEffectsSystem : ISystem
     {
         static readonly Collider[] s_Cols = new Collider[256];

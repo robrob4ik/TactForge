@@ -7,7 +7,8 @@ using Unity.Mathematics;
 namespace OneBitRob.ECS
 {
     [BurstCompile]
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateInGroup(typeof(AIPlanPhaseGroup))]
+    [UpdateBefore(typeof(SpellPlanSystem))]
     public partial struct UnitStatsRecalcSystem : ISystem
     {
         private EntityQuery _q;

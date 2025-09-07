@@ -12,7 +12,7 @@ namespace OneBitRob.AI
     public struct AttackTargetComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }
     public struct AttackTargetTag : IComponentData, IEnableableComponent { }
 
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateInGroup(typeof(AIPlanPhaseGroup))]
     public partial class AttackTargetSystem : TaskProcessorSystem<AttackTargetComponent, AttackTargetTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain brain)

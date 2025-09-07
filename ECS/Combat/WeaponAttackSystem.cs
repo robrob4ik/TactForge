@@ -9,9 +9,8 @@ using UnityEngine;
 
 namespace OneBitRob.AI
 {
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(AttackTargetSystem))]
-    [UpdateAfter(typeof(SpellWindupAndFireSystem))]
+    [UpdateInGroup(typeof(AICastPhaseGroup))]
+    [UpdateAfter(typeof(SpellWindupAndFireSystem))] 
     public partial struct WeaponAttackSystem : ISystem
     {
         private ComponentLookup<LocalTransform> _transformLookup;
@@ -56,7 +55,8 @@ namespace OneBitRob.AI
 
                 // If a spell is currently mid‑cast, postpone firing the weapon.
                 if (em.HasComponent<SpellWindup>(e) && em.GetComponentData<SpellWindup>(e).Active != 0)
-                {   // keep windup active until spell finishes
+                {
+                    // keep windup active until spell finishes
                     continue;
                 }
 
@@ -84,10 +84,8 @@ namespace OneBitRob.AI
                 {
                     FireRanged(em, ref ecb, e, brain, in ranged, in stats, selfPos, forward, right, up, now);
                 }
-                else if (weaponDef is MeleeWeaponDefinition melee)
-                {
-                    FinishMelee(em, ref ecb, e, brain, in melee, in stats, selfPos, forward, now);
-                }
+                // NOTE: melee releases happen immediately on request now (no windup path)
+                // We intentionally do not route melee through windup to keep the logic explicit and simple.
 
                 windup.Active = 0;
                 ecb.SetComponent(e, windup);
@@ -116,7 +114,7 @@ namespace OneBitRob.AI
                            : UnitRuntimeStats.Defaults;
 
                 var cd = em.HasComponent<AttackCooldown>(e) ? em.GetComponentData<AttackCooldown>(e) : default;
-                if (now < cd.NextTime) { Consume(ref ecb, e); continue; }
+                if (now < cd.NextTime) { Consume(ref ecb, e); continue; } // ← hard gate
 
                 if (!_transformLookup.HasComponent(e) || !em.HasComponent<LocalTransform>(req.Target))
                 { Consume(ref ecb, e); continue; }
@@ -140,8 +138,24 @@ namespace OneBitRob.AI
                     var hit = BuildMeleeHitRequest(e, brain, in melee, in stats, selfLT.Position, forward);
                     ecb.SetOrAdd(em, e, hit);
 
+                    // Anim + VFX
                     brain.UnitCombatController?.PlayMeleeAttack(melee.attackAnimations);
                     FeedbackService.TryPlay(melee.attackFeedback, brain.transform, (Vector3)selfLT.Position);
+
+                    // NEW: hard gate via cooldown (this was missing before)
+                    var newCd = ComputeAttackCooldown(in melee.attackCooldown, in melee.attackCooldownJitter, stats.MeleeAttackSpeedMult, e, now);
+                    ecb.SetOrAdd(em, e, newCd);
+                    brain.NextAllowedAttackTime = Time.time + (newCd.NextTime - now);
+
+                    // NEW: movement lock for the swing window (prevents sliding/orbiting while striking)
+                    float lockSeconds = max(0f, melee.swingLockSeconds);
+                    if (lockSeconds > 0f)
+                    {
+                        if (!em.HasComponent<ActionLockUntil>(e))
+                            ecb.AddComponent(e, new ActionLockUntil { Until = now + lockSeconds });
+                        else
+                            ecb.SetComponent(e, new ActionLockUntil { Until = now + lockSeconds });
+                    }
                 }
                 else if (weapon is RangedWeaponDefinition ranged)
                 {
@@ -184,16 +198,16 @@ namespace OneBitRob.AI
 
             var spawn = new EcsProjectileSpawnRequest
             {
-                Origin          = origin,
-                Direction       = aimDir,
-                Speed           = max(0.01f, ranged.projectileSpeed),
-                Damage          = max(0f, ranged.attackDamage),
-                MaxDistance     = max(0.1f, ranged.projectileMaxDistance),
-                CritChance      = critChance,
-                CritMultiplier  = critMult,
-                PierceChance    = pierceChance,
-                PierceMaxTargets= pierceMax,
-                HasValue        = 1
+                Origin           = origin,
+                Direction        = aimDir,
+                Speed            = max(0.01f, ranged.projectileSpeed),
+                Damage           = max(0f, ranged.attackDamage),
+                MaxDistance      = max(0.1f, ranged.projectileMaxDistance),
+                CritChance       = critChance,
+                CritMultiplier   = critMult,
+                PierceChance     = pierceChance,
+                PierceMaxTargets = pierceMax,
+                HasValue         = 1
             };
             ecb.SetOrAdd(em, e, spawn);
 
@@ -206,7 +220,7 @@ namespace OneBitRob.AI
 
             var cd = ComputeAttackCooldown(in ranged.attackCooldown, in ranged.attackCooldownJitter, stats.RangedAttackSpeedMult, e, now);
             ecb.SetOrAdd(em, e, cd);
-            brain.NextAllowedAttackTime = Time.time + (cd.NextTime - now); // for Animator gating (same logic as before)
+            brain.NextAllowedAttackTime = Time.time + (cd.NextTime - now);
         }
 
         private void StartRangedWindup(EntityManager em, ref EntityCommandBuffer ecb, Entity e, UnitBrain brain,
@@ -232,21 +246,6 @@ namespace OneBitRob.AI
         }
 
         // MELEE helpers
-        private void FinishMelee(EntityManager em, ref EntityCommandBuffer ecb, Entity e, UnitBrain brain,
-                                 in MeleeWeaponDefinition melee, in UnitRuntimeStats stats,
-                                 float3 selfPos, float3 forward, float now)
-        {
-            var hit = BuildMeleeHitRequest(e, brain, in melee, in stats, selfPos, forward);
-            ecb.SetOrAdd(em, e, hit);
-
-            brain.UnitCombatController?.PlayMeleeAttack(melee.attackAnimations);
-            FeedbackService.TryPlay(melee.attackFeedback, brain.transform, (Vector3)selfPos);
-
-            var cd = ComputeAttackCooldown(in melee.attackCooldown, in melee.attackCooldownJitter, stats.MeleeAttackSpeedMult, e, now);
-            ecb.SetOrAdd(em, e, cd);
-            brain.NextAllowedAttackTime = Time.time + (cd.NextTime - now);
-        }
-
         private static MeleeHitRequest BuildMeleeHitRequest(Entity e, UnitBrain brain, in MeleeWeaponDefinition melee, in UnitRuntimeStats stats, float3 pos, float3 forward)
         {
             return new MeleeHitRequest

@@ -19,9 +19,7 @@ namespace OneBitRob.AI
     public struct HasCastDecisionTag : IComponentData, IEnableableComponent { }
 
     [DisableAutoCreation]
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellPlanSystem))]
-    [UpdateBefore(typeof(SpellWindupAndFireSystem))]
+    [UpdateInGroup(typeof(AIPlanPhaseGroup))]
     public partial class HasCastDecisionSystem : TaskProcessorSystem<HasCastDecisionComponent, HasCastDecisionTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain _)

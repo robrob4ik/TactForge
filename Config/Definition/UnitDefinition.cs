@@ -22,11 +22,11 @@ namespace OneBitRob
         public GameObject unitModel;
 
         [BoxGroup("Classification")]
-        [ListDrawerSettings(Expanded = true)]
+        [ListDrawerSettings(ShowFoldout = true, DefaultExpandedState = true)]
         public List<UnitTrait> traits = new();
 
         [BoxGroup("Classification")]
-        [ListDrawerSettings(Expanded = true)]
+        [ListDrawerSettings(ShowFoldout = true, DefaultExpandedState = true)]
         public List<UnitClass> classes = new();
 
         [BoxGroup("Shop Settings")]
@@ -79,7 +79,6 @@ namespace OneBitRob
         public float retargetCheckInterval = 1f;
 
         [BoxGroup("AI")]
-        [InfoBox("While chasing, periodically return Failure from MoveToTarget to let BT re-evaluate (0 = off).")]
         [LabelText("Move Recheck Yield Interval"), SuffixLabel("s", true)]
         [MinValue(0f)]
         public float moveRecheckYieldInterval = 3f;
@@ -95,7 +94,7 @@ namespace OneBitRob
         public WeaponDefinition weapon;
 
         [BoxGroup("Spells (unique per unit)")]
-        [ListDrawerSettings(Expanded = false)]
+        [ListDrawerSettings(ShowFoldout = true, DefaultExpandedState = false)]
         public List<SpellDefinition> unitSpells;
 
         [BoxGroup("Feedbacks")]

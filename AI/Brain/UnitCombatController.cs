@@ -1,8 +1,8 @@
-﻿
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MoreMountains.Tools;
 using OneBitRob.ECS;
 using OneBitRob.EnigmaEngine;
+using OneBitRob.FX;
 using OneBitRob.VFX;
 using Unity.Entities;
 using UnityEngine;
@@ -77,11 +77,11 @@ namespace OneBitRob.AI
                 var p = _anim.parameters[i];
                 if (p.type == AnimatorControllerParameterType.Trigger && p.name == param) return true;
             }
-            if (_missingParams.Add(param))
-                Debug.LogWarning($"[{name}] Animator missing Trigger parameter '{param}'. Check your AttackAnimationSet.");
+
+            if (_missingParams.Add(param)) Debug.LogWarning($"[{name}] Animator missing Trigger parameter '{param}'. Check your AttackAnimationSet.");
             return false;
         }
-        
+
         private MMObjectPooler ResolveProjectilePooler()
         {
             if (_projectilePooler != null) return _projectilePooler;
@@ -99,12 +99,11 @@ namespace OneBitRob.AI
             }
 
             _projectilePooler = ProjectileService.GetPooler(_projectileId);
-            if (_projectilePooler == null)
-                Debug.LogWarning($"[{name}] No projectile pooler found for id '{_projectileId}'. Add your ProjectilePools prefab to this scene or register the id.");
+            if (_projectilePooler == null) Debug.LogWarning($"[{name}] No projectile pooler found for id '{_projectileId}'. Add your ProjectilePools prefab to this scene or register the id.");
 
             return _projectilePooler;
         }
-        
+
         public void FireProjectile(
             Vector3 origin, Vector3 direction, GameObject attacker,
             float speed, float damage, float maxDistance,
@@ -145,7 +144,19 @@ namespace OneBitRob.AI
             poolable?.TriggerOnSpawnComplete();
         }
 
-        public void FireSpellProjectile(string projectileId, Vector3 origin, Vector3 direction, GameObject attacker, float speed, float damage, float maxDistance, int layerMask, float radius, bool pierce)
+        public void FireSpellProjectile(
+            string projectileId,
+            Vector3 origin,
+            Vector3 direction,
+            GameObject attacker,
+            float speed,
+            float damage,
+            float maxDistance,
+            int layerMask,
+            float radius,
+            bool pierce,
+            FeedbackDefinition hitFeedback = null
+        )
         {
             if (string.IsNullOrEmpty(projectileId)) return;
             var pooler = ProjectileService.GetPooler(projectileId);
@@ -166,6 +177,7 @@ namespace OneBitRob.AI
                 Debug.LogError($"[{name}] Spell projectile must have SpellProjectile + MMPoolableObject.");
                 return;
             }
+
             go.transform.position = origin;
             go.transform.forward = (direction.sqrMagnitude < 1e-6f ? Vector3.forward : direction.normalized);
 
@@ -178,9 +190,10 @@ namespace OneBitRob.AI
                     Speed = speed > 0f ? speed : 60f,
                     Damage = damage,
                     MaxDistance = maxDistance > 0f ? maxDistance : 20f,
-                    LayerMask = layerMask != 0 ? layerMask : (_brain != null ? _brain.GetDamageableLayerMask().value : ~0),
+                    LayerMask = layerMask != 0 ? layerMask : (GetComponent<UnitBrain>()?.GetDamageableLayerMask().value ?? ~0),
                     Radius = Mathf.Max(0f, radius),
-                    Pierce = pierce
+                    Pierce = pierce,
+                    HitFeedback = hitFeedback // NEW
                 }
             );
 

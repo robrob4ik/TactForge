@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using OneBitRob.Config;
+using OneBitRob.Debugging;
 using OneBitRob.EnigmaEngine;
 using ProjectDawn.Navigation.Hybrid;
 using Unity.Entities;
@@ -150,13 +151,16 @@ namespace OneBitRob.AI
             if (_navAgent == null) return;
 
             var body = _navAgent.Body;
+ 
+            // TODO FIX HOW TO?
+
             if (body.IsStopped)
             {
                 body.IsStopped = false;
-                _navAgent.Body = body;
-
-                Debug.Log($"[UnitBrain] '{name}' nav init: cleared IsStopped on AgentBody.", this);
             }
+
+            _navAgent.Body = body;
+
         }
 
         public void StopAgentMotion()
@@ -207,6 +211,7 @@ namespace OneBitRob.AI
         public LayerMask GetFriendlyLayerMask() => CombatLayers.FriendlyMaskFor(_isEnemy);
         public LayerMask GetDamageableLayerMask() => GetHostileLayerMask();
 
+
 #if UNITY_EDITOR
         private void OnDrawGizmos()
         {
@@ -222,55 +227,43 @@ namespace OneBitRob.AI
         {
             var pos = transform.position;
 
-            if (UnitDefinition != null && UnitDefinition.weapon != null && UnitDefinition.weapon.attackRange > 0f)
+            // Primary weapon range disc
+            if (UnitDefinition != null && UnitDefinition.weapon && UnitDefinition.weapon.attackRange > 0f)
             {
-                Gizmos.color = new Color(1f, 0.25f, 0.25f, 0.7f);
-                UnityEditor.Handles.color = Gizmos.color;
-                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.weapon.attackRange);
+                DebugDraw.DiscXZ(pos, UnitDefinition.weapon.attackRange, Color.red);
             }
 
-            if (UnitDefinition != null)
-            {
-                Gizmos.color = new Color(0.25f, 1f, 0.35f, 0.65f);
-                UnityEditor.Handles.color = Gizmos.color;
-                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.stoppingDistance);
-            }
-
+            // Auto target min-switch distance disc
             if (UnitDefinition != null && UnitDefinition.autoTargetMinSwitchDistance > 0f)
             {
-                Gizmos.color = new Color(0.1f, 0.4f, 1f, 1f);
-                UnityEditor.Handles.color = Gizmos.color;
-                UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, UnitDefinition.autoTargetMinSwitchDistance);
+                DebugDraw.DiscXZ(pos, UnitDefinition.autoTargetMinSwitchDistance, Color.blue);
             }
 
+            // Target position and direct target
             if (CurrentTargetPosition != default)
             {
-                Gizmos.color = Color.cyan;
-                Gizmos.DrawLine(pos, CurrentTargetPosition);
-                Gizmos.DrawSphere(CurrentTargetPosition, 0.08f);
+                DebugDraw.GizmoLine(pos, CurrentTargetPosition, Color.cyan);
             }
 
             if (CurrentTarget)
             {
-                Gizmos.color = Color.green;
-                Gizmos.DrawLine(pos, CurrentTarget.transform.position);
-                Gizmos.DrawSphere(CurrentTarget.transform.position, 0.07f);
+                var tpos = CurrentTarget.transform.position;
+                DebugDraw.GizmoLine(pos, tpos, Color.orange);
             }
 
+            // Facing
             if (DebugDrawFacing)
             {
-                Gizmos.color = Color.yellow;
-                Gizmos.DrawRay(pos + Vector3.up * 0.05f, transform.forward * 0.9f);
+                DebugDraw.GizmoRay(pos + Vector3.up * 0.05f, transform.forward, Color.yellow, 0.9f);
             }
 
+            // Spell #0 range disc
             if (DebugDrawSpell && UnitDefinition != null && UnitDefinition.unitSpells != null && UnitDefinition.unitSpells.Count > 0)
             {
                 var sd = UnitDefinition.unitSpells[0];
                 if (sd != null && sd.Range > 0f)
                 {
-                    Gizmos.color = new Color(sd.DebugColor.r, sd.DebugColor.g, sd.DebugColor.b, 0.35f);
-                    UnityEditor.Handles.color = Gizmos.color;
-                    UnityEditor.Handles.DrawWireDisc(pos, Vector3.up, sd.Range);
+                    DebugDraw.DiscXZ(pos, sd.Range, Color.darkRed);
                 }
             }
         }

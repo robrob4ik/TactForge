@@ -25,7 +25,7 @@ namespace OneBitRob.AI
     }
 
     [DisableAutoCreation]
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateInGroup(typeof(AIPlanPhaseGroup))]
     public partial class FindTargetSystem : TaskProcessorSystem<FindTargetComponent, FindTargetTag>
     {
         ComponentLookup<LocalTransform> _posRO;

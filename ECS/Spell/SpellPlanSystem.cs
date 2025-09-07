@@ -9,9 +9,7 @@ using float3 = Unity.Mathematics.float3;
 namespace OneBitRob.AI
 {
     [BurstCompile]
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateBefore(typeof(CastSpellSystem))]
-    [UpdateBefore(typeof(SpellWindupAndFireSystem))]
+    [UpdateInGroup(typeof(AIPlanPhaseGroup))]
     public partial struct SpellPlanSystem : ISystem
     {
         ComponentLookup<LocalTransform> _posRO;

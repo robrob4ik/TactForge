@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.Serialization;
 using Sirenix.OdinInspector;
 using OneBitRob.FX;
 
@@ -61,7 +62,6 @@ namespace OneBitRob
         [MinValue(0f)]
         public float Cooldown = 2f;
 
-        // NEW: lock out weapon after spell
         [BoxGroup("General")]
         [LabelText("Post-cast Attack Lock"), SuffixLabel("s", true)]
         [MinValue(0f)]
@@ -72,36 +72,34 @@ namespace OneBitRob
         [MinValue(0f)]
         public float EffectAmount = 10f;
 
-        // DoT/HoT
         [BoxGroup("DoT+HoT")]
         [ShowIf("@Kind == SpellKind.EffectOverTimeTarget || Kind == SpellKind.EffectOverTimeArea")]
         [LabelText("Tick Amount"), MinValue(0f)]
         public float TickAmount = 5f;
 
-        [BoxGroup("DoT+HoT")]
+        [BoxGroup("DoT/HoT")]
         [ShowIf("@Kind == SpellKind.EffectOverTimeTarget || Kind == SpellKind.EffectOverTimeArea")]
         [LabelText("Duration"), SuffixLabel("s", true), MinValue(0f)]
         public float Duration = 3f;
 
-        [BoxGroup("DoT+HoT")]
+        [BoxGroup("DoT/HoT")]
         [ShowIf("@Kind == SpellKind.EffectOverTimeTarget || Kind == SpellKind.EffectOverTimeArea")]
         [LabelText("Tick Interval"), SuffixLabel("s", true), MinValue(0.05f)]
         public float TickInterval = 0.25f;
 
-        // AOE
         [BoxGroup("AOE")]
         [ShowIf("@Kind == SpellKind.EffectOverTimeArea")]
         [LabelText("Area Radius"), SuffixLabel("units", true), MinValue(0f)]
         public float AreaRadius = 3f;
 
-        // Projectile
+        // Projectile & muzzle (used by ProjectileLine AND Chain)
         [BoxGroup("Projectile")]
-        [ShowIf("@Kind == SpellKind.ProjectileLine")]
+        [ShowIf("@Kind == SpellKind.ProjectileLine || Kind == SpellKind.Chain")]
         [LabelText("Projectile Id")]
         public string ProjectileId = "";
 
         [BoxGroup("Projectile")]
-        [ShowIf("@Kind == SpellKind.ProjectileLine")]
+        [ShowIf("@Kind == SpellKind.ProjectileLine || Kind == SpellKind.Chain")]
         [LabelText("Speed"), SuffixLabel("units/s", true), MinValue(0.01f)]
         public float ProjectileSpeed = 60f;
 
@@ -116,12 +114,12 @@ namespace OneBitRob
         public float ProjectileRadius = 0f;
 
         [BoxGroup("Projectile Muzzle")]
-        [ShowIf("@Kind == SpellKind.ProjectileLine")]
+        [ShowIf("@Kind == SpellKind.ProjectileLine || Kind == SpellKind.Chain")]
         [LabelText("Muzzle Forward (Local Z)"), SuffixLabel("units", true), MinValue(0f)]
         public float MuzzleForward = 0.60f;
 
         [BoxGroup("Projectile Muzzle")]
-        [ShowIf("@Kind == SpellKind.ProjectileLine")]
+        [ShowIf("@Kind == SpellKind.ProjectileLine || Kind == SpellKind.Chain")]
         [LabelText("Muzzle Local Offset (XYZ)")]
         public Vector3 MuzzleLocalOffset = Vector3.zero;
 
@@ -132,13 +130,16 @@ namespace OneBitRob
         [BoxGroup("VFX & AOE Visuals")]
         [LabelText("Area VFX Id")]
         public string AreaVfxId = "";
+        
+        [ShowIf("@Kind == SpellKind.Summon")]
+        [LabelText("Summon Prefab"), AssetsOnly]
+        public GameObject SummonPrefab;
 
         [BoxGroup("VFX & AOE Visuals")]
         [LabelText("Area VFX Y Offset"), SuffixLabel("units", true), MinValue(0f)]
         [InfoBox("Vertical offset for the AOE VFX only (damage center remains at ground).")]
         public float AreaVfxYOffset = 0.04f;
 
-        // Chain
         [BoxGroup("Chain")]
         [ShowIf("@Kind == SpellKind.Chain")]
         [MinValue(1)]
@@ -154,22 +155,6 @@ namespace OneBitRob
         [LabelText("Per Jump Delay"), SuffixLabel("s", true), MinValue(0f)]
         public float ChainPerJumpDelay = 0.05f;
 
-        [BoxGroup("Summon")]
-        [ShowIf("@Kind == SpellKind.Summon")]
-        [LabelText("Summon Prefab"), AssetsOnly]
-        public GameObject SummonPrefab;
-
-        [BoxGroup("Summon")]
-        [ShowIf("@Kind == SpellKind.Summon")]
-        [MinValue(1)]
-        public int SummonCount = 1;
-
-        [BoxGroup("Debug")]
-        public bool DebugDraw = true;
-
-        [BoxGroup("Debug")]
-        public Color DebugColor = new Color(0.8f, 0.2f, 1f, 0.5f);
-
         [BoxGroup("Feedbacks")]
         [LabelText("Prepare Feedback")]
         [AssetsOnly]
@@ -181,8 +166,17 @@ namespace OneBitRob
         public FeedbackDefinition fireFeedback;
 
         [BoxGroup("Feedbacks")]
-        [LabelText("Impact Feedback (AOE Center)")]
+        [LabelText("AOE Impact Feedback (center)")]
         [AssetsOnly]
-        public FeedbackDefinition impactFeedback;
+        [ShowIf("@Kind == SpellKind.EffectOverTimeArea")]
+        [FormerlySerializedAs("impactFeedback")]
+        public FeedbackDefinition aoeImpactFeedback;
+
+        [BoxGroup("Feedbacks")]
+        [LabelText("Per-Target Hit Feedback")]
+        [AssetsOnly]
+        [ShowIf("@Kind == SpellKind.ProjectileLine || Kind == SpellKind.Chain")]
+        public FeedbackDefinition perTargetHitFeedback;
+        
     }
 }

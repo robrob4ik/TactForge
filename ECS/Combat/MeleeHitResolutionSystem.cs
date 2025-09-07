@@ -10,7 +10,7 @@ using static Unity.Mathematics.math;
 
 namespace OneBitRob.AI
 {
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateInGroup(typeof(AIResolvePhaseGroup))]
     public partial struct MeleeHitResolutionSystem : ISystem
     {
         private static readonly Collider[] s_SphereOverlapHits = new Collider[256];

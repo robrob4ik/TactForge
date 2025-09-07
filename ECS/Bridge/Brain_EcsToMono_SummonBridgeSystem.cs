@@ -11,7 +11,6 @@ using UnityEngine;
 namespace OneBitRob.ECS
 {
     [UpdateInGroup(typeof(EcsToMonoBridgeGroup))]
-    [UpdateAfter(typeof(SpellWindupAndFireSystem))]
     public partial struct Brain_EcsToMono_SummonBridgeSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)

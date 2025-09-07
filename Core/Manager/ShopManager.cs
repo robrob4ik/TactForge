@@ -8,7 +8,7 @@ using UnityEngine.Events;
 public class ShopManager : MonoBehaviour
 {
     [Title("Shop Configuration")]
-    [ListDrawerSettings(Expanded = true)]
+    [ListDrawerSettings(ShowFoldout = true, DefaultExpandedState = true)]
     public List<UnitDefinition> allAvailableUnits;
 
     [MinValue(1)]

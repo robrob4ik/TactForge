@@ -1,5 +1,4 @@
-﻿
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
 
@@ -44,7 +43,7 @@ namespace OneBitRob.VFX
         {
             if (_instance) return _instance;
             var go = new GameObject("[VfxPoolManager]");
-            DontDestroyOnLoad(go);
+            DontDestroyOnLoad(go);                   // root object we just created
             _instance = go.AddComponent<VfxPoolManager>();
             _instance.RebuildMap();
             return _instance;
@@ -54,7 +53,11 @@ namespace OneBitRob.VFX
         {
             if (_instance && _instance != this) { Destroy(gameObject); return; }
             _instance = this;
-            DontDestroyOnLoad(gameObject);
+
+            // Root-safe DDoL
+            if (transform.parent == null)
+                DontDestroyOnLoad(gameObject);
+
             RebuildMap();
         }
 
@@ -88,7 +91,7 @@ namespace OneBitRob.VFX
             var pool = GetPooler(id);
             return pool ? pool.GetPooledGameObject() : null;
         }
-        
+
         public static void PlayById(string id, Vector3 position, Transform follow = null)
         {
             var pool = GetPooler(id);
@@ -110,7 +113,7 @@ namespace OneBitRob.VFX
             go.SetActive(true);
             go.GetComponent<MMPoolableObject>()?.TriggerOnSpawnComplete();
         }
-        
+
         public static void BeginPersistent(string id, long key, Vector3 position, Transform follow = null)
         {
             Ensure();
@@ -196,7 +199,7 @@ namespace OneBitRob.VFX
                 _active.Remove(key);
             }
         }
-        
+
         private void PreparePersistent(GameObject go, Vector3 position, Transform follow)
         {
             Move(go, position, follow);

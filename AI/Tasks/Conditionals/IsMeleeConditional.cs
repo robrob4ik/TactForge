@@ -15,7 +15,7 @@ namespace OneBitRob.AI
     public struct IsMeleeTag       : IComponentData, IEnableableComponent { }
 
     [DisableAutoCreation]
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateInGroup(typeof(AIPlanPhaseGroup))]
     public partial class IsMeleeSystem : TaskProcessorSystem<IsMeleeComponent, IsMeleeTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain _)

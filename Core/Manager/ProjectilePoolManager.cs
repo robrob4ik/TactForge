@@ -10,7 +10,7 @@ namespace OneBitRob.ECS
         [System.Serializable]
         public struct Entry
         {
-            public string Id;               
+            public string Id;
             public MMObjectPooler Pooler;
         }
 
@@ -31,7 +31,7 @@ namespace OneBitRob.ECS
         {
             if (_instance) return _instance;
             var go = new GameObject("[ProjectilePoolManager]");
-            DontDestroyOnLoad(go);
+            DontDestroyOnLoad(go);                   // root object we just created
             _instance = go.AddComponent<ProjectilePoolManager>();
             _instance.RebuildMap();
             return _instance;
@@ -41,7 +41,11 @@ namespace OneBitRob.ECS
         {
             if (_instance && _instance != this) { Destroy(gameObject); return; }
             _instance = this;
-            DontDestroyOnLoad(gameObject);
+
+            // Root-safe DDoL
+            if (transform.parent == null)
+                DontDestroyOnLoad(gameObject);
+
             RebuildMap();
         }
 

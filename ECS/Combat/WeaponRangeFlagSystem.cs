@@ -8,7 +8,8 @@ using Unity.Transforms;
 
 namespace OneBitRob.AI
 {
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateInGroup(typeof(AIPlanPhaseGroup))]
+    [UpdateAfter(typeof(UnitStatsRecalcSystem))]
     public partial struct WeaponRangeFlagSystem : ISystem
     {
         private ComponentLookup<LocalTransform> _posRO;

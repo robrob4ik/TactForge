@@ -25,9 +25,7 @@ namespace OneBitRob.AI
     }
 
     [DisableAutoCreation]
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateBefore(typeof(MoveToTargetSystem))]
-    [UpdateBefore(typeof(WeaponRangeFlagSystem))]
+    [UpdateInGroup(typeof(AIPlanPhaseGroup))]
     public partial class SetupUnitSystem : TaskProcessorSystem<SetupUnitComponent, SetupUnitTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain brain)
@@ -36,7 +34,6 @@ namespace OneBitRob.AI
 
             var em = EntityManager;
 
-            // Health from UnitDefinition (fallback 100)
             int hp = 100;
             var def = brain != null ? brain.UnitDefinition : null;
             if (def != null) hp = def.health;
@@ -85,7 +82,7 @@ namespace OneBitRob.AI
 
             if (!em.HasComponent<RetargetCooldown>(e)) em.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
 
-            // Spells baseline (jak było)
+            // Spell baseline
             var spells = def != null ? def.unitSpells : null;
             bool hasSpell = spells != null && spells.Count > 0 && spells[0] != null;
 
@@ -94,12 +91,10 @@ namespace OneBitRob.AI
                 var spell = spells[0];
                 int projHash   = VisualAssetRegistry.RegisterProjectile(spell.ProjectileId);
                 int effectHash = VisualAssetRegistry.RegisterVfx(spell.EffectVfxId);
-                int areaVfxHash= VisualAssetRegistry.RegisterVfx(spell.AreaVfxId);
-                int summonHash = VisualAssetRegistry.RegisterSummon(spell.SummonPrefab);
+                int areaVfxHash = VisualAssetRegistry.RegisterVfx(spell.AreaVfxId);
+                int summonHash  = VisualAssetRegistry.RegisterSummon(spell.SummonPrefab);
 
-                float amount = (spell.Kind == SpellKind.EffectOverTimeArea || spell.Kind == SpellKind.EffectOverTimeTarget)
-                    ? spell.TickAmount
-                    : spell.EffectAmount;
+                float amount = (spell.Kind == SpellKind.EffectOverTimeArea || spell.Kind == SpellKind.EffectOverTimeTarget) ? spell.TickAmount : spell.EffectAmount;
 
                 var config = new SpellConfig
                 {
@@ -133,16 +128,18 @@ namespace OneBitRob.AI
 
                     SummonPrefabHash    = summonHash,
 
-                    // NEW
                     PostCastAttackLockSeconds = Mathf.Max(0f, spell.PostCastAttackLockSeconds)
                 };
 
                 if (em.HasComponent<SpellConfig>(e)) em.SetComponentData(e, config);
                 else                                 em.AddComponentData(e, config);
 
-                if (!em.HasComponent<SpellDecisionRequest>(e)) em.AddComponentData(e, new SpellDecisionRequest { HasValue = 0 });
-                if (!em.HasComponent<SpellWindup>(e)) em.AddComponentData(e, new SpellWindup { Active = 0, ReleaseTime = 0f });
-                if (!em.HasComponent<SpellCooldown>(e)) em.AddComponentData(e, new SpellCooldown { NextTime = 0f });
+                if (!em.HasComponent<SpellDecisionRequest>(e)) 
+                    em.AddComponentData(e, new SpellDecisionRequest { HasValue = 0 });
+                if (!em.HasComponent<SpellWindup>(e)) 
+                    em.AddComponentData(e, new SpellWindup { Active = 0, ReleaseTime = 0f });
+                if (!em.HasComponent<SpellCooldown>(e)) 
+                    em.AddComponentData(e, new SpellCooldown { NextTime = 0f });
 
                 if (em.HasComponent<SpellState>(e))
                 {
@@ -156,12 +153,13 @@ namespace OneBitRob.AI
                 }
             }
 
-            // === Stats bootstrap ===
-            if (!em.HasComponent<UnitRuntimeStats>(e)) em.AddComponentData(e, UnitRuntimeStats.Defaults);
-            if (!em.HasBuffer<StatModifier>(e)) em.AddBuffer<StatModifier>(e);
-            if (!em.HasComponent<StatsDirtyTag>(e)) em.AddComponent<StatsDirtyTag>(e);
+            if (!em.HasComponent<UnitRuntimeStats>(e)) 
+                em.AddComponentData(e, UnitRuntimeStats.Defaults);
+            if (!em.HasBuffer<StatModifier>(e)) 
+                em.AddBuffer<StatModifier>(e);
+            if (!em.HasComponent<StatsDirtyTag>(e)) 
+                em.AddComponent<StatsDirtyTag>(e);
 
-            // Apply baseScaling from UnitDefinition (if any)
             if (def != null && def.baseScaling != null) StatsService.AddModifiers(e, def.baseScaling);
 
             return TaskStatus.Success;

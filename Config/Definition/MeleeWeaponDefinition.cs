@@ -28,7 +28,14 @@ namespace OneBitRob
         [AssetsOnly] public FeedbackDefinition attackFeedback;
 
         [BoxGroup("Feedbacks")]
-        [LabelText("Hit Feedback")]                 
+        [LabelText("Hit Feedback")]
         [AssetsOnly] public FeedbackDefinition hitFeedback;
+
+        // NEW ────────────────────────────────────────────────────────────────────
+        [BoxGroup("Timing")]
+        [LabelText("Swing Lock"), SuffixLabel("s", true)]
+        [MinValue(0f)]
+        [Tooltip("Locks movement for this duration after a melee strike to prevent sliding/orbiting while attacking.")]
+        public float swingLockSeconds = 0.25f;
     }
 }

@@ -6,7 +6,6 @@ using UnityEngine;
 namespace OneBitRob.ECS
 {
     [UpdateInGroup(typeof(EcsToMonoBridgeGroup))]
-    [UpdateAfter(typeof(WeaponAttackSystem))]
     public partial struct Brain_EcsToMono_WeaponProjectileBridgeSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)

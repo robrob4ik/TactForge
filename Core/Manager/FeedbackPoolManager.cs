@@ -32,7 +32,7 @@ namespace OneBitRob.FX
         {
             if (_instance) return _instance;
             var go = new GameObject("[FeedbackPoolManager]");
-            DontDestroyOnLoad(go);
+            DontDestroyOnLoad(go);                   // root object we just created
             _instance = go.AddComponent<FeedbackPoolManager>();
             _instance.RebuildMap();
             return _instance;
@@ -42,7 +42,11 @@ namespace OneBitRob.FX
         {
             if (_instance && _instance != this) { Destroy(gameObject); return; }
             _instance = this;
-            DontDestroyOnLoad(gameObject);
+
+            // Root-safe DDoL
+            if (transform.parent == null)
+                DontDestroyOnLoad(gameObject);
+
             RebuildMap();
         }
 
@@ -79,6 +83,5 @@ namespace OneBitRob.FX
             var pooler = GetPooler(id);
             return pooler ? pooler.GetPooledGameObject() : null;
         }
-
     }
 }

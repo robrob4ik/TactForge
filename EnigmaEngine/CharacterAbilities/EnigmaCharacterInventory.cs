@@ -165,7 +165,7 @@ namespace OneBitRob.EnigmaEngine
         /// Grabs any inventory it can find that matches the names set in the inspector
         protected virtual void GrabInventories()
         {
-            Inventory[] inventories = FindObjectsOfType<Inventory>();
+            Inventory[] inventories = FindObjectsByType<Inventory>(FindObjectsSortMode.None);
             foreach (Inventory inventory in inventories)
             {
                 if (inventory.PlayerID != PlayerID)

@@ -16,7 +16,7 @@ namespace OneBitRob.AI
     public struct RotateToTargetTag : IComponentData, IEnableableComponent { }
     
     [DisableAutoCreation]
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateInGroup(typeof(AIPlanPhaseGroup))]
     public partial class RotateToTargetSystem : TaskProcessorSystem<RotateToTargetComponent, RotateToTargetTag>
     {
         ComponentLookup<LocalTransform> _posRO;

@@ -4,8 +4,9 @@ using Unity.Entities;
 
 namespace OneBitRob.AI
 {
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateInGroup(typeof(AICastPhaseGroup))]
     [UpdateAfter(typeof(WeaponAttackSystem))]
+    [UpdateAfter(typeof(SpellMovementLockSystem))]
     public partial struct WeaponMovementLockSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)

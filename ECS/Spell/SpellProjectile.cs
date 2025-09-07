@@ -19,6 +19,9 @@ namespace OneBitRob.ECS
             public int LayerMask;
             public float Radius;
             public bool Pierce;
+
+            // NEW: per-target feedback to play on hit
+            public FeedbackDefinition HitFeedback;
         }
 
         private GameObject _attacker;
@@ -29,6 +32,7 @@ namespace OneBitRob.ECS
         private int _mask;
         private float _radius;
         private bool _pierce;
+        private FeedbackDefinition _hitFeedback; // NEW
 
         private Vector3 _lastPos;
         private bool _didImmediateOverlapCheck;
@@ -45,6 +49,7 @@ namespace OneBitRob.ECS
             _mask       = data.LayerMask;
             _radius     = Mathf.Max(0f, data.Radius);
             _pierce     = data.Pierce;
+            _hitFeedback= data.HitFeedback;   // NEW
 
             transform.position = data.Origin;
             transform.forward  = _dir;
@@ -150,6 +155,13 @@ namespace OneBitRob.ECS
                 Position = point,
                 Amount   = Mathf.Abs(_damage)
             });
+
+            // NEW: per-target hit feedback (e.g., lightning spark + thunder)
+            if (_hitFeedback != null)
+            {
+                // If feedback.attachToTarget == true, it will parent to the target. Otherwise it spawns at world pos.
+                FeedbackService.TryPlay(_hitFeedback, brain.transform, point);
+            }
         }
 
         private void Despawn()

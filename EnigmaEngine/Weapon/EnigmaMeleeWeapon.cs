@@ -134,34 +134,6 @@ namespace OneBitRob.EnigmaEngine
             _damageArea.transform.localScale = Vector3.one;
             _damageArea.layer = CharacterHandleWeapon.DamageableLayer;
 
-            // 2D shapes
-            if (DamageAreaShape == MeleeDamageAreaShapes.Rectangle)
-            {
-                _boxCollider2D = _damageArea.AddComponent<BoxCollider2D>();
-                _boxCollider2D.offset = AreaOffset;
-                _boxCollider2D.size = AreaSize;
-                _damageAreaCollider2D = _boxCollider2D;
-                _damageAreaCollider2D.isTrigger = true;
-
-                var rb2d = _damageArea.AddComponent<Rigidbody2D>();
-                rb2d.isKinematic = true;
-                rb2d.sleepMode = RigidbodySleepMode2D.NeverSleep;
-            }
-
-            if (DamageAreaShape == MeleeDamageAreaShapes.Circle)
-            {
-                _circleCollider2D = _damageArea.AddComponent<CircleCollider2D>();
-                _circleCollider2D.transform.position = transform.position;
-                _circleCollider2D.offset = AreaOffset;
-                _circleCollider2D.radius = AreaSize.x * 0.5f;
-                _damageAreaCollider2D = _circleCollider2D;
-                _damageAreaCollider2D.isTrigger = true;
-
-                var rb2d = _damageArea.AddComponent<Rigidbody2D>();
-                rb2d.isKinematic = true;
-                rb2d.sleepMode = RigidbodySleepMode2D.NeverSleep;
-            }
-
             // 3D shapes
             if (DamageAreaShape == MeleeDamageAreaShapes.Box)
             {

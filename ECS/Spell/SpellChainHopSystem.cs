@@ -8,8 +8,7 @@ using quaternion = Unity.Mathematics.quaternion;
 
 namespace OneBitRob.AI
 {
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
-    [UpdateAfter(typeof(SpellWindupAndFireSystem))]
+    [UpdateInGroup(typeof(AIResolvePhaseGroup))]
     public partial struct SpellChainHopSystem : ISystem
     {
         ComponentLookup<LocalTransform> _posRO;

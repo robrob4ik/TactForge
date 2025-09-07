@@ -16,7 +16,7 @@ namespace OneBitRob.AI
     public struct CanCastSpellTag       : IComponentData, IEnableableComponent { }
 
     [DisableAutoCreation]
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateInGroup(typeof(AIPlanPhaseGroup))]
     public partial class CanCastSpellSystem : TaskProcessorSystem<CanCastSpellComponent, CanCastSpellTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain _)

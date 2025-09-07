@@ -19,17 +19,23 @@ namespace OneBitRob.ECS
                 var brain = UnitBrainRegistry.Get(entity);
                 if (!brain) { desiredDestination.ValueRW = default; continue; }
 
-                bool casting = em.HasComponent<MovementLock>(entity) && (em.GetComponentData<MovementLock>(entity).Flags & MovementLockFlags.Casting) != 0;
+                // NEW: treat Attacking as a lock just like Casting
+                bool locked = false;
+                if (em.HasComponent<MovementLock>(entity))
+                {
+                    var flags = em.GetComponentData<MovementLock>(entity).Flags;
+                    locked = (flags & (MovementLockFlags.Casting | MovementLockFlags.Attacking)) != 0;
+                }
 
-                Vector3 wanted = casting ? brain.transform.position : desiredDestination.ValueRO.Position;
+                Vector3 wanted = locked ? brain.transform.position : desiredDestination.ValueRO.Position;
 
                 // avoid noise
                 if ((wanted - brain.CurrentTargetPosition).sqrMagnitude > 0.0004f)
                     brain.MoveToPosition(wanted);
 
-
-                DebugDraw.Line(brain.transform.position, wanted, casting ? new Color(1f, 0.6f, 0.1f, 0.9f) : Color.cyan);
-
+#if UNITY_EDITOR
+                DebugDraw.Line(brain.transform.position, wanted, locked ? new Color(1f, 0.6f, 0.1f, 0.9f) : Color.cyan);
+#endif
                 desiredDestination.ValueRW = default; // consume
             }
         }

@@ -9,7 +9,8 @@ using float3 = Unity.Mathematics.float3;
 
 namespace OneBitRob.AI
 {
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateInGroup(typeof(AICastPhaseGroup))]
+    [UpdateAfter(typeof(CastSpellSystem))]
     public partial struct SpellWindupAndFireSystem : ISystem
     {
         private EntityQuery _castQuery;
@@ -193,7 +194,7 @@ namespace OneBitRob.AI
                     break;
                 }
 
-                case SpellKind.EffectOverTimeArea:
+                 case SpellKind.EffectOverTimeArea:
                 {
                     int mask = ~0;
                     if (brain != null)
@@ -225,7 +226,7 @@ namespace OneBitRob.AI
                         if (spells != null && spells.Count > 0 && spells[0] != null)
                         {
                             var def = spells[0];
-                            FeedbackService.TryPlay(def.impactFeedback, null, (Vector3)aimPos);
+                            FeedbackService.TryPlay(def.aoeImpactFeedback, null, (Vector3)aimPos);
                         }
                     }
                     break;

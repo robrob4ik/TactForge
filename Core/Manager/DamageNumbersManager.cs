@@ -44,7 +44,7 @@ namespace OneBitRob.FX
             if (_instance) return _instance;
 
             var go = new GameObject("[DamageNumbersManager]");
-            DontDestroyOnLoad(go);
+            DontDestroyOnLoad(go);                        // root object we just created
             _instance = go.AddComponent<DamageNumbersManager>();
             return _instance;
         }
@@ -53,8 +53,11 @@ namespace OneBitRob.FX
         {
             if (_instance && _instance != this) { Destroy(gameObject); return; }
             _instance = this;
-            DontDestroyOnLoad(gameObject);
-         
+
+            // Root-safe: only mark DDoL if this GameObject is at the scene root.
+            if (transform.parent == null)
+                DontDestroyOnLoad(gameObject);
+
             if (profile) TryPrewarm();
         }
 
@@ -172,7 +175,6 @@ namespace OneBitRob.FX
             if (!cam)
             {
                 cam = FindFirstObjectByType<Camera>(FindObjectsInactive.Include);
-
             }
 
             _cachedCamera = cam;

@@ -15,7 +15,7 @@ namespace OneBitRob.AI
     public struct IsTargetAliveTag       : IComponentData, IEnableableComponent { }
 
     [DisableAutoCreation]
-    [UpdateInGroup(typeof(AITaskSystemGroup))]
+    [UpdateInGroup(typeof(AIPlanPhaseGroup))]
     public partial class IsTargetAliveSystem : TaskProcessorSystem<IsTargetAliveComponent, IsTargetAliveTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain _)
