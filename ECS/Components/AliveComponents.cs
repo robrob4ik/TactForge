@@ -1,0 +1,20 @@
+﻿using Unity.Entities;
+
+namespace OneBitRob.ECS
+{
+    /// <summary>Lifecycle gate used to orchestrate death animation/FX before teardown.</summary>
+    public struct DeathSequence : IComponentData
+    {
+        public byte  Started; 
+        public float StartTime;   
+        public float Duration;    
+        public float HardTimeout; 
+    }
+
+    /// <summary>Optional override set by spawner/converters if you want per-unit timings.</summary>
+    public struct DeathSequenceOverride : IComponentData
+    {
+        public float Duration;
+        public float HardTimeout;
+    }
+}

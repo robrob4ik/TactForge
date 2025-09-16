@@ -1,4 +1,5 @@
-﻿using OneBitRob.AI;
+﻿// Assets/PROJECT/Scripts/ECS/Brain_MonoToEcs_AliveMirrorSystem.cs
+using OneBitRob.AI;
 using Unity.Collections;
 using Unity.Entities;
 using OneBitRob.FX;
@@ -38,7 +39,8 @@ namespace OneBitRob.ECS
                     var ud = brain.UnitDefinition;
                     if (ud != null && ud.deathFeedback != null)
                     {
-                        FeedbackService.TryPlay(ud.deathFeedback, null, brain.transform.position);
+                        // NESTED: attach to the unit so it follows any final pose/offsets
+                        FeedbackService.TryPlay(ud.deathFeedback, brain.transform, brain.transform.position);
                     }
                 }
             }

@@ -160,6 +160,7 @@ namespace OneBitRob.AI
             }
 
             _navAgent.Body = body;
+            
 
         }
 

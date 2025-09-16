@@ -10,7 +10,8 @@ namespace OneBitRob
 
     public enum UnitTrait { Undead, Beast, Goblin, Human }
     public enum UnitClass { Warrior, Mage, Hunter, Assassin }
-    public enum MovementType { Normal = 0, Melee = 1, Brute = 2 }
+    
+    public enum MovementType { Normal = 0, Knight = 1, Spearman = 2, Brute = 3, Assassin = 4, Axeman = 5, Mystic = 6 }
 
     public enum AttackAnimationSelect { Random, Sequential }
 

@@ -1,6 +1,4 @@
-﻿// FILE: OneBitRob/EnigmaEngine/EnigmaCharacterAgentsNavigationMovement.cs
-using MoreMountains.Tools;
-using OneBitRob;
+﻿using MoreMountains.Tools;
 using OneBitRob.AI;
 using ProjectDawn.Navigation.Hybrid;
 using UnityEngine;
@@ -10,10 +8,20 @@ namespace OneBitRob.EnigmaEngine
     [AddComponentMenu("Enigma Engine/Enigma Character Agents Navigation Movement")]
     public class EnigmaCharacterAgentsNavigationMovement : EnigmaCharacterAbility
     {
-        [Tooltip("How quickly the model rotates towards velocity (deg/s)")]
-        public float RotationSpeed = 720f;
+        [Header("Rotation")]
+        [Tooltip("Max yaw rotation speed (deg/s).")]
+        public float RotationSpeed = 120f;
 
-        [Tooltip("The forced rotation applied by an external script")]
+        [Tooltip("Do not rotate to velocity unless horizontal speed >= this (m/s).")]
+        public float MinVelocityToRotate = 0.10f;
+
+        [Tooltip("Snap to target yaw if the remaining error is below this (degrees).")]
+        public float SnapIfBelowDeg = 0.5f;
+
+        [Tooltip("How precisely we consider 'aligned' for ForcedRotationTarget (degrees).")]
+        public float AlignEpsilonDeg = 1f;
+
+        [Tooltip("The forced facing target set by external systems (clears when aligned).")]
         public Vector3 ForcedRotationTarget;
 
         private AgentAuthoring _agent;
@@ -51,8 +59,8 @@ namespace OneBitRob.EnigmaEngine
 
         private void ProcessCharacterMovement()
         {
-            var movingHorizontally = _agent.Body.Velocity.x != 0f || _agent.Body.Velocity.z != 0f;
-            var remainingDistance = _agent.Body.RemainingDistance;
+            var movingHorizontally = _agent && (_agent.Body.Velocity.x != 0f || _agent.Body.Velocity.z != 0f);
+            var remainingDistance = _agent ? _agent.Body.RemainingDistance : 0f;
             float combatStanceDistance = GetCombatStanceDistance();
 
             switch (_movement.CurrentState)
@@ -112,39 +120,40 @@ namespace OneBitRob.EnigmaEngine
 
         private void ProcessCharacterRotation()
         {
-            // Rotate to movement if moving
-            var vx = _agent.Body.Velocity.x;
-            var vz = _agent.Body.Velocity.z;
-            bool hasVelocity = (vx * vx + vz * vz) > 0f;
+            if (_character == null) return;
 
-            if (hasVelocity)
+            // --- 1) Try to face horizontal velocity (if meaningful) ---
+            if (_agent != null)
             {
-                Vector3 vel = new Vector3(vx, 0f, vz);
-                Quaternion targetRot = Quaternion.LookRotation(vel, Vector3.up);
-                _character.transform.rotation = Quaternion.RotateTowards(
-                    _character.transform.rotation,
-                    targetRot,
-                    RotationSpeed * Time.deltaTime
-                );
-                return;
+                float vx = _agent.Body.Velocity.x;
+                float vz = _agent.Body.Velocity.z;
+                float speedSq = vx * vx + vz * vz;
+
+                if (speedSq >= (MinVelocityToRotate * MinVelocityToRotate))
+                {
+                    // Yaw-only target from velocity on XZ plane
+                    float targetYaw = Mathf.Atan2(vx, vz) * Mathf.Rad2Deg;
+                    ApplyYawTowards(targetYaw);
+                    return;
+                }
             }
 
-            // Else honor a forced rotation target if any
+            // --- 2) Otherwise, honor a forced facing target if any ---
             if (ForcedRotationTarget != Vector3.zero)
-            {
+            {   
                 Vector3 dir = ForcedRotationTarget - _character.transform.position;
                 dir.y = 0f;
-                if (dir.sqrMagnitude > 0.0001f)
-                {
-                    Quaternion targetRot = Quaternion.LookRotation(dir, Vector3.up);
-                    _character.transform.rotation = Quaternion.RotateTowards(
-                        _character.transform.rotation,
-                        targetRot,
-                        RotationSpeed * Time.deltaTime
-                    );
+                float magSq = dir.sqrMagnitude;
 
-                    // Clear once aligned (~1 degree)
-                    if (Quaternion.Angle(_character.transform.rotation, targetRot) < 1f)
+                if (magSq >= 1e-6f)
+                {
+                    float targetYaw = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+                    float remaining = Mathf.Abs(Mathf.DeltaAngle(GetCurrentYaw(), targetYaw));
+
+                    ApplyYawTowards(targetYaw);
+
+                    // Clear once tightly aligned
+                    if (remaining <= AlignEpsilonDeg)
                     {
                         ForcedRotationTarget = Vector3.zero;
                     }
@@ -154,6 +163,28 @@ namespace OneBitRob.EnigmaEngine
                     ForcedRotationTarget = Vector3.zero;
                 }
             }
+        }
+
+        private float GetCurrentYaw()
+        {
+            return _character.transform.eulerAngles.y;
+        }
+
+        private void ApplyYawTowards(float targetYawDeg)
+        {
+            float currentYaw = GetCurrentYaw();
+            float step = Mathf.Max(0f, RotationSpeed) * Time.deltaTime;
+
+            // Snap to clean up tiny jitter
+            float delta = Mathf.DeltaAngle(currentYaw, targetYawDeg);
+            if (Mathf.Abs(delta) <= SnapIfBelowDeg)
+            {
+                _character.transform.rotation = Quaternion.Euler(0f, targetYawDeg, 0f);
+                return;
+            }
+
+            float nextYaw = Mathf.MoveTowardsAngle(currentYaw, targetYawDeg, step);
+            _character.transform.rotation = Quaternion.Euler(0f, nextYaw, 0f);
         }
 
         protected override void InitializeAnimatorParameters()

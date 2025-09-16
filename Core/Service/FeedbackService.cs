@@ -7,6 +7,11 @@ namespace OneBitRob.FX
 {
     public static class FeedbackService
     {
+        /// <summary>
+        /// Plays a feedback instance. If definition.HasPoolId resolves, uses MM pooler; otherwise falls back to instantiate.
+        /// Parent/placement logic is unchanged (nested if attachToTarget).
+        /// Adds PooledFxAttachment so cleanup can detach to pool root before unit destruction.
+        /// </summary>
         public static bool TryPlay(FeedbackDefinition definition, Transform attach, Vector3 worldPosition, float? overrideIntensity = null)
         {
             if (definition == null) return false;
@@ -45,9 +50,15 @@ namespace OneBitRob.FX
             else
             {
                 go.transform.SetParent(null);
-                go.transform.SetPositionAndRotation(worldPosition + definition.offset,
-                    (definition.inheritRotation && attach != null) ? attach.rotation : go.transform.rotation);
+                go.transform.SetPositionAndRotation(
+                    worldPosition + definition.offset,
+                    (definition.inheritRotation && attach != null) ? attach.rotation : go.transform.rotation
+                );
             }
+
+            // Mark pooled FX so we can safely detach them on unit death
+            var marker = go.GetComponent<PooledFxAttachment>() ?? go.AddComponent<PooledFxAttachment>();
+            marker.PoolRoot = pooler != null ? pooler.transform : null;
 
             if (!go.activeSelf) go.SetActive(true);
             var poolable = go.GetComponent<MMPoolableObject>();
@@ -73,6 +84,18 @@ namespace OneBitRob.FX
 
             FeedbackServiceRunner.Instance.ReleaseAfter(go, poolable, pooled, duration);
             return true;
+        }
+
+        /// <summary>Detach all pooled FX under 'root' back to their pools (used right before destroying a unit).</summary>
+        public static void DetachAllPooledChildren(Transform root)
+        {
+            if (root == null) return;
+            var markers = root.GetComponentsInChildren<PooledFxAttachment>(true);
+            for (int i = 0; i < markers.Length; i++)
+            {
+                var m = markers[i];
+                if (m != null) m.DetachToPoolRoot();
+            }
         }
     }
 
@@ -101,7 +124,7 @@ namespace OneBitRob.FX
             if (pooled)
             {
                 if (poolable != null) poolable.Destroy();
-                else go.SetActive(false);
+                else if (go != null) go.SetActive(false);
             }
             else
             {

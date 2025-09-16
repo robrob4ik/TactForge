@@ -14,10 +14,5 @@ namespace OneBitRob.Config
 
         [Tooltip("Layer index for Enemy units.")]
         public int EnemyLayer;
-
-        [Header("Single-bit Masks (auto-kept in sync with indices)")]
-        public LayerMask PlayerMask;
-        public LayerMask AllyMask;
-        public LayerMask EnemyMask;
     }
 }

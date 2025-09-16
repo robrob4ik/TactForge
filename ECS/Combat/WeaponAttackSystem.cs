@@ -1,4 +1,5 @@
-﻿using OneBitRob.ECS;
+﻿// Assets/PROJECT/Scripts/ECS/Combat/WeaponAttackSystem.cs
+using OneBitRob.ECS;
 using OneBitRob.FX;
 using Unity.Collections;
 using Unity.Entities;
@@ -20,12 +21,23 @@ namespace OneBitRob.AI
         public void OnCreate(ref SystemState state)
         {
             _transformLookup    = state.GetComponentLookup<LocalTransform>(true);
-            _attackRequestQuery = state.GetEntityQuery(ComponentType.ReadWrite<AttackRequest>());
-            _windupQuery        = state.GetEntityQuery(ComponentType.ReadWrite<AttackWindup>());
+
+            _attackRequestQuery = state.GetEntityQuery(new EntityQueryDesc
+            {
+                All  = new[] { ComponentType.ReadWrite<AttackRequest>() },
+                None = new[] { ComponentType.ReadOnly<DestroyEntityTag>() }
+            });
+
+            _windupQuery = state.GetEntityQuery(new EntityQueryDesc
+            {
+                All  = new[] { ComponentType.ReadWrite<AttackWindup>() },
+                None = new[] { ComponentType.ReadOnly<DestroyEntityTag>() }
+            });
 
             state.RequireForUpdate(state.GetEntityQuery(new EntityQueryDesc
             {
-                Any = new[] { ComponentType.ReadOnly<AttackRequest>(), ComponentType.ReadOnly<AttackWindup>() }
+                Any  = new[] { ComponentType.ReadOnly<AttackRequest>(), ComponentType.ReadOnly<AttackWindup>() },
+                None = new[] { ComponentType.ReadOnly<DestroyEntityTag>() }
             }));
         }
 
@@ -50,13 +62,15 @@ namespace OneBitRob.AI
             for (int i = 0; i < windupEntities.Length; i++)
             {
                 var e = windupEntities[i];
+
+                if (em.HasComponent<DestroyEntityTag>(e)) { continue; }
+
                 var windup = em.GetComponentData<AttackWindup>(e);
                 if (windup.Active == 0 || now < windup.ReleaseTime) continue;
 
                 // If a spell is currently mid‑cast, postpone firing the weapon.
                 if (em.HasComponent<SpellWindup>(e) && em.GetComponentData<SpellWindup>(e).Active != 0)
                 {
-                    // keep windup active until spell finishes
                     continue;
                 }
 
@@ -84,8 +98,6 @@ namespace OneBitRob.AI
                 {
                     FireRanged(em, ref ecb, e, brain, in ranged, in stats, selfPos, forward, right, up, now);
                 }
-                // NOTE: melee releases happen immediately on request now (no windup path)
-                // We intentionally do not route melee through windup to keep the logic explicit and simple.
 
                 windup.Active = 0;
                 ecb.SetComponent(e, windup);
@@ -99,6 +111,10 @@ namespace OneBitRob.AI
             for (int i = 0; i < entities.Length; i++)
             {
                 var e = entities[i];
+
+                if (em.HasComponent<DestroyEntityTag>(e))
+                { Consume(ref ecb, e); continue; }
+
                 var req = em.GetComponentData<AttackRequest>(e);
                 if (req.HasValue == 0 || req.Target == Entity.Null)
                 { Consume(ref ecb, e); continue; }
@@ -115,6 +131,9 @@ namespace OneBitRob.AI
 
                 var cd = em.HasComponent<AttackCooldown>(e) ? em.GetComponentData<AttackCooldown>(e) : default;
                 if (now < cd.NextTime) { Consume(ref ecb, e); continue; } // ← hard gate
+
+                if (brain == null || brain.UnitCombatController == null || !brain.UnitCombatController.IsAlive)
+                { Consume(ref ecb, e); continue; }
 
                 if (!_transformLookup.HasComponent(e) || !em.HasComponent<LocalTransform>(req.Target))
                 { Consume(ref ecb, e); continue; }
@@ -140,14 +159,15 @@ namespace OneBitRob.AI
 
                     // Anim + VFX
                     brain.UnitCombatController?.PlayMeleeAttack(melee.attackAnimations);
-                    FeedbackService.TryPlay(melee.attackFeedback, brain.transform, (Vector3)selfLT.Position);
+                    if (melee.attackFeedback != null)
+                        FeedbackService.TryPlay(melee.attackFeedback, brain.transform, (Vector3)selfLT.Position);
 
-                    // NEW: hard gate via cooldown (this was missing before)
+                    // Cooldown
                     var newCd = ComputeAttackCooldown(in melee.attackCooldown, in melee.attackCooldownJitter, stats.MeleeAttackSpeedMult, e, now);
                     ecb.SetOrAdd(em, e, newCd);
                     brain.NextAllowedAttackTime = Time.time + (newCd.NextTime - now);
 
-                    // NEW: movement lock for the swing window (prevents sliding/orbiting while striking)
+                    // Movement lock for the swing window (prevents sliding)
                     float lockSeconds = max(0f, melee.swingLockSeconds);
                     if (lockSeconds > 0f)
                     {
@@ -212,7 +232,8 @@ namespace OneBitRob.AI
             ecb.SetOrAdd(em, e, spawn);
 
             brain.UnitCombatController?.PlayRangedFire(ranged.animations);
-            FeedbackService.TryPlay(ranged.fireFeedback, brain.transform, (Vector3)origin);
+            if (ranged.fireFeedback != null)
+                FeedbackService.TryPlay(ranged.fireFeedback, brain.transform, (Vector3)origin);
 
 #if UNITY_EDITOR
             Debug.DrawRay((Vector3)origin, (Vector3)aimDir * 1.6f, new Color(1f, 0.45f, 0.2f, 0.95f), 0.55f, false);
@@ -238,14 +259,15 @@ namespace OneBitRob.AI
             ecb.SetComponent(e, wind);
 
             brain.UnitCombatController?.PlayRangedPrepare(ranged.animations);
-            FeedbackService.TryPlay(ranged.prepareFeedback, brain.transform, (Vector3)selfPos);
+            if (ranged.prepareFeedback != null)
+                FeedbackService.TryPlay(ranged.prepareFeedback, brain.transform, (Vector3)selfPos);
 
 #if UNITY_EDITOR
             Debug.DrawRay((Vector3)selfPos + Vector3.up * 0.05f, (Vector3)forward * 1.2f, new Color(0.8f, 0.9f, 1f, 0.95f), 0.65f, false);
 #endif
         }
 
-        // MELEE helpers
+        // MELEE helpers (unchanged)
         private static MeleeHitRequest BuildMeleeHitRequest(Entity e, UnitBrain brain, in MeleeWeaponDefinition melee, in UnitRuntimeStats stats, float3 pos, float3 forward)
         {
             return new MeleeHitRequest
