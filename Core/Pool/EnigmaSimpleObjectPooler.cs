@@ -1,13 +1,12 @@
 ﻿// Assets/AssetsWithoutIndex/TopDownEngine/ThirdParty/MoreMountains/MMTools/Core/MMObjectPool/MMSimpleObjectPooler.cs
 using UnityEngine;
 using System.Collections.Generic;
+using MoreMountains.Tools;
 using UnityEngine.SceneManagement;
 
-namespace MoreMountains.Tools
+namespace OneBitRob.Tools
 {
-	/// <summary>
 	/// A simple object pool outputting a single type of objects
-	/// </summary>
 	[AddComponentMenu("Enigma Simple Object Pooler")]
 	public class EnigmaSimpleObjectPooler : MMObjectPooler 
 	{
@@ -21,9 +20,7 @@ namespace MoreMountains.Tools
 		public virtual List<EnigmaSimpleObjectPooler> Owner { get; set; }
 		private void OnDestroy() { Owner?.Remove(this); }
 
-		/// <summary>
 		/// Fills the object pool with the gameobject type you've specified in the inspector
-		/// </summary>
 		public override void FillObjectPool()
 		{
 			if (GameObjectToPool == null)
@@ -31,7 +28,7 @@ namespace MoreMountains.Tools
 				return;
 			}
 
-			// if we've already created a pool, we exit
+			// If we've already created a pool, we exit
 			if ((_objectPool != null) && (_objectPool.PooledGameObjects.Count > PoolSize))
 			{
 				return;
@@ -53,19 +50,13 @@ namespace MoreMountains.Tools
 			}
 		}
 
-		/// <summary>
 		/// Determines the name of the object pool.
-		/// </summary>
-		/// <returns>The object pool name.</returns>
 		protected override string DetermineObjectPoolName()
 		{
 			return ("[SimpleObjectPooler] " + GameObjectToPool.name);	
 		}
-	    	
-		/// <summary>
+		
 		/// This method returns one inactive object from the pool
-		/// </summary>
-		/// <returns>The pooled game object.</returns>
 		public override GameObject GetPooledGameObject()
 		{
 			// Ensure the pool exists
@@ -78,7 +69,7 @@ namespace MoreMountains.Tools
 				}
 			}
 
-			// ---- NEW: cull destroyed entries to avoid MissingReferenceException on .activeInHierarchy
+			// Cull destroyed entries to avoid MissingReferenceException on .activeInHierarchy
 			var list = _objectPool.PooledGameObjects;
 			for (int i = list.Count - 1; i >= 0; i--)
 			{
@@ -87,7 +78,6 @@ namespace MoreMountains.Tools
 					list.RemoveAt(i);
 				}
 			}
-			// ----
 
 			// we go through the pool looking for an inactive object
 			for (int i = 0; i < list.Count; i++)
@@ -108,10 +98,7 @@ namespace MoreMountains.Tools
 			return null;
 		}
 		
-		/// <summary>
 		/// Adds one object of the specified type (in the inspector) to the pool.
-		/// </summary>
-		/// <returns>The one object to the pool.</returns>
 		protected virtual GameObject AddOneObjectToThePool()
 		{
 			if (GameObjectToPool == null)

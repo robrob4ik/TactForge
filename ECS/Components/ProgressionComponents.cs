@@ -6,12 +6,9 @@ namespace OneBitRob.ECS
     {
         public StatKind Kind;
         public StatOp   Op;
-        public float              Value;
+        public float    Value;
     }
-
-    /// <summary>Mark entity to recompute its UnitRuntimeStats this frame.</summary>
     public struct StatsDirtyTag : IComponentData {}
-    
     public struct UnitRuntimeStats : IComponentData
     {
         public float RangedAttackSpeedMult;
@@ -25,26 +22,26 @@ namespace OneBitRob.ECS
         public float ProjectileRadiusMult;
 
         public float CritChanceAdd;
-        public float CritMultiplierMult; 
+        public float CritMultiplierMult;
         public float RangedPierceChanceAdd;
         public int   RangedPierceMaxAdd;
 
         public static UnitRuntimeStats Defaults => new UnitRuntimeStats
         {
-            RangedAttackSpeedMult = 1f,
-            MeleeAttackSpeedMult = 1f,
-            AttackRangeMult_Ranged = 1f,
-            AttackRangeMult_Melee = 1f,
-            MeleeArcMult = 1f,
-            MeleeRangeMult = 1f,
-            SpellAoeMult = 1f,
-            SpellRangeMult = 1f,
-            ProjectileRadiusMult = 1f,
+            RangedAttackSpeedMult   = 1f,
+            MeleeAttackSpeedMult    = 1f,
+            AttackRangeMult_Ranged  = 1f,
+            AttackRangeMult_Melee   = 1f,
+            MeleeArcMult            = 1f,
+            MeleeRangeMult          = 1f,
+            SpellAoeMult            = 1f,
+            SpellRangeMult          = 1f,
+            ProjectileRadiusMult    = 1f,
 
-            CritChanceAdd = 0f,
-            CritMultiplierMult = 1f,
-            RangedPierceChanceAdd = 0f,
-            RangedPierceMaxAdd = 0
+            CritChanceAdd           = 0f,
+            CritMultiplierMult      = 1f,
+            RangedPierceChanceAdd   = 0f,
+            RangedPierceMaxAdd      = 0
         };
     }
 }

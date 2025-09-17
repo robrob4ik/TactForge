@@ -1,9 +1,9 @@
-﻿using System.Collections.Generic;
+﻿// File: OneBitRob/AI/UnitCombatController.cs
+using System.Collections.Generic;
 using MoreMountains.Tools;
 using OneBitRob.ECS;
 using OneBitRob.EnigmaEngine;
 using OneBitRob.FX;
-using OneBitRob.VFX;
 using Unity.Entities;
 using UnityEngine;
 
@@ -28,6 +28,8 @@ namespace OneBitRob.AI
 #if UNITY_EDITOR
         private readonly HashSet<string> _missingParams = new();
 #endif
+        // NEW: cached trigger parameter names (for O(1) lookup)
+        private HashSet<string> _animTriggerNames;
 
         private void Awake()
         {
@@ -37,6 +39,22 @@ namespace OneBitRob.AI
 
             var weapon = _brain != null ? _brain.UnitDefinition?.weapon : null;
             if (weapon is RangedWeaponDefinition rw) _projectileId = rw.projectileId;
+
+            // NEW: cache animator trigger names once
+            if (_anim != null)
+            {
+                _animTriggerNames = new HashSet<string>();
+                for (int i = 0; i < _anim.parameterCount; i++)
+                {
+                    var p = _anim.parameters[i];
+                    if (p.type == AnimatorControllerParameterType.Trigger)
+                        _animTriggerNames.Add(p.name);
+                }
+            }
+            else
+            {
+                _animTriggerNames = new HashSet<string>();
+            }
         }
 
         public bool IsAlive => _character != null && _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
@@ -71,14 +89,15 @@ namespace OneBitRob.AI
 
         private bool AnimatorHasTrigger(string param)
         {
-            if (_anim == null) return false;
-            for (int i = 0; i < _anim.parameterCount; i++)
-            {
-                var p = _anim.parameters[i];
-                if (p.type == AnimatorControllerParameterType.Trigger && p.name == param) return true;
-            }
+            if (_anim == null || string.IsNullOrEmpty(param)) return false;
 
-            if (_missingParams.Add(param)) Debug.LogWarning($"[{name}] Animator missing Trigger parameter '{param}'. Check your AttackAnimationSet.");
+            if (_animTriggerNames != null && _animTriggerNames.Contains(param))
+                return true;
+
+#if UNITY_EDITOR
+            if (_missingParams.Add(param))
+                Debug.LogWarning($"[{name}] Animator missing Trigger parameter '{param}'. Check your AttackAnimationSet.");
+#endif
             return false;
         }
 
@@ -98,7 +117,7 @@ namespace OneBitRob.AI
                 return null;
             }
 
-            _projectilePooler = ProjectileService.GetPooler(_projectileId);
+            _projectilePooler = OneBitRob.VFX.ProjectileService.GetPooler(_projectileId);
             if (_projectilePooler == null) Debug.LogWarning($"[{name}] No projectile pooler found for id '{_projectileId}'. Add your ProjectilePools prefab to this scene or register the id.");
 
             return _projectilePooler;
@@ -159,7 +178,7 @@ namespace OneBitRob.AI
         )
         {
             if (string.IsNullOrEmpty(projectileId)) return;
-            var pooler = ProjectileService.GetPooler(projectileId);
+            var pooler = OneBitRob.VFX.ProjectileService.GetPooler(projectileId);
             if (pooler == null)
             {
                 Debug.LogWarning($"[{name}] Spell projectile pool '{projectileId}' not found in this scene.");
@@ -193,7 +212,7 @@ namespace OneBitRob.AI
                     LayerMask = layerMask != 0 ? layerMask : (GetComponent<UnitBrain>()?.GetDamageableLayerMask().value ?? ~0),
                     Radius = Mathf.Max(0f, radius),
                     Pierce = pierce,
-                    HitFeedback = hitFeedback // NEW
+                    HitFeedback = hitFeedback // unchanged
                 }
             );
 

@@ -1,8 +1,10 @@
-﻿using OneBitRob.ECS;
+﻿// File: OneBitRob/AI/SpellPlanSystem.cs
+
+using OneBitRob.ECS;
 using Unity.Burst;
-using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
+using static Unity.Mathematics.math;
 using Unity.Transforms;
 using float3 = Unity.Mathematics.float3;
 
@@ -12,71 +14,49 @@ namespace OneBitRob.AI
     [UpdateInGroup(typeof(AIPlanPhaseGroup))]
     public partial struct SpellPlanSystem : ISystem
     {
-        ComponentLookup<LocalTransform> _posRO;
+        ComponentLookup<LocalTransform>    _posRO;
         ComponentLookup<SpatialHashTarget> _factRO;
-        ComponentLookup<HealthMirror> _hpRO;
-
-        EntityQuery _q;
+        ComponentLookup<HealthMirror>      _hpRO;
 
         public void OnCreate(ref SystemState state)
         {
-            _posRO = state.GetComponentLookup<LocalTransform>(true);
+            _posRO  = state.GetComponentLookup<LocalTransform>(true);
             _factRO = state.GetComponentLookup<SpatialHashTarget>(true);
-            _hpRO = state.GetComponentLookup<HealthMirror>(true);
-
-            _q = state.GetEntityQuery(
-                new EntityQueryDesc
-                {
-                    All = new[]
-                    {
-                        ComponentType.ReadOnly<SpellConfig>(),
-                        ComponentType.ReadWrite<SpellDecisionRequest>(),
-                        ComponentType.ReadWrite<CastRequest>(),
-                        ComponentType.ReadOnly<SpellWindup>(),
-                        ComponentType.ReadOnly<SpellCooldown>()
-                    }
-                });
-
-            state.RequireForUpdate(_q);
+            _hpRO   = state.GetComponentLookup<HealthMirror>(true);
         }
 
-       public void OnUpdate(ref SystemState state)
+        public void OnUpdate(ref SystemState state)
         {
             _posRO.Update(ref state);
             _factRO.Update(ref state);
             _hpRO.Update(ref state);
 
             var em  = state.EntityManager;
-            var now = (float)SystemAPI.Time.ElapsedTime;
-            var spellEntities = _q.ToEntityArray(Allocator.Temp);
+            float now = (float)SystemAPI.Time.ElapsedTime;
 
-            for (int i = 0; i < spellEntities.Length; i++)
+            foreach (var (decideRW, e) in SystemAPI.Query<RefRW<SpellDecisionRequest>>()
+                                                   .WithAll<SpellConfig, SpellWindup, SpellCooldown>()
+                                                   .WithEntityAccess())
             {
-                var e = spellEntities[i];
-
-                var decide = em.GetComponentData<SpellDecisionRequest>(e);
-                if (decide.HasValue == 0) continue;
+                if (!SystemAPI.IsComponentEnabled<SpellDecisionRequest>(e)) continue;
 
                 var wind = em.GetComponentData<SpellWindup>(e);
                 var cool = em.GetComponentData<SpellCooldown>(e);
-
                 if (wind.Active != 0 || now < cool.NextTime)
                 {
-                    decide.HasValue = 0;
-                    em.SetComponentData(e, decide);
+                    SystemAPI.SetComponentEnabled<SpellDecisionRequest>(e, false);
                     continue;
                 }
 
                 var cfg  = em.GetComponentData<SpellConfig>(e);
-                var cast = em.GetComponentData<CastRequest>(e);
-                cast.HasValue    = 0;
+                var cast = em.HasComponent<CastRequest>(e) ? em.GetComponentData<CastRequest>(e) : default;
+
+                var stats = em.HasComponent<UnitRuntimeStats>(e) ? em.GetComponentData<UnitRuntimeStats>(e) : UnitRuntimeStats.Defaults;
+                var cfgScaled = cfg; cfgScaled.Range = cfg.Range * max(0.0001f, stats.SpellRangeMult);
+
                 cast.Kind        = CastKind.None;
                 cast.Target      = Entity.Null;
                 cast.AoEPosition = float3.zero;
-
-                var stats = em.HasComponent<UnitRuntimeStats>(e) ? em.GetComponentData<UnitRuntimeStats>(e) : UnitRuntimeStats.Defaults;
-                var cfgScaled = cfg;
-                cfgScaled.Range = cfg.Range * math.max(0.0001f, stats.SpellRangeMult);
 
                 switch (cfg.Kind)
                 {
@@ -84,23 +64,21 @@ namespace OneBitRob.AI
                     case SpellKind.Chain:
                     case SpellKind.EffectOverTimeTarget:
                     {
-                        var tgt = SelectSingleTarget(e, cfgScaled);
+                        var tgt = SelectSingleTarget(e, in cfgScaled);
                         if (tgt != Entity.Null)
                         {
                             cast.Kind   = CastKind.SingleTarget;
                             cast.Target = tgt;
-                            cast.HasValue = 1;
                         }
                         break;
                     }
 
                     case SpellKind.EffectOverTimeArea:
                     {
-                        if (TrySelectAoE(e, cfgScaled, out var point))
+                        if (TrySelectAoE(e, in cfgScaled, out var point))
                         {
                             cast.Kind        = CastKind.AreaOfEffect;
                             cast.AoEPosition = point;
-                            cast.HasValue    = 1;
                         }
                         break;
                     }
@@ -111,18 +89,21 @@ namespace OneBitRob.AI
                         {
                             cast.Kind        = CastKind.AreaOfEffect;
                             cast.AoEPosition = _posRO[e].Position;
-                            cast.HasValue    = 1;
                         }
                         break;
                     }
                 }
 
-                em.SetComponentData(e, cast);
-                decide.HasValue = 0;
-                em.SetComponentData(e, decide);
-            }
+                if (cast.Kind != CastKind.None)
+                {
+                    if (!em.HasComponent<CastRequest>(e)) em.AddComponentData(e, cast);
+                    else                                  em.SetComponentData(e, cast);
 
-            spellEntities.Dispose();
+                    SystemAPI.SetComponentEnabled<CastRequest>(e, true);
+                }
+
+                SystemAPI.SetComponentEnabled<SpellDecisionRequest>(e, false);
+            }
         }
 
         [BurstCompile]
@@ -153,17 +134,10 @@ namespace OneBitRob.AI
                 default:
                 {
                     var tgt = new ClosestEnemySpellTargeting().GetTarget(self, in cfg, ref _posRO, ref _factRO, ref _hpRO);
-                    if (tgt != Entity.Null && _posRO.HasComponent(tgt))
-                    {
-                        point = _posRO[tgt].Position;
-                        return true;
-                    }
+                    if (tgt != Entity.Null && _posRO.HasComponent(tgt)) { point = _posRO[tgt].Position; return true; }
 
                     if (cfg.EffectType == SpellEffectType.Positive && _posRO.HasComponent(self))
-                    {
-                        point = _posRO[self].Position;
-                        return true;
-                    }
+                    { point = _posRO[self].Position; return true; }
 
                     point = default;
                     return false;

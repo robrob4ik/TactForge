@@ -1,6 +1,7 @@
-﻿using System.Collections.Generic;
-using Unity.Entities;
+﻿// File: OneBitRob/AI/UnitBrainRegistry.cs
+using System.Collections.Generic;
 using UnityEngine;
+using Unity.Entities;
 
 namespace OneBitRob.AI
 {
@@ -13,10 +14,7 @@ namespace OneBitRob.AI
             public EntityKey(Entity e) { Index = e.Index; Version = e.Version; }
         }
 
-        // ECS -> Brain
         static readonly Dictionary<EntityKey, UnitBrain> _entityToBrain = new(256);
-
-        // GO -> Entity
         static readonly Dictionary<int, Entity> _goToEntity = new(256);
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -39,11 +37,14 @@ namespace OneBitRob.AI
             if (go) _goToEntity.Remove(go.GetInstanceID());
         }
 
-        public static UnitBrain Get(Entity entity) =>
-            _entityToBrain.TryGetValue(new EntityKey(entity), out var brain) ? brain : null;
+        public static bool Contains(Entity entity) => _entityToBrain.ContainsKey(new EntityKey(entity));
+        public static bool Contains(GameObject go) => go && _goToEntity.ContainsKey(go.GetInstanceID());
 
-        public static bool TryGet(Entity entity, out UnitBrain brain) =>
-            _entityToBrain.TryGetValue(new EntityKey(entity), out brain);
+        public static UnitBrain Get(Entity entity)
+            => _entityToBrain.TryGetValue(new EntityKey(entity), out var brain) ? brain : null;
+
+        public static bool TryGet(Entity entity, out UnitBrain brain)
+            => _entityToBrain.TryGetValue(new EntityKey(entity), out brain);
 
         public static bool TryGetEntity(GameObject go, out Entity ent)
         {
@@ -52,13 +53,25 @@ namespace OneBitRob.AI
             return _goToEntity.TryGetValue(go.GetInstanceID(), out ent);
         }
 
-        public static Entity GetEntity(GameObject go) =>
-            TryGetEntity(go, out var ent) ? ent : Entity.Null;
+        public static Entity GetEntity(GameObject go)
+            => TryGetEntity(go, out var ent) ? ent : Entity.Null;
 
-        public static GameObject GetGameObject(Entity entity)
+        public static bool TryGetGameObject(Entity entity, out GameObject go)
         {
-            var brain = Get(entity);
-            return brain ? brain.gameObject : null;
+            go = null;
+            if (_entityToBrain.TryGetValue(new EntityKey(entity), out var brain) && brain)
+            {
+                go = brain.gameObject;
+                return true;
+            }
+            return false;
+        }
+
+        public static int TryGetEntityId(GameObject go)
+        {
+            if (TryGetEntity(go, out var e) && e != Entity.Null)
+                return (e.Index ^ (e.Version << 8));
+            return 0;
         }
 
 #if UNITY_EDITOR

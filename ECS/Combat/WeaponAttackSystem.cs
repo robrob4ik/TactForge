@@ -1,17 +1,18 @@
-﻿// Assets/PROJECT/Scripts/ECS/Combat/WeaponAttackSystem.cs
-using OneBitRob.ECS;
-using OneBitRob.FX;
+﻿// File: OneBitRob/AI/WeaponAttackSystem.cs
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
+using OneBitRob.Core;
+using OneBitRob.ECS;
+using OneBitRob.FX;
+using PROJECT.Scripts.AI.Brain.OneBitRob.Core;
 using static Unity.Mathematics.math;
 using UnityEngine;
 
 namespace OneBitRob.AI
 {
     [UpdateInGroup(typeof(AICastPhaseGroup))]
-    [UpdateAfter(typeof(SpellWindupAndFireSystem))] 
     public partial struct WeaponAttackSystem : ISystem
     {
         private ComponentLookup<LocalTransform> _transformLookup;
@@ -20,7 +21,7 @@ namespace OneBitRob.AI
 
         public void OnCreate(ref SystemState state)
         {
-            _transformLookup    = state.GetComponentLookup<LocalTransform>(true);
+            _transformLookup = state.GetComponentLookup<LocalTransform>(true);
 
             _attackRequestQuery = state.GetEntityQuery(new EntityQueryDesc
             {
@@ -62,41 +63,57 @@ namespace OneBitRob.AI
             for (int i = 0; i < windupEntities.Length; i++)
             {
                 var e = windupEntities[i];
-
-                if (em.HasComponent<DestroyEntityTag>(e)) { continue; }
+                if (em.HasComponent<DestroyEntityTag>(e)) continue;
 
                 var windup = em.GetComponentData<AttackWindup>(e);
                 if (windup.Active == 0 || now < windup.ReleaseTime) continue;
 
                 // If a spell is currently mid‑cast, postpone firing the weapon.
                 if (em.HasComponent<SpellWindup>(e) && em.GetComponentData<SpellWindup>(e).Active != 0)
-                {
                     continue;
-                }
 
                 var brain = UnitBrainRegistry.Get(e);
-                var weaponDef = brain?.UnitDefinition?.weapon;
-
-                // If we can't act (dead/no transform), just clear windup and continue.
-                if (brain?.UnitCombatController == null || !brain.UnitCombatController.IsAlive || !_transformLookup.HasComponent(e))
+                if (brain == null || brain.UnitCombatController == null || !brain.UnitCombatController.IsAlive || !_transformLookup.HasComponent(e))
                 {
                     windup.Active = 0;
                     ecb.SetComponent(e, windup);
                     continue;
                 }
 
-                var lt = _transformLookup[e];
-                float3 selfPos = lt.Position;
-                var rot = lt.Rotation;
-                float3 forward = normalizesafe(mul(rot, new float3(0, 0, 1)));
-                float3 up      = normalizesafe(mul(rot, new float3(0, 1, 0)));
-                float3 right   = normalizesafe(mul(rot, new float3(1, 0, 0)));
-
+                var lt    = _transformLookup[e];
+                var pose  = AttackPose.FromLocalTransform(lt);
                 var stats = em.HasComponent<UnitRuntimeStats>(e) ? em.GetComponentData<UnitRuntimeStats>(e) : UnitRuntimeStats.Defaults;
+                var uw    = em.HasComponent<UnitWeaponStatic>(e)  ? em.GetComponentData<UnitWeaponStatic>(e) : default;
+                bool hasUws = em.HasComponent<UnitWeaponStatic>(e);
 
-                if (weaponDef is RangedWeaponDefinition ranged)
+                // If ranged, actually fire and play fire anim/FX once here
+                bool isRanged = false;
+                if (em.HasComponent<UnitStatic>(e))
                 {
-                    FireRanged(em, ref ecb, e, brain, in ranged, in stats, selfPos, forward, right, up, now);
+                    isRanged = em.GetComponentData<UnitStatic>(e).CombatStyle == 2;
+                }
+                else
+                {
+                    isRanged = brain.UnitDefinition?.weapon is RangedWeaponDefinition;
+                }
+
+                if (isRanged)
+                {
+                    var rangedDef = brain.UnitDefinition?.weapon as RangedWeaponDefinition;
+                    FireRanged(em, ref ecb, e, brain, in uw, hasUws, rangedDef, in stats, in pose, now);
+
+                    if (rangedDef != null)
+                    {
+                        brain.UnitCombatController?.PlayRangedFire(rangedDef.animations);
+                        // Place fire feedback at muzzle origin
+                        float3 origin = pose.Position
+                                      + pose.Forward * max(0f, hasUws ? uw.MuzzleForward : (rangedDef?.muzzleForward ?? 0f))
+                                      + pose.Right   * (hasUws ? uw.MuzzleLocalOffset.x : (rangedDef?.muzzleLocalOffset.x ?? 0f))
+                                      + pose.Up      * (hasUws ? uw.MuzzleLocalOffset.y : (rangedDef?.muzzleLocalOffset.y ?? 0f))
+                                      + pose.Forward * (hasUws ? uw.MuzzleLocalOffset.z : (rangedDef?.muzzleLocalOffset.z ?? 0f));
+                        if (rangedDef.fireFeedback != null)
+                            FeedbackService.TryPlay(rangedDef.fireFeedback, brain.transform, (Vector3)origin);
+                    }
                 }
 
                 windup.Active = 0;
@@ -116,59 +133,79 @@ namespace OneBitRob.AI
                 { Consume(ref ecb, e); continue; }
 
                 var req = em.GetComponentData<AttackRequest>(e);
-                if (req.HasValue == 0 || req.Target == Entity.Null)
+                if (req.Target == Entity.Null)
                 { Consume(ref ecb, e); continue; }
 
-                // If a spell is mid‑cast, we do not start a new weapon action.
+                // If a spell is mid‑cast, do not start a new weapon action.
                 if (em.HasComponent<SpellWindup>(e) && em.GetComponentData<SpellWindup>(e).Active != 0)
                 { Consume(ref ecb, e); continue; }
 
-                var brain  = UnitBrainRegistry.Get(e);
-                var weapon = brain?.UnitDefinition?.weapon;
-                var stats  = em.HasComponent<UnitRuntimeStats>(e)
-                           ? em.GetComponentData<UnitRuntimeStats>(e)
-                           : UnitRuntimeStats.Defaults;
-
-                var cd = em.HasComponent<AttackCooldown>(e) ? em.GetComponentData<AttackCooldown>(e) : default;
-                if (now < cd.NextTime) { Consume(ref ecb, e); continue; } // ← hard gate
-
+                var brain = UnitBrainRegistry.Get(e);
                 if (brain == null || brain.UnitCombatController == null || !brain.UnitCombatController.IsAlive)
                 { Consume(ref ecb, e); continue; }
 
                 if (!_transformLookup.HasComponent(e) || !em.HasComponent<LocalTransform>(req.Target))
                 { Consume(ref ecb, e); continue; }
 
+                // Cooldown gate
+                var cd = em.HasComponent<AttackCooldown>(e) ? em.GetComponentData<AttackCooldown>(e) : default;
+                if (now < cd.NextTime)
+                { Consume(ref ecb, e); continue; }
+
                 var selfLT   = _transformLookup[e];
                 var targetLT = em.GetComponentData<LocalTransform>(req.Target);
+                var stats    = em.HasComponent<UnitRuntimeStats>(e) ? em.GetComponentData<UnitRuntimeStats>(e) : UnitRuntimeStats.Defaults;
 
-                bool isRanged = weapon is RangedWeaponDefinition;
-                float baseRange = max(0.01f, weapon != null ? weapon.attackRange : 1.5f);
+                // ---- Read ranged/melee & base range from UnitStatic if present; else from UnitDefinition.weapon
+                bool  isRanged;
+                float baseRange;
+
+                if (em.HasComponent<UnitStatic>(e))
+                {
+                    var us = em.GetComponentData<UnitStatic>(e);
+                    isRanged  = (us.CombatStyle == 2);
+                    baseRange = max(0.01f, us.AttackRangeBase);
+                }
+                else
+                {
+                    var w = brain.UnitDefinition?.weapon;
+                    isRanged  = (w is RangedWeaponDefinition);
+                    baseRange = max(0.01f, w != null ? w.attackRange : 1.5f);
+                }
+
                 float rangeMult = isRanged ? stats.AttackRangeMult_Ranged : stats.AttackRangeMult_Melee;
                 float effectiveRange = baseRange * max(0.0001f, rangeMult);
 
-                if (math.distancesq(selfLT.Position, targetLT.Position) > (effectiveRange * effectiveRange) * 1.1f)
+                if (lengthsq(selfLT.Position - targetLT.Position) > (effectiveRange * effectiveRange) * 1.1f)
                 { Consume(ref ecb, e); continue; }
 
-                float3 forward = normalizesafe(mul(selfLT.Rotation, new float3(0, 0, 1)));
+                var pose  = AttackPose.FromLocalTransform(selfLT);
+                var uw    = em.HasComponent<UnitWeaponStatic>(e) ? em.GetComponentData<UnitWeaponStatic>(e) : default;
+                bool hasUws = em.HasComponent<UnitWeaponStatic>(e);
 
-                if (weapon is MeleeWeaponDefinition melee)
+                // Presentation (animations/feedback) sourced from UnitDefinition (unchanged)
+                var weapon = brain.UnitDefinition?.weapon;
+
+                if (!isRanged && weapon is MeleeWeaponDefinition meleeDef)
                 {
-                    // Immediate melee hit this frame
-                    var hit = BuildMeleeHitRequest(e, brain, in melee, in stats, selfLT.Position, forward);
-                    ecb.SetOrAdd(em, e, hit);
+                    // Build hit using statics if present, else weapon def fallback
+                    var hit = BuildMeleeHitRequest(e, brain, hasUws, in uw, meleeDef, in stats, pose.Position, pose.Forward);
+                    ecb.SetOrAddAndEnable(em, e, hit);
 
-                    // Anim + VFX
-                    brain.UnitCombatController?.PlayMeleeAttack(melee.attackAnimations);
-                    if (melee.attackFeedback != null)
-                        FeedbackService.TryPlay(melee.attackFeedback, brain.transform, (Vector3)selfLT.Position);
+                    // Anim + feedback (presentation)
+                    brain.UnitCombatController?.PlayMeleeAttack(meleeDef.attackAnimations);
+                    if (meleeDef.attackFeedback != null)
+                        FeedbackService.TryPlay(meleeDef.attackFeedback, brain.transform, (Vector3)pose.Position);
 
                     // Cooldown
-                    var newCd = ComputeAttackCooldown(in melee.attackCooldown, in melee.attackCooldownJitter, stats.MeleeAttackSpeedMult, e, now);
+                    float baseCd   = hasUws ? uw.MeleeAttackCooldown       : Mathf.Max(0.01f, meleeDef.attackCooldown);
+                    float jitterCd = hasUws ? uw.MeleeAttackCooldownJitter : Mathf.Max(0f,    meleeDef.attackCooldownJitter);
+                    var newCd = ComputeAttackCooldown(baseCd, jitterCd, stats.MeleeAttackSpeedMult, e, now);
                     ecb.SetOrAdd(em, e, newCd);
                     brain.NextAllowedAttackTime = Time.time + (newCd.NextTime - now);
 
-                    // Movement lock for the swing window (prevents sliding)
-                    float lockSeconds = max(0f, melee.swingLockSeconds);
+                    // Movement lock
+                    float lockSeconds = hasUws ? uw.MeleeSwingLockSeconds : Mathf.Max(0f, meleeDef.swingLockSeconds);
                     if (lockSeconds > 0f)
                     {
                         if (!em.HasComponent<ActionLockUntil>(e))
@@ -177,28 +214,43 @@ namespace OneBitRob.AI
                             ecb.SetComponent(e, new ActionLockUntil { Until = now + lockSeconds });
                     }
                 }
-                else if (weapon is RangedWeaponDefinition ranged)
+                else // ranged
                 {
-                    // Start windup (actual fire happens in Phase 1)
-                    StartRangedWindup(em, ref ecb, e, brain, in ranged, in stats, selfLT.Position, forward, now);
+                    bool started = StartRangedWindup(em, ref ecb, e, hasUws, in uw, weapon as RangedWeaponDefinition, in stats, pose, now);
+                    if (started && weapon is RangedWeaponDefinition rangedDef)
+                    {
+                        brain.UnitCombatController?.PlayRangedPrepare(rangedDef.animations);
+                        if (rangedDef.prepareFeedback != null)
+                            FeedbackService.TryPlay(rangedDef.prepareFeedback, brain.transform, (Vector3)pose.Position);
+                    }
                 }
 
                 Consume(ref ecb, e);
             }
         }
 
-        // RANGED helpers
+        // RANGED helpers — use UWS if present else weapon def fallback
         private void FireRanged(EntityManager em, ref EntityCommandBuffer ecb, Entity e, UnitBrain brain,
-                                in RangedWeaponDefinition ranged, in UnitRuntimeStats stats,
-                                float3 selfPos, float3 forward, float3 right, float3 up, float now)
+                                in UnitWeaponStatic uw, bool hasUws, RangedWeaponDefinition rangedDef,
+                                in UnitRuntimeStats stats, in AttackPose pose, float now)
         {
-            float3 origin = selfPos
-                          + forward * max(0f, ranged.muzzleForward)
-                          + right   * ranged.muzzleLocalOffset.x
-                          + up      * ranged.muzzleLocalOffset.y
-                          + forward * ranged.muzzleLocalOffset.z;
+            float muzzleFwd = hasUws ? uw.MuzzleForward : (rangedDef?.muzzleForward ?? 0f);
+            float3 muzzleOff = hasUws ? uw.MuzzleLocalOffset
+                                      : new float3(rangedDef?.muzzleLocalOffset.x ?? 0f,
+                                                   rangedDef?.muzzleLocalOffset.y ?? 0f,
+                                                   rangedDef?.muzzleLocalOffset.z ?? 0f);
 
-            float3 aimDir = forward;
+            float3 origin = pose.Position
+                          + pose.Forward * max(0f, muzzleFwd)
+                          + pose.Right   * muzzleOff.x
+                          + pose.Up      * muzzleOff.y
+                          + pose.Forward * muzzleOff.z;
+
+            float projSpeed = hasUws ? uw.RangedProjectileSpeed       : Mathf.Max(0.01f, rangedDef?.projectileSpeed       ?? 60f);
+            float maxDist   = hasUws ? uw.RangedProjectileMaxDistance : Mathf.Max(0.1f,  rangedDef?.projectileMaxDistance ?? 40f);
+            float damage    = hasUws ? uw.BaseDamage                  : Mathf.Max(0f,    rangedDef?.attackDamage          ?? 1f);
+
+            float3 aimDir = pose.Forward;
             if (em.HasComponent<Target>(e))
             {
                 var targetEnt = em.GetComponentData<Target>(e).Value;
@@ -206,13 +258,15 @@ namespace OneBitRob.AI
                 {
                     float3 targetPos = em.GetComponentData<LocalTransform>(targetEnt).Position;
                     float3 raw = targetPos - origin; raw.y = 0;
-                    aimDir = normalizesafe(raw, forward);
+                    aimDir = math.normalizesafe(raw, pose.Forward);
                 }
             }
 
-            // Final crit/pierce
-            float critChance   = clamp(ranged.critChance + stats.CritChanceAdd, 0f, 1f);
-            float critMult     = max(1f, ranged.critMultiplier * stats.CritMultiplierMult);
+            float baseCritChance = hasUws ? uw.RangedCritChanceBase     : Mathf.Clamp01(rangedDef?.critChance     ?? 0f);
+            float baseCritMult   = hasUws ? uw.RangedCritMultiplierBase : Mathf.Max(1f,  rangedDef?.critMultiplier ?? 1f);
+
+            float critChance   = clamp(baseCritChance + stats.CritChanceAdd, 0f, 1f);
+            float critMult     = max(1f, baseCritMult * stats.CritMultiplierMult);
             float pierceChance = clamp(stats.RangedPierceChanceAdd, 0f, 1f);
             int   pierceMax    = max(0,   stats.RangedPierceMaxAdd);
 
@@ -220,76 +274,94 @@ namespace OneBitRob.AI
             {
                 Origin           = origin,
                 Direction        = aimDir,
-                Speed            = max(0.01f, ranged.projectileSpeed),
-                Damage           = max(0f, ranged.attackDamage),
-                MaxDistance      = max(0.1f, ranged.projectileMaxDistance),
+                Speed            = projSpeed,
+                Damage           = damage,
+                MaxDistance      = maxDist,
                 CritChance       = critChance,
                 CritMultiplier   = critMult,
                 PierceChance     = pierceChance,
-                PierceMaxTargets = pierceMax,
-                HasValue         = 1
+                PierceMaxTargets = pierceMax
             };
-            ecb.SetOrAdd(em, e, spawn);
 
-            brain.UnitCombatController?.PlayRangedFire(ranged.animations);
-            if (ranged.fireFeedback != null)
-                FeedbackService.TryPlay(ranged.fireFeedback, brain.transform, (Vector3)origin);
+            ecb.SetOrAddAndEnable(em, e, spawn);
 
 #if UNITY_EDITOR
-            Debug.DrawRay((Vector3)origin, (Vector3)aimDir * 1.6f, new Color(1f, 0.45f, 0.2f, 0.95f), 0.55f, false);
+            Debug.DrawRay((Vector3)origin, (Vector3)aimDir * 1.6f, DebugPalette.SpellFire, 0.55f, false);
 #endif
 
-            var cd = ComputeAttackCooldown(in ranged.attackCooldown, in ranged.attackCooldownJitter, stats.RangedAttackSpeedMult, e, now);
+            float baseCd   = hasUws ? uw.RangedAttackCooldown       : Mathf.Max(0.01f, rangedDef?.attackCooldown       ?? 0.5f);
+            float jitterCd = hasUws ? uw.RangedAttackCooldownJitter : Mathf.Max(0f,    rangedDef?.attackCooldownJitter ?? 0f);
+            var cd = ComputeAttackCooldown(baseCd, jitterCd, stats.RangedAttackSpeedMult, e, now);
             ecb.SetOrAdd(em, e, cd);
+
             brain.NextAllowedAttackTime = Time.time + (cd.NextTime - now);
         }
 
-        private void StartRangedWindup(EntityManager em, ref EntityCommandBuffer ecb, Entity e, UnitBrain brain,
-                                       in RangedWeaponDefinition ranged, in UnitRuntimeStats stats,
-                                       float3 selfPos, float3 forward, float now)
+        private bool StartRangedWindup(EntityManager em, ref EntityCommandBuffer ecb, Entity e,
+                                       bool hasUws, in UnitWeaponStatic uw, RangedWeaponDefinition rangedDef,
+                                       in UnitRuntimeStats stats, in AttackPose pose, float now)
         {
-            if (!em.HasComponent<AttackWindup>(e)) ecb.AddComponent(e, new AttackWindup { Active = 0, ReleaseTime = 0 });
+            if (!em.HasComponent<AttackWindup>(e))
+                ecb.AddComponent(e, new AttackWindup { Active = 0, ReleaseTime = 0 });
 
-            var wind = em.HasComponent<AttackWindup>(e) ? em.GetComponentData<AttackWindup>(e) : default;
-            if (wind.Active != 0) return;
+            var wind = em.GetComponentData<AttackWindup>(e);
+            if (wind.Active != 0) return false;
 
-            float speedMult = max(0.0001f, stats.RangedAttackSpeedMult);
+            float windupSeconds = hasUws ? uw.RangedWindupSeconds : Mathf.Max(0f, rangedDef?.windupSeconds ?? 0f);
+            float speedMult     = max(0.0001f, stats.RangedAttackSpeedMult);
+
             wind.Active      = 1;
-            wind.ReleaseTime = now + max(0f, ranged.windupSeconds) / speedMult;
+            wind.ReleaseTime = now + windupSeconds / speedMult;
             ecb.SetComponent(e, wind);
 
-            brain.UnitCombatController?.PlayRangedPrepare(ranged.animations);
-            if (ranged.prepareFeedback != null)
-                FeedbackService.TryPlay(ranged.prepareFeedback, brain.transform, (Vector3)selfPos);
-
 #if UNITY_EDITOR
-            Debug.DrawRay((Vector3)selfPos + Vector3.up * 0.05f, (Vector3)forward * 1.2f, new Color(0.8f, 0.9f, 1f, 0.95f), 0.65f, false);
+            Debug.DrawRay((Vector3)pose.Position + Vector3.up * 0.05f, (Vector3)pose.Forward * 1.2f, DebugPalette.SpellPrepare, 0.65f, false);
 #endif
+            return true;
         }
 
-        // MELEE helpers (unchanged)
-        private static MeleeHitRequest BuildMeleeHitRequest(Entity e, UnitBrain brain, in MeleeWeaponDefinition melee, in UnitRuntimeStats stats, float3 pos, float3 forward)
+        private static MeleeHitRequest BuildMeleeHitRequest(Entity e, UnitBrain brain,
+                                                            bool hasUws, in UnitWeaponStatic uw,
+                                                            MeleeWeaponDefinition meleeDef,
+                                                            in UnitRuntimeStats stats, float3 pos, float3 forward)
         {
+            float baseDamage = hasUws ? uw.BaseDamage : Mathf.Max(1f, meleeDef.attackDamage);
+            float halfAngle  = hasUws ? uw.MeleeHalfAngleDeg : Mathf.Clamp(meleeDef.halfAngleDeg, 0f, 179f);
+            float invinc     = hasUws ? uw.MeleeInvincibility : Mathf.Max(0f, meleeDef.invincibility);
+            int   maxTargets = hasUws ? uw.MeleeMaxTargets : Mathf.Max(1, meleeDef.maxTargets);
+
+            float baseCritChance = hasUws ? uw.MeleeCritChanceBase     : Mathf.Clamp01(meleeDef.critChance);
+            float baseCritMult   = hasUws ? uw.MeleeCritMultiplierBase : Mathf.Max(1f, meleeDef.critMultiplier);
+
+            float critChance     = clamp(baseCritChance + stats.CritChanceAdd, 0f, 1f);
+            float critMultiplier = max(1f, baseCritMult * stats.MeleeRangeMult); // keep original semantics
+
+            // Range = UnitDefinition.attackRange * stats (original behavior).
+            float baseRange = Mathf.Max(0.01f, brain.UnitDefinition?.weapon != null ? brain.UnitDefinition.weapon.attackRange : 1.5f);
+            float range     = baseRange * max(0.0001f, stats.MeleeRangeMult);
+
             return new MeleeHitRequest
             {
                 Origin        = pos,
                 Forward       = forward,
-                Range         = max(0.01f, melee.attackRange * max(0.0001f, stats.MeleeRangeMult)),
-                HalfAngleRad  = radians(clamp(melee.halfAngleDeg * max(0.0001f, stats.MeleeArcMult), 0f, 179f)),
-                Damage        = max(1f, melee.attackDamage),
-                Invincibility = max(0f, melee.invincibility),
+                Range         = range,
+                HalfAngleRad  = radians(clamp(halfAngle * max(0.0001f, stats.MeleeArcMult), 0f, 179f)),
+                Damage        = max(1f, baseDamage),
+                Invincibility = max(0f, invinc),
                 LayerMask     = (UnitBrainRegistry.Get(e)?.GetDamageableLayerMask().value) ?? ~0,
-                MaxTargets    = max(1, melee.maxTargets),
-                CritChance    = clamp(melee.critChance + stats.CritChanceAdd, 0f, 1f),
-                CritMultiplier= max(1f, melee.critMultiplier * stats.CritMultiplierMult),
-                HasValue      = 1
+                MaxTargets    = max(1, maxTargets),
+                CritChance    = critChance,
+                CritMultiplier= critMultiplier,
             };
         }
 
         private static void Consume(ref EntityCommandBuffer ecb, Entity e)
-            => ecb.SetComponent(e, new AttackRequest { HasValue = 0, Target = Entity.Null });
+        {
+            ecb.SetComponent(e, new AttackRequest { Target = Entity.Null });
+            ecb.SetComponentEnabled<AttackRequest>(e, false);
+        }
 
-        private static AttackCooldown ComputeAttackCooldown(in float baseCd, in float jitterRange, float speedMult, Entity e, float now)
+        private static AttackCooldown ComputeAttackCooldown(float baseCd, float jitterRange, float speedMult, Entity e, float now)
         {
             float jitter = CalcJitter(jitterRange, e, now);
             speedMult    = max(0.0001f, speedMult);

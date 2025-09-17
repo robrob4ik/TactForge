@@ -45,44 +45,35 @@ namespace OneBitRob.AI
         {
             var em = EntityManager;
 
-            // If we’re already mid‑cast, keep running until windup releases.
+            // If mid-cast, keep running
             if (em.HasComponent<SpellWindup>(e) && em.GetComponentData<SpellWindup>(e).Active != 0) return TaskStatus.Running;
 
-            if (!em.HasComponent<CastRequest>(e) || !em.HasComponent<SpellConfig>(e)) return TaskStatus.Failure;
+            if (!em.HasComponent<CastRequest>(e) || !em.IsComponentEnabled<CastRequest>(e) || !em.HasComponent<SpellConfig>(e))
+                return TaskStatus.Failure;
 
             var cr = em.GetComponentData<CastRequest>(e);
-            if (cr.HasValue == 0) return TaskStatus.Failure;
 
-            // Determine a facing point from the request.
+            // Determine facing point
             float3 aim = float3.zero;
             bool hasAim = false;
 
             if (cr.Kind == CastKind.AreaOfEffect)
             {
-                aim = cr.AoEPosition;
-                hasAim = true;
+                aim = cr.AoEPosition; hasAim = true;
             }
             else if (cr.Kind == CastKind.SingleTarget && cr.Target != Entity.Null)
             {
-                if (_posRO.HasComponent(cr.Target))
-                {
-                    aim = _posRO[cr.Target].Position;
-                    hasAim = true;
-                }
+                if (_posRO.HasComponent(cr.Target)) { aim = _posRO[cr.Target].Position; hasAim = true; }
             }
-
             if (!hasAim) return TaskStatus.Failure;
 
-            // Face the aim immediately so visual rotation starts right away.
+            // Face right away
             var df = new DesiredFacing { TargetPosition = aim, HasValue = 1 };
-            if (em.HasComponent<DesiredFacing>(e))
-                em.SetComponentData(e, df);
-            else
-                em.AddComponentData(e, df);
+            if (em.HasComponent<DesiredFacing>(e)) em.SetComponentData(e, df);
+            else                                    em.AddComponentData(e, df);
 
             if (brain) DebugDraw.Line(brain.transform.position, (Vector3)aim, Color.yellow);
 
-            
             return TaskStatus.Success;
         }
     }

@@ -1,7 +1,10 @@
-﻿using UnityEngine;
+﻿// File: Assets/PROJECT/Scripts/Core/Service/VfxService.cs
+using UnityEngine;
 
 namespace OneBitRob.VFX
 {
+    using OneBitRob.FX;
+
     public static class VfxService
     {
         public static void PlayByHash(int vfxIdHash, Vector3 position, Transform follow = null)
@@ -9,7 +12,16 @@ namespace OneBitRob.VFX
             if (vfxIdHash == 0) return;
             var id = VisualAssetRegistry.GetVfxId(vfxIdHash);
             if (string.IsNullOrEmpty(id)) return;
-            VfxPoolManager.PlayById(id, position, follow);
+            PlayById(id, position, follow);
+        }
+
+        public static void PlayById(string id, Vector3 position, Transform follow = null)
+        {
+            var go = PoolHub.GetPooled(PoolKind.Vfx, id); // SAFE pooled retrieval
+            if (!go) return;
+
+            VfxPoolManager.Ensure().SendMessage("PrepareOneShot", new object[] { go, position, follow }, SendMessageOptions.DontRequireReceiver);
+            // The VfxPoolManager handles parenting/activation.
         }
 
         // Persistent (ref-counted) by hash
@@ -27,7 +39,6 @@ namespace OneBitRob.VFX
         public static void MovePersistent(long key, Vector3 position, Transform follow = null)
             => VfxPoolManager.MovePersistent(key, position, follow);
 
-        public static void EndPersistent(long key)
-            => VfxPoolManager.EndPersistent(key);
+        public static void EndPersistent(long key) => VfxPoolManager.EndPersistent(key);
     }
 }

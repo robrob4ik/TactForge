@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿// File: Assets/PROJECT/Scripts/Core/Service/FeedbackService.cs
+using System.Collections;
+using System.Collections.Generic;
 using MoreMountains.Feedbacks;
 using MoreMountains.Tools;
 using UnityEngine;
@@ -8,39 +10,30 @@ namespace OneBitRob.FX
     public static class FeedbackService
     {
         /// <summary>
-        /// Plays a feedback instance. If definition.HasPoolId resolves, uses MM pooler; otherwise falls back to instantiate.
-        /// Parent/placement logic is unchanged (nested if attachToTarget).
-        /// Adds PooledFxAttachment so cleanup can detach to pool root before unit destruction.
+        /// Play an MMFeedbacks effect from a pool id (preferred) or a fallback prefab.
+        /// Now uses PoolHub.GetPooled(...) which is exception-safe against broken pool lists.
         /// </summary>
         public static bool TryPlay(FeedbackDefinition definition, Transform attach, Vector3 worldPosition, float? overrideIntensity = null)
         {
             if (definition == null) return false;
 
             GameObject go = null;
-            MMObjectPooler pooler = null;
             bool pooled = false;
 
-            // 1) Resolve pooled instance if possible
             if (definition.HasPoolId)
             {
-                pooler = FeedbackPoolManager.GetPooler(definition.poolId);
-                if (pooler != null)
-                {
-                    go = pooler.GetPooledGameObject();
-                    pooled = true;
-                }
+                go = PoolHub.GetPooled(PoolKind.Feedback, definition.poolId); // SAFE pooled retrieval
+                pooled = go != null;
             }
 
-            // 2) Fallback instantiate (non-pooled)
             if (go == null && definition.fallbackPrefab != null)
             {
                 go = Object.Instantiate(definition.fallbackPrefab);
                 pooled = false;
             }
-
             if (go == null) return false;
 
-            // 3) Place & parent BEFORE activation so initial OnEnable effects use correct transform
+            // Placement / parenting
             if (definition.attachToTarget && attach != null)
             {
                 go.transform.SetParent(attach, worldPositionStays: false);
@@ -56,18 +49,19 @@ namespace OneBitRob.FX
                 );
             }
 
-            // Mark pooled FX so we can safely detach them on unit death
-            var marker = go.GetComponent<PooledFxAttachment>() ?? go.AddComponent<PooledFxAttachment>();
-            marker.PoolRoot = pooler != null ? pooler.transform : null;
-
-            if (!go.activeSelf) go.SetActive(true);
             var poolable = go.GetComponent<MMPoolableObject>();
+            if (!go.activeSelf) go.SetActive(true);
             poolable?.TriggerOnSpawnComplete();
 
             var player = go.GetComponent<MMFeedbacks>();
             if (player == null)
             {
-                if (pooled) { if (poolable != null) poolable.Destroy(); else go.SetActive(false); }
+                // Return to pool / cleanup gracefully
+                if (pooled)
+                {
+                    if (poolable != null) poolable.Destroy();
+                    else go.SetActive(false);
+                }
                 else Object.Destroy(go);
                 return false;
             }
@@ -86,15 +80,53 @@ namespace OneBitRob.FX
             return true;
         }
 
-        /// <summary>Detach all pooled FX under 'root' back to their pools (used right before destroying a unit).</summary>
+        /// <summary>
+        /// Non-destructive rescue of pooled FX parented under 'root': simply re-parent them to world.
+        /// Lets them keep playing & auto-release later, avoiding destruction along with the unit.
+        /// </summary>
+        public static void RescuePooledChildren(Transform root)
+        {
+            if (root == null) return;
+
+            // Re-parent ANY pooled FX (MMPoolableObject) away from the dying unit.
+            var poolables = root.GetComponentsInChildren<MMPoolableObject>(true);
+            for (int i = 0; i < poolables.Length; i++)
+            {
+                var p = poolables[i];
+                if (p == null) continue;
+                // Avoid touching the unit itself even if it had an MMPoolableObject (unlikely)
+                if (p.transform == root) continue;
+                try
+                {
+                    p.transform.SetParent(null, true); // keep active, world-space
+                }
+                catch { /* ignore */ }
+            }
+        }
+
+        /// <summary>
+        /// Legacy: Detach by marker OR generically return child pooled FX to pool.
+        /// Prefer RescuePooledChildren at unit cleanup to keep death FX visible.
+        /// </summary>
         public static void DetachAllPooledChildren(Transform root)
         {
             if (root == null) return;
+
+            // Marker-based detach (if present on FX)
             var markers = root.GetComponentsInChildren<PooledFxAttachment>(true);
             for (int i = 0; i < markers.Length; i++)
             {
-                var m = markers[i];
-                if (m != null) m.DetachToPoolRoot();
+                if (markers[i] != null) markers[i].DetachToPoolRoot();
+            }
+
+            // Generic fallback: return any orphan poolables to pool
+            var poolables = root.GetComponentsInChildren<MMPoolableObject>(true);
+            for (int i = 0; i < poolables.Length; i++)
+            {
+                var p = poolables[i];
+                if (p == null) continue;
+                if (p.transform == root) continue;
+                try { p.Destroy(); } catch { /* ignore */ }
             }
         }
     }
@@ -108,7 +140,7 @@ namespace OneBitRob.FX
             {
                 if (_instance != null) return _instance;
                 var go = new GameObject("[FeedbackServiceRunner]");
-                DontDestroyOnLoad(go);
+                Object.DontDestroyOnLoad(go);
                 _instance = go.AddComponent<FeedbackServiceRunner>();
                 return _instance;
             }

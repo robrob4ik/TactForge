@@ -1,8 +1,7 @@
-﻿using OneBitRob.AI;
-using OneBitRob.FX;
-using OneBitRob.VFX;
+﻿// File: OneBitRob/ECS/Brain_EcsToMono_SpellProjectileBridgeSystem.cs
 using Unity.Entities;
 using UnityEngine;
+using OneBitRob.FX;
 
 namespace OneBitRob.ECS
 {
@@ -13,50 +12,39 @@ namespace OneBitRob.ECS
         {
             var em = state.EntityManager;
 
-            foreach (var (spawnRequest, entity) in SystemAPI.Query<RefRW<SpellProjectileSpawnRequest>>().WithEntityAccess())
+            foreach (var (spawnRW, entity) in SystemAPI.Query<RefRW<SpellProjectileSpawnRequest>>().WithEntityAccess())
             {
-                if (spawnRequest.ValueRO.HasValue == 0) continue;
+                if (!SystemAPI.IsComponentEnabled<SpellProjectileSpawnRequest>(entity)) continue;
+                var spawnRequest = spawnRW.ValueRO;
 
-                var brain = UnitBrainRegistry.Get(entity);
-                if (!brain || brain.UnitCombatController == null)
+                var brain = OneBitRob.AI.UnitBrainRegistry.Get(entity);
+                if (brain && brain.UnitCombatController != null)
                 {
-                    spawnRequest.ValueRW = default; // consume anyway to avoid repeats
-                    continue;
+                    var projId = OneBitRob.VFX.VisualAssetRegistry.GetProjectileId(spawnRequest.ProjectileIdHash);
+                    if (!string.IsNullOrEmpty(projId))
+                    {
+                        var spells = brain.UnitDefinition != null ? brain.UnitDefinition.unitSpells : null;
+                        FeedbackDefinition perHit = null;
+                        if (spells != null && spells.Count > 0 && spells[0] != null)
+                            perHit = spells[0].perTargetHitFeedback;
+
+                        brain.UnitCombatController.FireSpellProjectile(
+                            projId,
+                            (Vector3)spawnRequest.Origin,
+                            ((Vector3)spawnRequest.Direction).normalized,
+                            brain.gameObject,
+                            spawnRequest.Speed,
+                            spawnRequest.Damage,
+                            spawnRequest.MaxDistance,
+                            spawnRequest.LayerMask,
+                            spawnRequest.Radius,
+                            spawnRequest.Pierce != 0,
+                            perHit
+                        );
+                    }
                 }
 
-                // Resolve projectile id string
-                var projId = VisualAssetRegistry.GetProjectileId(spawnRequest.ValueRO.ProjectileIdHash);
-                if (string.IsNullOrEmpty(projId))
-                {
-                    spawnRequest.ValueRW = default;
-                    continue;
-                }
-
-                // Fetch the per-target hit feedback from the caster's spell (first spell slot by design)
-                FeedbackDefinition perHit = null;
-                var spells = brain.UnitDefinition != null ? brain.UnitDefinition.unitSpells : null;
-                if (spells != null && spells.Count > 0 && spells[0] != null)
-                    perHit = spells[0].perTargetHitFeedback;
-
-                var origin = (Vector3)spawnRequest.ValueRO.Origin;
-                var dir    = ((Vector3)spawnRequest.ValueRO.Direction).normalized;
-                int layer  = spawnRequest.ValueRO.LayerMask;
-
-                brain.UnitCombatController.FireSpellProjectile(
-                    projId,
-                    origin,
-                    dir,
-                    brain.gameObject,
-                    spawnRequest.ValueRO.Speed,
-                    spawnRequest.ValueRO.Damage,
-                    spawnRequest.ValueRO.MaxDistance,
-                    layer,
-                    spawnRequest.ValueRO.Radius,
-                    spawnRequest.ValueRO.Pierce != 0,
-                    perHit // <-- new
-                );
-
-                spawnRequest.ValueRW = default; // consume
+                SystemAPI.SetComponentEnabled<SpellProjectileSpawnRequest>(entity, false);
             }
         }
     }

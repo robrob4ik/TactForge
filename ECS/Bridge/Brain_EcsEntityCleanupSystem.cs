@@ -1,17 +1,20 @@
-﻿// Assets/PROJECT/Scripts/ECS/Brain_EcsEntityCleanupSystem.cs
+﻿// File: Assets/PROJECT/Scripts/ECS/Brain/Brain_EcsEntityCleanupSystem.cs
+
+using System.Reflection;
 using GPUInstancerPro.PrefabModule;
-using OneBitRob.AI;
-using OneBitRob.VFX;
 using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
+using OneBitRob.AI;
+using OneBitRob.VFX;
+using OneBitRob.FX;
 
 namespace OneBitRob.ECS
 {
     [UpdateInGroup(typeof(LateSimulationSystemGroup), OrderLast = true)]
     public partial class Brain_EcsEntityCleanupSystem : SystemBase
     {
-        // Simple, global death hold to let anim + nested FX finish
+        // Let death anim + nested FX finish
         private const float DeathDespawnDelaySeconds = 1.0f;
 
         protected override void OnUpdate()
@@ -32,6 +35,9 @@ namespace OneBitRob.ECS
                 var brain = UnitBrainRegistry.Get(entity);
                 if (brain && brain.gameObject)
                 {
+                    // IMPORTANT: rescue pooled FX parented under the unit so they don't get destroyed with it
+                    FeedbackService.RescuePooledChildren(brain.transform);
+
                     // If registered with GPUI, unregister
                     if (brain.TryGetComponent<GPUIPrefab>(out var gpuiPrefab))
                         GPUIPrefabAPI.RemovePrefabInstance(gpuiPrefab);
@@ -39,7 +45,7 @@ namespace OneBitRob.ECS
                     // Destroy the ECS entity now
                     ecb.DestroyEntity(entity);
 
-                    // Let the GO stick around a bit for death anim + nested FX
+                    // Destroy the GO after a small delay
                     GameObject.Destroy(brain.gameObject, DeathDespawnDelaySeconds);
                 }
                 else

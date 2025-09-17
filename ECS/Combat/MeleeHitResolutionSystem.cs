@@ -1,4 +1,5 @@
-﻿// File: Runtime/AI/Systems/MeleeHitResolutionSystem.cs
+﻿// File: OneBitRob/AI/MeleeHitResolutionSystem.cs
+
 using OneBitRob.Debugging;
 using OneBitRob.ECS;
 using OneBitRob.FX;
@@ -14,51 +15,36 @@ namespace OneBitRob.AI
     public partial struct MeleeHitResolutionSystem : ISystem
     {
         private static readonly Collider[] s_SphereOverlapHits = new Collider[256];
-        private EntityQuery _requestQuery;
 
-        public void OnCreate(ref SystemState state)
-        {
-            _requestQuery = state.GetEntityQuery(ComponentType.ReadWrite<MeleeHitRequest>());
-            state.RequireForUpdate(_requestQuery);
-        }
+        public void OnCreate(ref SystemState state) { }
 
         public void OnUpdate(ref SystemState state)
         {
             var em = state.EntityManager;
-            using var reqEntities = _requestQuery.ToEntityArray(Allocator.Temp);
 
-            for (int i = 0; i < reqEntities.Length; i++)
+            foreach (var (reqRW, e) in SystemAPI.Query<RefRW<MeleeHitRequest>>().WithEntityAccess())
             {
-                var e = reqEntities[i];
-                var req = em.GetComponentData<MeleeHitRequest>(e);
-                if (req.HasValue == 0) continue;
-
-                // consume first
-                req.HasValue = 0;
-                em.SetComponentData(e, req);
+                if (!SystemAPI.IsComponentEnabled<MeleeHitRequest>(e)) continue;
+                var req = reqRW.ValueRO;
 
                 var brain = UnitBrainRegistry.Get(e);
-                if (brain == null) continue;
+                if (brain == null) { SystemAPI.SetComponentEnabled<MeleeHitRequest>(e, false); continue; }
 
                 DebugDrawVolume(req);
 
                 int hitCount = TryGetHits(in req);
-                if (hitCount <= 0) continue;
+                if (hitCount > 0) ProcessHits(em, e, brain, in req, hitCount);
 
-                ProcessHits(em, e, brain, in req, hitCount);
+                SystemAPI.SetComponentEnabled<MeleeHitRequest>(e, false);
             }
         }
 
         private static int TryGetHits(in MeleeHitRequest req)
         {
             int maskToUse = (req.LayerMask != 0) ? req.LayerMask : ~0;
-            int count = Physics.OverlapSphereNonAlloc(
-                (Vector3)req.Origin, req.Range, s_SphereOverlapHits, maskToUse, QueryTriggerInteraction.Collide);
-
+            int count = Physics.OverlapSphereNonAlloc((Vector3)req.Origin, req.Range, s_SphereOverlapHits, maskToUse, QueryTriggerInteraction.Collide);
             if (count == 0 && maskToUse != ~0)
-            {
                 count = Physics.OverlapSphereNonAlloc((Vector3)req.Origin, req.Range, s_SphereOverlapHits, ~0, QueryTriggerInteraction.Collide);
-            }
             return count;
         }
 
@@ -66,33 +52,32 @@ namespace OneBitRob.AI
         {
             bool attackerIsEnemy = attackerBrain.UnitDefinition != null && attackerBrain.UnitDefinition.isEnemy;
 
-            float3 forward = normalizesafe(req.Forward);
-            float cosHalf = cos(req.HalfAngleRad);
-            float cosHalfSq = cosHalf * cosHalf;
-            float rangeSq = req.Range * req.Range;
-            int maxTargets = math.max(1, req.MaxTargets);
-            int applied = 0;
+            float3 forward = math.normalizesafe(req.Forward);
+            float cosHalf  = math.cos(req.HalfAngleRad);
+            float cosHalfSq= cosHalf * cosHalf;
+            float rangeSq  = req.Range * req.Range;
+            int   maxT     = math.max(1, req.MaxTargets);
+            int   applied  = 0;
 
             var meleeDef = attackerBrain.UnitDefinition?.weapon as OneBitRob.MeleeWeaponDefinition;
 
-            for (int h = 0; h < hitCount; h++)
+            for (int i = 0; i < hitCount; i++)
             {
-                var col = s_SphereOverlapHits[h];
+                var col = s_SphereOverlapHits[i];
                 if (!col) continue;
 
                 if (attackerBrain && col.transform.root == attackerBrain.transform.root)
-                    continue; 
-
-                if (!ShouldAffectTarget(col, attackerIsEnemy, req, forward, cosHalfSq, rangeSq, out var targetBrain, out var to))
                     continue;
 
-                // Debug helpers
+                if (!ShouldAffectTarget(col, attackerIsEnemy, in req, forward, cosHalfSq, rangeSq, out var targetBrain, out var to))
+                    continue;
+
                 DebugDraw.Line((Vector3)req.Origin, targetBrain.transform.position, new Color(0.2f, 1f, 0.2f, 0.95f));
                 DebugDraw.Line((Vector3)req.Origin + Vector3.up * 0.03f, targetBrain.transform.position + Vector3.up * 0.03f, new Color(1f, 0.95f, 0.2f, 1f));
 
                 ApplyDamageAndFX(in req, attackerBrain, targetBrain, ((Vector3)to).normalized, meleeDef);
 
-                if (++applied >= maxTargets) break;
+                if (++applied >= maxT) break;
             }
         }
 
@@ -108,11 +93,11 @@ namespace OneBitRob.AI
             if (attackerIsEnemy == targetIsEnemy) { to = default; return false; }
 
             to = (float3)targetBrain.transform.position - req.Origin;
-            float sq = lengthsq(to);
+            float sq = math.lengthsq(to);
             if (sq > rangeSq) return false;
 
             float dot = math.dot(forward, to);
-            if (dot <= 0f) return false;   
+            if (dot <= 0f) return false;
             if ((dot * dot) < (cosHalfSq * sq)) return false;
 
             return true;
@@ -120,23 +105,21 @@ namespace OneBitRob.AI
 
         private static void ApplyDamageAndFX(in MeleeHitRequest req, UnitBrain attackerBrain, UnitBrain targetBrain, Vector3 impactDir, OneBitRob.MeleeWeaponDefinition meleeDef)
         {
-            bool isCrit = (req.CritChance > 0f) && (UnityEngine.Random.value < req.CritChance);
-            float damage = isCrit ? req.Damage * math.max(1f, req.CritMultiplier) : req.Damage;
+            bool  isCrit = (req.CritChance > 0f) && (UnityEngine.Random.value < req.CritChance);
+            float dmg    = isCrit ? req.Damage * math.max(1f, req.CritMultiplier) : req.Damage;
 
-            targetBrain.Health.Damage(damage, attackerBrain.gameObject, 0f, req.Invincibility, impactDir);
+            targetBrain.Health.Damage(dmg, attackerBrain.gameObject, 0f, req.Invincibility, impactDir);
 
             DamageNumbersManager.Popup(new DamageNumbersParams
             {
                 Kind     = isCrit ? DamagePopupKind.CritDamage : DamagePopupKind.Damage,
                 Follow   = targetBrain.transform,
                 Position = targetBrain.transform.position,
-                Amount   = damage
+                Amount   = dmg
             });
 
             if (meleeDef != null && meleeDef.hitFeedback != null)
-            {
                 FeedbackService.TryPlay(meleeDef.hitFeedback, targetBrain.transform, targetBrain.transform.position);
-            }
         }
 
 #if UNITY_EDITOR

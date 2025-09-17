@@ -26,8 +26,7 @@ namespace OneBitRob.AI
         {
             var em = EntityManager;
             if (!em.HasComponent<CastRequest>(e)) return TaskStatus.Failure;
-            var cr = em.GetComponentData<CastRequest>(e);
-            return cr.HasValue != 0 ? TaskStatus.Success : TaskStatus.Failure;
+            return em.IsComponentEnabled<CastRequest>(e) ? TaskStatus.Success : TaskStatus.Failure;
         }
     }
 }

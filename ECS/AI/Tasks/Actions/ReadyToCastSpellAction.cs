@@ -16,19 +16,15 @@ namespace OneBitRob.AI
     public struct ReadyToCastSpellTag       : IComponentData, IEnableableComponent { }
 
     [UpdateInGroup(typeof(AIPlanPhaseGroup))]
-    public partial class ReadyToCastSpellSystem
-        : TaskProcessorSystem<ReadyToCastSpellComponent, ReadyToCastSpellTag>
+    public partial class ReadyToCastSpellSystem : TaskProcessorSystem<ReadyToCastSpellComponent, ReadyToCastSpellTag>
     {
         protected override TaskStatus Execute(Entity e, UnitBrain _)
         {
             var em = EntityManager;
-            if (!em.HasComponent<SpellDecisionRequest>(e))
-                return TaskStatus.Failure;
+            if (!em.HasComponent<SpellDecisionRequest>(e)) return TaskStatus.Failure;
 
-            var req = em.GetComponentData<SpellDecisionRequest>(e);
-            req.HasValue = 1; // ask ECS to produce CastRequest now
-            em.SetComponentData(e, req);
-
+            // Enable request (consumed by SpellPlanSystem this frame)
+            em.SetComponentEnabled<SpellDecisionRequest>(e, true);
             return TaskStatus.Success;
         }
     }

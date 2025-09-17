@@ -2,13 +2,7 @@
 
 namespace OneBitRob.ECS
 {
-    public struct SpatialHashTarget : IComponentData
-    {
-        public byte Faction;
-    }
+    public struct SpatialHashTarget : IComponentData { public byte Faction; }
+    public struct SpatialHashSettings : IComponentData { public float CellSize; }
 
-    public struct SpatialHashSettings : IComponentData
-    {
-        public float CellSize; 
-    }
 }

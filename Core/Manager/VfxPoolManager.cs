@@ -1,9 +1,13 @@
-﻿using System.Collections.Generic;
+﻿// File: Assets/PROJECT/Scripts/Core/Service/VfxPoolManager.cs
+using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
 
 namespace OneBitRob.VFX
 {
+    using OneBitRob.FX;
+    using Unity.Collections;
+
     [DefaultExecutionOrder(-9999)]
     public sealed class VfxPoolManager : MonoBehaviour
     {
@@ -43,7 +47,7 @@ namespace OneBitRob.VFX
         {
             if (_instance) return _instance;
             var go = new GameObject("[VfxPoolManager]");
-            DontDestroyOnLoad(go);                   // root object we just created
+            DontDestroyOnLoad(go);
             _instance = go.AddComponent<VfxPoolManager>();
             _instance.RebuildMap();
             return _instance;
@@ -54,7 +58,6 @@ namespace OneBitRob.VFX
             if (_instance && _instance != this) { Destroy(gameObject); return; }
             _instance = this;
 
-            // Root-safe DDoL
             if (transform.parent == null)
                 DontDestroyOnLoad(gameObject);
 
@@ -88,19 +91,15 @@ namespace OneBitRob.VFX
 
         public static GameObject GetPooled(string id)
         {
-            var pool = GetPooler(id);
-            return pool ? pool.GetPooledGameObject() : null;
+            // Route through PoolHub to gain exception safety
+            return PoolHub.GetPooled(PoolKind.Vfx, id);
         }
 
         public static void PlayById(string id, Vector3 position, Transform follow = null)
         {
-            var pool = GetPooler(id);
-            if (!pool) return;
-
-            var go = pool.GetPooledGameObject();
+            var go = GetPooled(id);
             if (!go) return;
-
-            _instance.PrepareOneShot(go, position, follow);
+            Ensure().PrepareOneShot(go, position, follow);
         }
 
         private void PrepareOneShot(GameObject go, Vector3 position, Transform follow)
@@ -121,8 +120,8 @@ namespace OneBitRob.VFX
             _refs.TryGetValue(key, out var rc);
             _refs[key] = rc + 1;
 
-            var pool = GetPooler(id);
-            if (!pool) return;
+            var go = PoolHub.GetPooled(PoolKind.Vfx, id);
+            if (!go) return;
 
             if (_active.TryGetValue(key, out var entry) && entry.Go)
             {
@@ -137,9 +136,6 @@ namespace OneBitRob.VFX
                 return;
             }
 
-            var go = pool.GetPooledGameObject();
-            if (!go) return;
-
             _instance.PreparePersistent(go, position, follow);
             _active[key] = new PersistentEntry { IdHash = VisualAssetRegistry.RegisterVfx(id), Id = id, Go = go };
         }
@@ -150,11 +146,8 @@ namespace OneBitRob.VFX
 
             if (!_active.TryGetValue(key, out var entry) || entry.Go == null)
             {
-                var id = VisualAssetRegistry.GetVfxId(idHash);
-                var pool = GetPooler(id);
-                if (!pool) return;
-
-                var go = pool.GetPooledGameObject();
+                var id  = VisualAssetRegistry.GetVfxId(idHash);
+                var go  = PoolHub.GetPooled(PoolKind.Vfx, id);
                 if (!go) return;
 
                 _instance.PreparePersistent(go, position, follow);

@@ -2,5 +2,9 @@
 
 namespace OneBitRob.ECS
 {
-    public struct HealthMirror : IComponentData { public float Current; public float Max; }
+    public struct HealthMirror : IComponentData
+    {
+        public float Current;
+        public float Max;
+    }
 }

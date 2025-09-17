@@ -1,4 +1,5 @@
-﻿using OneBitRob.ECS;
+﻿// File: OneBitRob/AI/SpellChainHopSystem.cs
+using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Transforms;
@@ -11,9 +12,9 @@ namespace OneBitRob.AI
     [UpdateInGroup(typeof(AIResolvePhaseGroup))]
     public partial struct SpellChainHopSystem : ISystem
     {
-        ComponentLookup<LocalTransform> _posRO;
+        ComponentLookup<LocalTransform>  _posRO;
         ComponentLookup<SpatialHashTarget> _factRO;
-        ComponentLookup<SpellConfig> _cfgRO;
+        ComponentLookup<SpellConfig>     _cfgRO;
 
         EntityQuery _q;
 
@@ -36,7 +37,7 @@ namespace OneBitRob.AI
             var now = (float)SystemAPI.Time.ElapsedTime;
 
             using var ents = _q.ToEntityArray(Allocator.Temp);
-            var ecb  = new EntityCommandBuffer(Allocator.Temp);
+            var ecb = new EntityCommandBuffer(Allocator.Temp);
 
             for (int i = 0; i < ents.Length; i++)
             {
@@ -71,8 +72,10 @@ namespace OneBitRob.AI
             float  dist     = distance(to, from);
 
             var req = BuildProjectileRequest(in run, from, dir, dist);
-            if (em.HasComponent<SpellProjectileSpawnRequest>(caster)) ecb.SetComponent(caster, req);
-            else                                                      ecb.AddComponent(caster, req);
+
+            if (!em.HasComponent<SpellProjectileSpawnRequest>(caster)) ecb.AddComponent<SpellProjectileSpawnRequest>(caster);
+            ecb.SetComponent(caster, req);
+            ecb.SetComponentEnabled<SpellProjectileSpawnRequest>(caster, true); // enableable trigger
 
             AdvanceRunner(ref run, to, now, dist, em);
             if (run.Remaining <= 0 || run.CurrentTarget == Entity.Null)
@@ -116,7 +119,6 @@ namespace OneBitRob.AI
                 ProjectileIdHash = run.ProjectileIdHash,
                 LayerMask   = run.LayerMask,
                 Pierce      = 0,
-                HasValue    = 1
             };
         }
 
@@ -136,7 +138,7 @@ namespace OneBitRob.AI
                 ? run.CasterFaction
                 : (run.CasterFaction == Constants.GameConstants.ENEMY_FACTION ? Constants.GameConstants.ALLY_FACTION : Constants.GameConstants.ENEMY_FACTION);
 
-            var wanted = new FixedList128Bytes<byte>(); wanted.Add(wantFaction);
+            var wanted = new Unity.Collections.FixedList128Bytes<byte>(); wanted.Add(wantFaction);
 
             if (!_posRO.HasComponent(run.PreviousTarget)) return Entity.Null;
             float3 center = _posRO[run.PreviousTarget].Position;

@@ -3,17 +3,18 @@ using Unity.Mathematics;
 
 namespace OneBitRob.ECS
 {
-    public enum CastKind : byte { None = 0, SingleTarget = 1, AreaOfEffect = 3 }
-
-    public struct CastRequest : IComponentData
+    public enum CastKind : byte
     {
-        public CastKind Kind;
-        public Entity Target;
-        public float3 AoEPosition;
-        public byte HasValue;
+        None = 0,
+        SingleTarget = 1,
+        AreaOfEffect = 3
     }
 
-    public struct SpellState : IComponentData { public byte CanCast; public byte Ready; }
+    public struct SpellState : IComponentData
+    {
+        public byte CanCast;
+        public byte Ready;
+    }
 
     public struct SpellConfig : IComponentData
     {
@@ -25,13 +26,13 @@ namespace OneBitRob.ECS
         public float Cooldown;
         public float Range;
 
-        public float Amount;
+        public float Amount; // signed handled at usage time
 
         // Projectile
         public float ProjectileSpeed;
         public float ProjectileMaxDistance;
         public float ProjectileRadius;
-        public int   ProjectileIdHash;
+        public int ProjectileIdHash;
         public float MuzzleForward;
         public float3 MuzzleLocalOffset;
 
@@ -39,88 +40,112 @@ namespace OneBitRob.ECS
         public float AreaRadius;
         public float Duration;
         public float TickInterval;
-        public int   EffectVfxIdHash;
-        public int   AreaVfxIdHash;
+        public int EffectVfxIdHash;
+        public int AreaVfxIdHash;
         public float AreaVfxYOffset;
 
         // Chain
-        public int   ChainMaxTargets;
+        public int ChainMaxTargets;
         public float ChainRadius;
         public float ChainJumpDelay;
 
         // Summon
-        public int   SummonPrefabHash;
+        public int SummonPrefabHash;
 
-        // NEW: time window to block weapon attacks after spell
+        // Attack lock after spell
         public float PostCastAttackLockSeconds;
     }
-
-    public struct SpellDecisionRequest : IComponentData { public byte HasValue; }
 
     public struct SpellWindup : IComponentData
     {
         public float ReleaseTime;
-        public byte  Active;
+        public byte Active;
 
         public float3 AimPoint;
         public Entity AimTarget;
-        public byte  HasAimPoint;
+        public byte HasAimPoint;
 
         public float FacingDeadline;
     }
 
-    public struct SpellCooldown : IComponentData { public float NextTime; }
+    public struct SpellCooldown : IComponentData
+    {
+        public float NextTime;
+    }
 
-    public struct SpellProjectileSpawnRequest : IComponentData
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Requests -> enableable components
+    // Cast
+    public struct CastRequest : IComponentData, IEnableableComponent
+    {
+        public CastKind Kind;
+        public Entity Target;
+        public float3 AoEPosition;
+    }
+
+    public struct SpellDecisionRequest : IComponentData, IEnableableComponent
+    {
+    }
+
+    public struct SpellProjectileSpawnRequest : IComponentData, IEnableableComponent
     {
         public float3 Origin;
         public float3 Direction;
-        public float  Speed;
-        public float  Damage;
-        public float  MaxDistance;
-        public float  Radius;
-        public int    ProjectileIdHash;
-        public int    LayerMask;
-        public byte   Pierce;
-        public int    HasValue;
+        public float Speed;
+        public float Damage; // signed for heal
+        public float MaxDistance;
+        public float Radius;
+        public int ProjectileIdHash;
+        public int LayerMask;
+        public byte Pierce; // bool as byte for compactness
     }
 
-    public struct SummonRequest : IComponentData
+    public struct SummonRequest : IComponentData, IEnableableComponent
     {
-        public int   PrefabIdHash;
+        public int PrefabIdHash;
         public float3 Position;
-        public byte  Count;
-        public byte  Faction;
-        public int   HasValue;
+        public byte Count;
+        public byte Faction;
     }
 
+// Spell DoTs/HoTs & visuals
     public struct DotOnTarget : IComponentData
     {
         public Entity Target;
-        public float  AmountPerTick;
-        public float  Interval;
-        public float  Remaining;
-        public float  NextTick;
-        public byte   Positive;
-        public int    EffectVfxIdHash;
+        public float AmountPerTick;
+        public float Interval;
+        public float Remaining;
+        public float NextTick;
+        public byte Positive;
+        public int EffectVfxIdHash;
     }
-
-    public struct ActiveAreaVfx : IComponentData { public long Key; public int IdHash; }
 
     public struct DoTArea : IComponentData
     {
         public float3 Position;
-        public float  Radius;
-        public float  AmountPerTick;
-        public float  Interval;
-        public float  Remaining;
-        public float  NextTick;
-        public byte   Positive;
-        public int    AreaVfxIdHash;
-        public int    LayerMask;
-        public float  VfxYOffset;   // <-- NEW: visuals only, damage stays at Position
+        public float Radius;
+        public float AmountPerTick;
+        public float Interval;
+        public float Remaining;
+        public float NextTick;
+        public byte Positive;
+        public int AreaVfxIdHash;
+        public int LayerMask;
+        public float VfxYOffset;
     }
 
+    public struct ActiveAreaVfx : IComponentData
+    {
+        public long Key;
+        public int IdHash;
+    }
+
+    public struct ActiveTargetVfx : IComponentData
+    {
+        public long Key;
+        public int IdHash;
+        public Entity Target;
+    }
     public struct SpellChainRunner : IComponentData
     {
         public int   Remaining;
@@ -141,12 +166,5 @@ namespace OneBitRob.ECS
 
         public Entity Caster;
         public byte   CasterFaction;
-    }
-
-    public struct ActiveTargetVfx : IComponentData
-    {
-        public long   Key;
-        public int    IdHash;
-        public Entity Target;
     }
 }
