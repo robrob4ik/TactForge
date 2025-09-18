@@ -1,11 +1,13 @@
-﻿// File: OneBitRob/AI/UnitCombatController.cs
+﻿// File: Assets/PROJECT/Scripts/Mono/Combat/UnitCombatController.cs
 using System.Collections.Generic;
 using MoreMountains.Tools;
+using UnityEngine;
+using OneBitRob.AI;
 using OneBitRob.ECS;
 using OneBitRob.EnigmaEngine;
 using OneBitRob.FX;
+using OneBitRob.VFX;
 using Unity.Entities;
-using UnityEngine;
 
 namespace OneBitRob.AI
 {
@@ -28,8 +30,6 @@ namespace OneBitRob.AI
 #if UNITY_EDITOR
         private readonly HashSet<string> _missingParams = new();
 #endif
-        // NEW: cached trigger parameter names (for O(1) lookup)
-        private HashSet<string> _animTriggerNames;
 
         private void Awake()
         {
@@ -39,22 +39,6 @@ namespace OneBitRob.AI
 
             var weapon = _brain != null ? _brain.UnitDefinition?.weapon : null;
             if (weapon is RangedWeaponDefinition rw) _projectileId = rw.projectileId;
-
-            // NEW: cache animator trigger names once
-            if (_anim != null)
-            {
-                _animTriggerNames = new HashSet<string>();
-                for (int i = 0; i < _anim.parameterCount; i++)
-                {
-                    var p = _anim.parameters[i];
-                    if (p.type == AnimatorControllerParameterType.Trigger)
-                        _animTriggerNames.Add(p.name);
-                }
-            }
-            else
-            {
-                _animTriggerNames = new HashSet<string>();
-            }
         }
 
         public bool IsAlive => _character != null && _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
@@ -89,14 +73,15 @@ namespace OneBitRob.AI
 
         private bool AnimatorHasTrigger(string param)
         {
-            if (_anim == null || string.IsNullOrEmpty(param)) return false;
-
-            if (_animTriggerNames != null && _animTriggerNames.Contains(param))
-                return true;
+            if (_anim == null) return false;
+            for (int i = 0; i < _anim.parameterCount; i++)
+            {
+                var p = _anim.parameters[i];
+                if (p.type == AnimatorControllerParameterType.Trigger && p.name == param) return true;
+            }
 
 #if UNITY_EDITOR
-            if (_missingParams.Add(param))
-                Debug.LogWarning($"[{name}] Animator missing Trigger parameter '{param}'. Check your AttackAnimationSet.");
+            if (_missingParams.Add(param)) Debug.LogWarning($"[{name}] Animator missing Trigger parameter '{param}'. Check your AttackAnimationSet.");
 #endif
             return false;
         }
@@ -117,7 +102,7 @@ namespace OneBitRob.AI
                 return null;
             }
 
-            _projectilePooler = OneBitRob.VFX.ProjectileService.GetPooler(_projectileId);
+            _projectilePooler = ProjectileService.GetPooler(_projectileId);
             if (_projectilePooler == null) Debug.LogWarning($"[{name}] No projectile pooler found for id '{_projectileId}'. Add your ProjectilePools prefab to this scene or register the id.");
 
             return _projectilePooler;
@@ -130,10 +115,14 @@ namespace OneBitRob.AI
             float critChance = 0f, float critMultiplier = 1f,
             float pierceChance = 0f, int pierceMaxTargets = 0)
         {
-            var pooler = ResolveProjectilePooler();
-            if (pooler == null) return;
+            // Use PoolHub (safe) instead of raw pooler call
+            if (string.IsNullOrEmpty(_projectileId))
+            {
+                // populate id lazily from definition
+                ResolveProjectilePooler();
+            }
 
-            GameObject go = pooler.GetPooledGameObject();
+            GameObject go = PoolHub.GetPooled(PoolKind.Projectile, _projectileId);
             if (go == null) return;
 
             var poolable = go.GetComponent<MMPoolableObject>();
@@ -178,15 +167,14 @@ namespace OneBitRob.AI
         )
         {
             if (string.IsNullOrEmpty(projectileId)) return;
-            var pooler = OneBitRob.VFX.ProjectileService.GetPooler(projectileId);
-            if (pooler == null)
+
+            // SAFE pooled retrieval via PoolHub
+            GameObject go = PoolHub.GetPooled(PoolKind.Projectile, projectileId);
+            if (go == null)
             {
-                Debug.LogWarning($"[{name}] Spell projectile pool '{projectileId}' not found in this scene.");
+                Debug.LogWarning($"[{name}] Spell projectile pool '{projectileId}' not found or empty in this scene.");
                 return;
             }
-
-            GameObject go = pooler.GetPooledGameObject();
-            if (go == null) return;
 
             var poolable = go.GetComponent<MMPoolableObject>();
             var proj = go.GetComponent<SpellProjectile>();
@@ -212,7 +200,7 @@ namespace OneBitRob.AI
                     LayerMask = layerMask != 0 ? layerMask : (GetComponent<UnitBrain>()?.GetDamageableLayerMask().value ?? ~0),
                     Radius = Mathf.Max(0f, radius),
                     Pierce = pierce,
-                    HitFeedback = hitFeedback // unchanged
+                    HitFeedback = hitFeedback
                 }
             );
 

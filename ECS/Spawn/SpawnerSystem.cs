@@ -1,15 +1,15 @@
 ﻿// File: OneBitRob/ECS/SpawnerSystem.cs
-using System;
-using System.Reflection;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
-using GPUInstancerPro.PrefabModule; // GPUIPrefab / GPUIPrefabManager
+
+using GPUInstancerPro.PrefabModule;
 using OneBitRob.ECS.GPUI;
 using Opsive.BehaviorDesigner.Runtime;
-using Unity.Transforms; // GPUIManagerRef
+using Unity.Transforms;
+
 using static Unity.Mathematics.math;
 using float3 = Unity.Mathematics.float3;
 using quaternion = Unity.Mathematics.quaternion;
@@ -28,6 +28,7 @@ namespace OneBitRob.ECS
         {
             var deltaTime = SystemAPI.Time.DeltaTime;
             var data      = SystemAPI.ManagedAPI.GetSingleton<SpawnerData>();
+
             var timerEnt  = SystemAPI.GetSingletonEntity<SpawnerTimer>();
             var timer     = SystemAPI.GetComponent<SpawnerTimer>(timerEnt);
 
@@ -41,6 +42,7 @@ namespace OneBitRob.ECS
             timer.ElapsedTime = 0f;
             SystemAPI.SetComponent(timerEnt, timer);
 
+            // Gather spawn anchors
             var allySpawnCenter  = new List<Vector3>();
             var enemySpawnCenter = new List<Vector3>();
             foreach (var (marker, ltw) in SystemAPI.Query<RefRO<SpawnerMarker>, RefRO<LocalTransform>>())
@@ -52,7 +54,13 @@ namespace OneBitRob.ECS
                 }
             }
 
-            var gpuiMgr = SystemAPI.ManagedAPI.GetSingleton<GPUIManagerRef>()?.Value; // GPUIPrefabManager
+            // Try to get the GPUI Prefab Manager (may be null -> fallback path handles it)
+            GPUIPrefabManager gpuiMgr = null;
+            try
+            {
+                gpuiMgr = SystemAPI.ManagedAPI.GetSingleton<GPUIManagerRef>()?.Value;
+            }
+            catch { /* No GPUI manager singleton - we will fallback to manager-agnostic add. */ }
 
             foreach (var pos in allySpawnCenter)
                 SpawnGroup(ref state, data, data.AllyPrefabs, pos, Constants.GameConstants.ALLY_FACTION, gpuiMgr);
@@ -64,7 +72,13 @@ namespace OneBitRob.ECS
             BehaviorTree.EnableBakedBehaviorTreeSystem(World.DefaultGameObjectInjectionWorld);
         }
 
-        private void SpawnGroup(ref SystemState state, SpawnerData data, GameObject[] unitPrefabs, Vector3 spawnCenter, byte faction, GPUIPrefabManager gpuiManager)
+        private void SpawnGroup(
+            ref SystemState state,
+            SpawnerData data,
+            GameObject[] unitPrefabs,
+            Vector3 spawnCenter,
+            byte faction,
+            GPUIPrefabManager gpuiManager)
         {
             if (unitPrefabs == null || unitPrefabs.Length == 0) return;
 
@@ -74,9 +88,20 @@ namespace OneBitRob.ECS
             var brains = state.EntityManager.Instantiate(data.EntityPrefab, totalUnits, Allocator.Temp);
             int entityIndex = 0;
 
+            bool anyImmediateAdds = false;
+
             for (int prefabIndex = 0; prefabIndex < unitPrefabs.Length; ++prefabIndex)
             {
                 var bodyPrefab = unitPrefabs[prefabIndex];
+
+                // Make sure the manager knows this prefab as a prototype (safe to call even if already added)
+                int protoIndexOnMgr = -1;
+                if (gpuiManager != null)
+                {
+                    protoIndexOnMgr = gpuiManager.GetPrototypeIndex(bodyPrefab);
+                    if (protoIndexOnMgr < 0)
+                        protoIndexOnMgr = GPUIPrefabAPI.AddPrototype(gpuiManager, bodyPrefab); // runtime define
+                }
 
                 for (int i = 0; i < countPerPrefab; ++i)
                 {
@@ -85,46 +110,54 @@ namespace OneBitRob.ECS
                     var rand = Unity.Mathematics.Random.CreateFromIndex((uint)Time.frameCount + (uint)e.Index);
                     var pos  = GetRandomPositionInArea(data.SpawnAreaFrom, data.SpawnAreaTo, rand) + spawnCenter;
 
-                    state.EntityManager.SetComponentData(e, LocalTransform.FromPositionRotationScale(pos, quaternion.identity, 1f));
-                    InstantiateMonoBrain(bodyPrefab, pos, e, gpuiManager);
+                    state.EntityManager.SetComponentData(
+                        e, LocalTransform.FromPositionRotationScale(pos, quaternion.identity, 1f));
+
+                    // Instantiate, wire brain, and register with GPUI
+                    var go = UnityEngine.Object.Instantiate(bodyPrefab, pos, Quaternion.identity);
+
+                    // Bridge Mono brain to ECS entity
+                    var unitBrainMono = go.GetComponent<AI.UnitBrain>();
+                    unitBrainMono.SetEntity(e);
+
+                    // Register with GPUI
+                    var gpui = go.GetComponent<GPUIPrefab>();
+                    if (gpui != null)
+                    {
+                        bool usedImmediate = false;
+
+                        if (gpuiManager != null && protoIndexOnMgr >= 0)
+                        {
+                            // Immediate add -> shows up this frame, disables Unity renderers
+                            int addRes = GPUIPrefabAPI.AddPrefabInstanceImmediate(gpuiManager, gpui, protoIndexOnMgr);
+                            usedImmediate = addRes >= 0;
+                        }
+
+                        if (!usedImmediate)
+                        {
+                            // Manager-agnostic queued add (registers on next LateUpdate)
+                            GPUIPrefabAPI.AddPrefabInstance(gpui);
+                        }
+
+                        anyImmediateAdds |= usedImmediate;
+                    }
+                    else
+                    {
+                        // If you reach here, prefab wasn't added to a Prefab Manager as a prototype
+                        // (GPUI won't have attached the GPUIPrefab component to the asset).
+                        // Either add it in the Prefab Manager or keep the runtime AddPrototype above.
+                        // EnigmaLogger.Log($"GPUI: Prefab '{bodyPrefab.name}' has no GPUIPrefab component.", "WARN");
+                    }
+
                     PrimeAgentEntity(ref state, e, faction);
                 }
             }
-        }
 
-        private void InstantiateMonoBrain(GameObject bodyPrefab, Vector3 pos, Entity e, GPUIPrefabManager gpuiManager)
-        {
-            var go = UnityEngine.Object.Instantiate(bodyPrefab, pos, Quaternion.identity);
-
-            // GPUI registration (robust across API variants)
-            var gpui = go.GetComponent<GPUIPrefab>();
-            if (gpuiManager != null && gpui != null)
-                TryRegisterGPUIInstance(gpuiManager, gpui);
-
-            var unitBrainMono = go.GetComponent<AI.UnitBrain>();
-            unitBrainMono.SetEntity(e); // registers in UnitBrainRegistry
-        }
-
-        // Attempts several known method signatures to avoid hard‑binding GPUI variant APIs.
-        private static void TryRegisterGPUIInstance(GPUIPrefabManager manager, GPUIPrefab prefab)
-        {
-            if (manager == null || prefab == null) return;
-
-            var mgrType = manager.GetType();
-            var pfType  = prefab.GetType();
-
-            // Try (GPUIPrefab) overloads
-            foreach (var name in new[] { "AddPrefabInstanceImmediate", "AddPrefabInstance", "RegisterPrefabInstance" })
+            // If we immediately added instances and Transform Updates are disabled on the prototype,
+            // push transforms once so they render in the right place without waiting.
+            if (anyImmediateAdds && gpuiManager != null)
             {
-                var m = mgrType.GetMethod(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { pfType }, null);
-                if (m != null) { m.Invoke(manager, new object[] { prefab }); return; }
-            }
-
-            // Try (GameObject) overloads
-            foreach (var name in new[] { "AddPrefabInstanceImmediate", "AddPrefabInstance", "RegisterPrefabInstance" })
-            {
-                var m = mgrType.GetMethod(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(GameObject) }, null);
-                if (m != null) { m.Invoke(manager, new object[] { prefab.gameObject }); return; }
+                GPUIPrefabAPI.UpdateTransformData(gpuiManager);
             }
         }
 
@@ -158,7 +191,7 @@ namespace OneBitRob.ECS
             if (!em.HasComponent<MeleeHitRequest>(e))             { em.AddComponent<MeleeHitRequest>(e);             em.SetComponentEnabled<MeleeHitRequest>(e, false); }
 
             // Spell state shell
-            if (!em.HasComponent<SpellState>(e))   em.AddComponentData(e, new SpellState { CanCast = 1, Ready = 1 });
+            if (!em.HasComponent<SpellState>(e))    em.AddComponentData(e, new SpellState { CanCast = 1, Ready = 1 });
             if (!em.HasComponent<SpellCooldown>(e)) em.AddComponentData(e, new SpellCooldown { NextTime = 0f });
             if (!em.HasComponent<SpellWindup>(e))   em.AddComponentData(e, new SpellWindup { Active = 0, ReleaseTime = 0f });
         }

@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+﻿// File: Assets/PROJECT/Scripts/Core/Service/FeedbackPoolManager.cs
+using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
+using OneBitRob.FX;
 
 namespace OneBitRob.FX
 {
@@ -32,7 +34,7 @@ namespace OneBitRob.FX
         {
             if (_instance) return _instance;
             var go = new GameObject("[FeedbackPoolManager]");
-            DontDestroyOnLoad(go);                   // root object we just created
+            DontDestroyOnLoad(go);
             _instance = go.AddComponent<FeedbackPoolManager>();
             _instance.RebuildMap();
             return _instance;
@@ -43,7 +45,6 @@ namespace OneBitRob.FX
             if (_instance && _instance != this) { Destroy(gameObject); return; }
             _instance = this;
 
-            // Root-safe DDoL
             if (transform.parent == null)
                 DontDestroyOnLoad(gameObject);
 
@@ -80,8 +81,8 @@ namespace OneBitRob.FX
 
         public static GameObject GetPooled(string id)
         {
-            var pooler = GetPooler(id);
-            return pooler ? pooler.GetPooledGameObject() : null;
+            // SAFE: delegate to PoolHub (auto‑repairs MM pool lists and retries)
+            return PoolHub.GetPooled(PoolKind.Feedback, id);
         }
     }
 }

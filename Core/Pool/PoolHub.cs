@@ -1,4 +1,7 @@
-﻿// File: Assets/PROJECT/Scripts/Core/Service/PoolHub.cs
+﻿// File: Assets/PROJECT/Scripts/Core/Pool/PoolHub.cs
+using System;
+using System.Collections;
+using System.Reflection;
 using MoreMountains.Tools;
 using UnityEngine;
 
@@ -34,11 +37,7 @@ namespace OneBitRob.FX
         private static IPoolResolver _resolver;
         public static IPoolResolver Resolver
         {
-            get
-            {
-                if (_resolver == null) _resolver = new DefaultPoolResolver();
-                return _resolver;
-            }
+            get { return _resolver ??= new DefaultPoolResolver(); }
             set { _resolver = value; }
         }
 
@@ -46,28 +45,55 @@ namespace OneBitRob.FX
             => Resolver.TryGetPooler(kind, id, out var p) ? p : null;
 
         /// <summary>
-        /// Safe pooled object retrieval. Swallows MissingReferenceException from third‑party poolers whose lists contain destroyed entries.
-        /// Returns null on failure; callers should gracefully skip the FX or fallback to a prefab.
+        /// Safe pooled object retrieval:
+        /// - Try pooler once
+        /// - If MissingReferenceException occurs, repair pool (remove destroyed entries) and retry once
+        /// - Return null quietly if still failing
         /// </summary>
         public static GameObject GetPooled(PoolKind kind, string id)
         {
-            var p = GetPooler(kind, id);
-            if (!p) return null;
+            var pooler = GetPooler(kind, id);
+            if (!pooler) return null;
 
             try
             {
-                return p.GetPooledGameObject();
+                return pooler.GetPooledGameObject();
             }
-            catch (MissingReferenceException ex)
+            catch (MissingReferenceException)
             {
-                Debug.LogWarning($"[PoolHub] Pool '{id}' had destroyed entries; returning null. {ex.Message}");
+                TryRepairDestroyedEntries(pooler);
+                try { return pooler.GetPooledGameObject(); }
+                catch { return null; }
+            }
+            catch
+            {
                 return null;
             }
-            catch (System.Exception ex)
+        }
+
+        /// <summary>Prunes destroyed entries from MoreMountains pooler internal list.</summary>
+        private static void TryRepairDestroyedEntries(MMObjectPooler pooler)
+        {
+            if (!pooler) return;
+            try
             {
-                Debug.LogWarning($"[PoolHub] Exception while getting pooled '{id}': {ex.Message}");
-                return null;
+                // MMObjectPooler has a protected field "_objectPool" with a list 'PooledGameObjects'
+                var objectPoolField = typeof(MMObjectPooler).GetField("_objectPool",
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                var objectPool = objectPoolField?.GetValue(pooler);
+                if (objectPool == null) return;
+
+                var listProp = objectPool.GetType().GetProperty("PooledGameObjects",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (listProp?.GetValue(objectPool) is not IList list) return;
+
+                for (int i = list.Count - 1; i >= 0; --i)
+                {
+                    var go = list[i] as GameObject;     // Unity destroyed objects compare to null
+                    if (go == null) list.RemoveAt(i);
+                }
             }
+            catch { /* silent */ }
         }
     }
 }

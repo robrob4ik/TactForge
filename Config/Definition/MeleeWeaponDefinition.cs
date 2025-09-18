@@ -31,7 +31,6 @@ namespace OneBitRob
         [LabelText("Hit Feedback")]
         [AssetsOnly] public FeedbackDefinition hitFeedback;
 
-        // NEW ────────────────────────────────────────────────────────────────────
         [BoxGroup("Timing")]
         [LabelText("Swing Lock"), SuffixLabel("s", true)]
         [MinValue(0f)]

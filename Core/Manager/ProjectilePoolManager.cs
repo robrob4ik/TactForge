@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+﻿// File: Assets/PROJECT/Scripts/Core/Service/ProjectilePoolManager.cs
+using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
+using OneBitRob.FX;
 
 namespace OneBitRob.ECS
 {
@@ -31,7 +33,7 @@ namespace OneBitRob.ECS
         {
             if (_instance) return _instance;
             var go = new GameObject("[ProjectilePoolManager]");
-            DontDestroyOnLoad(go);                   // root object we just created
+            DontDestroyOnLoad(go);
             _instance = go.AddComponent<ProjectilePoolManager>();
             _instance.RebuildMap();
             return _instance;
@@ -42,7 +44,6 @@ namespace OneBitRob.ECS
             if (_instance && _instance != this) { Destroy(gameObject); return; }
             _instance = this;
 
-            // Root-safe DDoL
             if (transform.parent == null)
                 DontDestroyOnLoad(gameObject);
 
@@ -57,7 +58,6 @@ namespace OneBitRob.ECS
                     _map[p.Id] = p.Pooler;
         }
 
-        /// Returns a pooler or null. Logs once if missing (if LogMissing=true).
         public static MMObjectPooler GetPooler(string id)
         {
             Ensure();
@@ -75,11 +75,10 @@ namespace OneBitRob.ECS
             return pooler;
         }
 
-        /// Returns an inactive pooled object ready to be armed, or null if not found.
         public static GameObject GetPooled(string id)
         {
-            var pooler = GetPooler(id);
-            return pooler ? pooler.GetPooledGameObject() : null;
+            // SAFE: delegate to PoolHub (auto‑repairs MM pool lists and retries)
+            return PoolHub.GetPooled(PoolKind.Projectile, id);
         }
     }
 }

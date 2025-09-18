@@ -1,9 +1,10 @@
 ﻿// File: Assets/PROJECT/Scripts/Core/Service/VfxService.cs
+
+using OneBitRob.FX;
 using UnityEngine;
 
 namespace OneBitRob.VFX
 {
-    using OneBitRob.FX;
 
     public static class VfxService
     {
