@@ -1,8 +1,9 @@
 ﻿// File: Assets/PROJECT/Scripts/Mono/Combat/UnitCombatController.cs
 using System.Collections.Generic;
 using MoreMountains.Tools;
+using OneBitRob.Anim;
 using UnityEngine;
-using OneBitRob.AI;
+using OneBitRob.Config;
 using OneBitRob.ECS;
 using OneBitRob.EnigmaEngine;
 using OneBitRob.FX;
@@ -18,6 +19,7 @@ namespace OneBitRob.AI
         private EnigmaCharacter _character;
         private Animator _anim;
         private UnitBrain _brain;
+        private UnitAnimator _unitAnim;
 
         private int _nextMeleeIdx;
         private int _nextPrepareIdx;
@@ -26,6 +28,7 @@ namespace OneBitRob.AI
 
         private MMObjectPooler _projectilePooler;
         private string _projectileId;
+
 
 #if UNITY_EDITOR
         private readonly HashSet<string> _missingParams = new();
@@ -36,6 +39,7 @@ namespace OneBitRob.AI
             _character = GetComponent<EnigmaCharacter>();
             _anim = GetComponentInChildren<Animator>();
             _brain = GetComponent<UnitBrain>();
+            _unitAnim = GetComponent<UnitAnimator>();
 
             var weapon = _brain != null ? _brain.UnitDefinition?.weapon : null;
             if (weapon is RangedWeaponDefinition rw) _projectileId = rw.projectileId;
@@ -43,34 +47,102 @@ namespace OneBitRob.AI
 
         public bool IsAlive => _character != null && _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
 
-        public void PlayMeleeAttack(AttackAnimationSettings settings)
+        // public void PlayMeleeAttack(AttackAnimationSettings settings)
+        // {
+        //     // Compute Animator first
+        //     var meleeCompute = (_brain?.UnitDefinition?.weapon as MeleeWeaponDefinition)?.attackAnimationsCompute
+        //                        ?? _unitAnim?.AnimationsDefinition?.Melee;
+        //     if (_unitAnim && _unitAnim.IsComputeActive && meleeCompute && meleeCompute.HasEntries)
+        //     {
+        //         _unitAnim.PlayMelee(meleeCompute);
+        //         return;
+        //     }
+        //
+        //     // fallback (existing)
+        //     if (_anim == null || settings == null || !settings.HasEntries) return;
+        //     var param = settings.SelectParameter(ref _nextMeleeIdx);
+        //     if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
+        // }
+        //
+        // public void PlayRangedPrepare(TwoStageAttackAnimationSettings settings)
+        // {
+        //     var rangedCompute = (_brain?.UnitDefinition?.weapon as RangedWeaponDefinition)?.animationsCompute
+        //                         ?? _unitAnim?.AnimationsDefinition?.Ranged;
+        //     if (_unitAnim && _unitAnim.IsComputeActive && rangedCompute && rangedCompute.HasPrepare)
+        //     {
+        //         _unitAnim.PlayRangedPrepare(rangedCompute);
+        //         return;
+        //     }
+        //
+        //     if (_anim == null || settings == null || !settings.HasPrepare) return;
+        //     var param = settings.SelectPrepare(ref _nextPrepareIdx);
+        //     if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
+        // }
+        //
+        // public void PlayRangedFire(TwoStageAttackAnimationSettings settings)
+        // {
+        //     var rangedCompute = (_brain?.UnitDefinition?.weapon as RangedWeaponDefinition)?.animationsCompute
+        //                         ?? _unitAnim?.AnimationsDefinition?.Ranged;
+        //     if (_unitAnim && _unitAnim.IsComputeActive && rangedCompute && rangedCompute.HasFire)
+        //     {
+        //         _unitAnim.PlayRangedFire(rangedCompute);
+        //         return;
+        //     }
+        //
+        //     if (_anim == null || settings == null || !settings.HasFire) return;
+        //     var param = settings.SelectFire(ref _nextFireIdx);
+        //     if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
+        // }
+        //
+        // public void PlaySpell(AttackAnimationSettings settings)
+        // {
+        //     var spells = _brain?.UnitDefinition?.unitSpells;
+        //     var compute = (spells != null && spells.Count > 0 && spells[0] != null)
+        //         ? spells[0].castAnimations
+        //         : _unitAnim?.animsDefinition?.DefaultSpell;
+        //
+        //     if (_unitAnim && _unitAnim.IsComputeActive && compute && compute.HasEntries)
+        //     {
+        //         _unitAnim.PlaySpell(compute);
+        //         return;
+        //     }
+        //
+        //     if (_anim == null || settings == null || !settings.HasEntries) return;
+        //     var param = settings.SelectParameter(ref _nextSpellIdx);
+        //     if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
+        // }
+
+        public void PlayMeleeAttackCompute()
         {
-            if (_anim == null || settings == null || !settings.HasEntries) return;
-            var param = settings.SelectParameter(ref _nextMeleeIdx);
-            if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
+            if (!_unitAnim) return;
+            var set = (_brain?.UnitDefinition?.weapon as MeleeWeaponDefinition)?.attackAnimations;
+            _unitAnim.PlayMelee(set);
         }
 
-        public void PlayRangedPrepare(TwoStageAttackAnimationSettings settings)
+        public void PlayRangedPrepareCompute()
         {
-            if (_anim == null || settings == null || !settings.HasPrepare) return;
-            var param = settings.SelectPrepare(ref _nextPrepareIdx);
-            if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
+            if (!_unitAnim) return;
+            var set = (_brain?.UnitDefinition?.weapon as RangedWeaponDefinition)?.attackAnimations;
+            _unitAnim.PlayRangedPrepare(set);
         }
 
-        public void PlayRangedFire(TwoStageAttackAnimationSettings settings)
+        public void PlayRangedFireCompute()
         {
-            if (_anim == null || settings == null || !settings.HasFire) return;
-            var param = settings.SelectFire(ref _nextFireIdx);
-            if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
+            if (!_unitAnim) return;
+            var set = (_brain?.UnitDefinition?.weapon as RangedWeaponDefinition)?.attackAnimations;
+            _unitAnim.PlayRangedFire(set);
         }
 
-        public void PlaySpell(AttackAnimationSettings settings)
+        public void PlaySpellCompute()
         {
-            if (_anim == null || settings == null || !settings.HasEntries) return;
-            var param = settings.SelectParameter(ref _nextSpellIdx);
-            if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
+            if (!_unitAnim) return;
+            ComputeAttackAnimationSettings set = null;
+            var spells = _brain?.UnitDefinition?.unitSpells;
+            if (spells != null && spells.Count > 0 && spells[0] != null)
+                set = spells[0].castAnimations;
+            _unitAnim.PlaySpell(set);
         }
-
+        
         private bool AnimatorHasTrigger(string param)
         {
             if (_anim == null) return false;

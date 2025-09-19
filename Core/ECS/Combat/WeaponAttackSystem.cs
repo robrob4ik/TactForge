@@ -104,7 +104,7 @@ namespace OneBitRob.AI
 
                     if (rangedDef != null)
                     {
-                        brain.UnitCombatController?.PlayRangedFire(rangedDef.animations);
+                        brain.UnitCombatController?.PlayRangedFireCompute();
                         // Place fire feedback at muzzle origin
                         float3 origin = pose.Position
                                       + pose.Forward * max(0f, hasUws ? uw.MuzzleForward : (rangedDef?.muzzleForward ?? 0f))
@@ -193,7 +193,7 @@ namespace OneBitRob.AI
                     ecb.SetOrAddAndEnable(em, e, hit);
 
                     // Anim + feedback (presentation)
-                    brain.UnitCombatController?.PlayMeleeAttack(meleeDef.attackAnimations);
+                    brain.UnitCombatController?.PlayMeleeAttackCompute();
                     if (meleeDef.attackFeedback != null)
                         FeedbackService.TryPlay(meleeDef.attackFeedback, brain.transform, (Vector3)pose.Position);
 
@@ -217,11 +217,11 @@ namespace OneBitRob.AI
                 else // ranged
                 {
                     bool started = StartRangedWindup(em, ref ecb, e, hasUws, in uw, weapon as RangedWeaponDefinition, in stats, pose, now);
-                    if (started && weapon is RangedWeaponDefinition rangedDef)
+                    if (started && weapon is RangedWeaponDefinition tempDef)
                     {
-                        brain.UnitCombatController?.PlayRangedPrepare(rangedDef.animations);
-                        if (rangedDef.prepareFeedback != null)
-                            FeedbackService.TryPlay(rangedDef.prepareFeedback, brain.transform, (Vector3)pose.Position);
+                        brain.UnitCombatController?.PlayRangedPrepareCompute();
+                        if (tempDef.prepareFeedback != null)
+                            FeedbackService.TryPlay(tempDef.prepareFeedback, brain.transform, pose.Position);
                     }
                 }
 

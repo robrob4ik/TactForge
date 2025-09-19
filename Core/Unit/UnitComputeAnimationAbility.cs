@@ -1,12 +1,14 @@
 ﻿using MoreMountains.Tools;
 using OneBitRob.AI;
+using OneBitRob.Anim;
 using ProjectDawn.Navigation.Hybrid;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace OneBitRob.EnigmaEngine
 {
     [AddComponentMenu("Enigma Engine/Enigma Character Agents Navigation Movement")]
-    public class EnigmaCharacterAgentsNavigationMovement : EnigmaCharacterAbility
+    public class UnitComputeAnimationAbility : EnigmaCharacterAbility
     {
         [Header("Rotation")]
         [Tooltip("Max yaw rotation speed (deg/s).")]
@@ -26,6 +28,7 @@ namespace OneBitRob.EnigmaEngine
 
         private AgentAuthoring _agent;
         private UnitBrain _unitBrain;
+        private UnitAnimator _unitAnim;
 
         protected const string _walkingAnimationParameterName = "Walking";
         protected const string _combatStanceAnimationParameterName = "CombatStance";
@@ -40,6 +43,7 @@ namespace OneBitRob.EnigmaEngine
             base.Initialization();
             _agent = this.GetComponentInParent<AgentAuthoring>();
             _unitBrain = this.GetComponentInParent<UnitBrain>();
+            _unitAnim = GetComponentInParent<UnitAnimator>();
         }
 
         public override void ProcessAbility()
@@ -196,6 +200,11 @@ namespace OneBitRob.EnigmaEngine
 
         private void UpdateMovementAnimators()
         {
+            var vel = _agent ? new Vector3(_agent.Body.Velocity.x, 0f, _agent.Body.Velocity.z) : Vector3.zero;
+            float maxSpeed = _unitBrain ? Mathf.Max(0.01f, _unitBrain.UnitDefinition.moveSpeed) : 4f;
+            _unitAnim.ApplyMovement(_movement.CurrentState, vel, maxSpeed);
+            
+            // TODO remove legacy
             MMAnimatorExtensions.UpdateAnimatorBool(_animator, _walkingAnimationParameter, (_movement.CurrentState == EnigmaCharacterStates.MovementStates.Walking), _character._animatorParameters, _character.RunAnimatorSanityChecks);
             MMAnimatorExtensions.UpdateAnimatorBool(_animator, _idleAnimationParameter, (_movement.CurrentState == EnigmaCharacterStates.MovementStates.Idle), _character._animatorParameters, _character.RunAnimatorSanityChecks);
             MMAnimatorExtensions.UpdateAnimatorBool(_animator, _combatStanceAnimationParameter, (_movement.CurrentState == EnigmaCharacterStates.MovementStates.CombatStance), _character._animatorParameters, _character.RunAnimatorSanityChecks);

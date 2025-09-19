@@ -32,7 +32,7 @@ namespace OneBitRob
         public float    Value;
     }
 
-    [CreateAssetMenu(menuName = "TactForge/Stats/Stat Mod Set", fileName = "StatModSet")]
+    [CreateAssetMenu(menuName = "TactForge/Stats/Stat Mod Set", fileName = "StatModSetDefinition")]
     public sealed class StatModSetDefinition : ScriptableObject
     {
         [Tooltip("Ordered list of stat modifiers (applied top-to-bottom).")]

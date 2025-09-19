@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using OneBitRob.Config;
+using UnityEngine;
 using UnityEngine.Serialization;
 using Sirenix.OdinInspector;
 using OneBitRob.FX;
@@ -28,7 +29,7 @@ namespace OneBitRob
         Negative = 1
     }
 
-    [CreateAssetMenu(menuName = "TactForge/Definition/Spell", fileName = "SpellDefinition")]
+    [CreateAssetMenu(menuName = "TactForge/Definition/Spell Definition", fileName = "SpellDefinition")]
     public class SpellDefinition : ScriptableObject
     {
         [BoxGroup("General")]
@@ -50,7 +51,8 @@ namespace OneBitRob
         public float Range = 12f;
 
         [BoxGroup("General")]
-        public AttackAnimationSettings animations;
+        [LabelText("Cast Clips (Compute)")]
+        public ComputeAttackAnimationSettings castAnimations;
 
         [BoxGroup("General")]
         [LabelText("Fire Delay"), SuffixLabel("s", true)]

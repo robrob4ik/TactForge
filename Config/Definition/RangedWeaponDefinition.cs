@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using OneBitRob.Config;
+using UnityEngine;
 using Sirenix.OdinInspector;
 using OneBitRob.FX;
 
@@ -32,7 +33,8 @@ namespace OneBitRob
         public float windupSeconds = 0.5f;
 
         [BoxGroup("Animations")]
-        public TwoStageAttackAnimationSettings animations;
+        [LabelText("Ranged Attack Clips")]
+        public ComputeTwoStageAttackAnimationSettings attackAnimations;
 
         [BoxGroup("Projectile Pool Key")]
         public string projectileId = "arrow";

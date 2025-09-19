@@ -16,7 +16,6 @@ namespace OneBitRob.ECS
     [UpdateAfter(typeof(AITaskSystemGroup))]
     public sealed partial class EcsToMonoBridgeGroup : ComponentSystemGroup {}
     
-    
     // Parent AI group (stays where it is in the Simulation pipeline)
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateAfter(typeof(BehaviorTreeSystemGroup))]

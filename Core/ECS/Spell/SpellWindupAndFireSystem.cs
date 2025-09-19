@@ -98,9 +98,9 @@ namespace OneBitRob.AI
                     if (spells != null && spells.Count > 0 && spells[0] != null)
                     {
                         var def = spells[0];
-                        brain.UnitCombatController?.PlaySpell(def.animations);
+                        brain.UnitCombatController?.PlaySpellCompute();
                         float3 casterPos = SystemAPI.HasComponent<LocalTransform>(e) ? SystemAPI.GetComponent<LocalTransform>(e).Position : default;
-                        FeedbackService.TryPlay(def.prepareFeedback, brain.transform, (UnityEngine.Vector3)casterPos);
+                        FeedbackService.TryPlay(def.prepareFeedback, brain.transform, casterPos);
                     }
                 }
 

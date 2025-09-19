@@ -21,7 +21,7 @@ namespace OneBitRob.AI
         public EnigmaCharacter Character { get; private set; }
         public EnigmaCharacterHandleWeapon HandleWeapon { get; private set; }
         public EnigmaHealth Health { get; private set; }
-        private EnigmaCharacterAgentsNavigationMovement _navMove;
+        private UnitComputeAnimationAbility _navMove;
         private AgentAuthoring _navAgent;
 
         private LayerMask _targetMask;
@@ -72,7 +72,7 @@ namespace OneBitRob.AI
             Character = GetComponent<EnigmaCharacter>();
             UnitCombatController = GetComponent<UnitCombatController>();
             HandleWeapon = Character ? Character.FindAbility<EnigmaCharacterHandleWeapon>() : null;
-            _navMove = Character ? Character.FindAbility<EnigmaCharacterAgentsNavigationMovement>() : null;
+            _navMove = Character ? Character.FindAbility<UnitComputeAnimationAbility>() : null;
             _navAgent = GetComponent<AgentAuthoring>();
             Health = GetComponent<EnigmaHealth>();
 

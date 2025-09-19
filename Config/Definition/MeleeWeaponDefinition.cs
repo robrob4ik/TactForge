@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using OneBitRob.Config;
+using UnityEngine;
 using Sirenix.OdinInspector;
 using OneBitRob.FX;
 
@@ -21,7 +22,8 @@ namespace OneBitRob
         public float invincibility = 0.10f;
 
         [BoxGroup("Animations")]
-        public AttackAnimationSettings attackAnimations;
+        [LabelText("Melee Attack Clips")]
+        public ComputeAttackAnimationSettings attackAnimations;
 
         [BoxGroup("Feedbacks")]
         [LabelText("Attack (Swing) Feedback")]

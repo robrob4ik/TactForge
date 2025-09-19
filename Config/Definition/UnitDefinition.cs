@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using OneBitRob.Config;
 using OneBitRob.FX;
+using PROJECT.Scripts.Config.Definition;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -11,11 +13,9 @@ namespace OneBitRob
     public enum UnitTrait { Undead, Beast, Goblin, Human }
     public enum UnitClass { Warrior, Mage, Hunter, Assassin }
     
-    public enum MovementType { Normal = 0, Knight = 1, Spearman = 2, Brute = 3, Assassin = 4, Axeman = 5, Mystic = 6 }
-
     public enum AttackAnimationSelect { Random, Sequential }
 
-    [CreateAssetMenu(menuName = "TactForge/Definition/Unit", fileName = "UnitDefinition")]
+    [CreateAssetMenu(menuName = "TactForge/Definition/Unit Definition", fileName = "UnitDefinition")]
     public class UnitDefinition : ScriptableObject
     {
         [BoxGroup("Visual & Prefab")]
@@ -56,8 +56,9 @@ namespace OneBitRob
         [MinValue(0f)]
         public float acceleration = 10f;
 
-        [BoxGroup("Base Stats")]
-        public MovementType movementType = MovementType.Normal;
+        [BoxGroup("Animations")]
+        [LabelText("Locomotion Animations"), AssetsOnly]
+        public LocomotionAnimationsDefinition locomotionAnimations;
 
         [BoxGroup("Agent")]
         [LabelText("Stopping Distance"), SuffixLabel("units", true)]
