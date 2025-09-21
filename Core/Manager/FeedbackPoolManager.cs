@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
-using OneBitRob.FX;
 
 namespace OneBitRob.FX
 {
@@ -51,21 +50,47 @@ namespace OneBitRob.FX
             RebuildMap();
         }
 
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            // Trim authoring ids to avoid accidental leading/trailing spaces
+            for (int i = 0; i < Pools.Count; i++)
+            {
+                var e = Pools[i];
+                if (!string.IsNullOrEmpty(e.Id)) e.Id = e.Id.Trim();
+                Pools[i] = e;
+            }
+            // Editor convenience only – keeps the dictionary viewable during play mode
+            if (!Application.isPlaying) RebuildMap();
+        }
+#endif
+
         private void RebuildMap()
         {
             _map = new Dictionary<string, MMObjectPooler>(Pools.Count);
+#if UNITY_EDITOR
+            var seen = new HashSet<string>();
+#endif
             for (int i = 0; i < Pools.Count; i++)
             {
                 var p = Pools[i];
                 if (p.Pooler == null || string.IsNullOrEmpty(p.Id)) continue;
-                _map[p.Id] = p.Pooler;
+
+                var id = p.Id.Trim();
+#if UNITY_EDITOR
+                if (!seen.Add(id))
+                {
+                    Debug.LogWarning($"[FeedbackPoolManager] Duplicate id '{id}' in Pools list. Last entry wins.", this);
+                }
+#endif
+                _map[id] = p.Pooler;
             }
         }
 
         public static MMObjectPooler GetPooler(string id)
         {
             Ensure();
-            if (string.IsNullOrEmpty(id) || _map == null || !_map.TryGetValue(id, out var pooler))
+            if (string.IsNullOrEmpty(id) || _map == null || !_map.TryGetValue(id.Trim(), out var pooler))
             {
 #if UNITY_EDITOR
                 if (_instance && _instance.LogMissing && !_warned.Contains(id ?? "<null>"))

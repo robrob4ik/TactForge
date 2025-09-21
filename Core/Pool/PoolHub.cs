@@ -4,6 +4,7 @@ using System.Collections;
 using System.Reflection;
 using MoreMountains.Tools;
 using UnityEngine;
+using OneBitRob.Tools; // <-- to see EnigmaSimpleObjectPooler
 
 namespace OneBitRob.FX
 {
@@ -71,13 +72,21 @@ namespace OneBitRob.FX
             }
         }
 
-        /// <summary>Prunes destroyed entries from MoreMountains pooler internal list.</summary>
+        /// <summary>Prunes destroyed entries from MM pooler internal list (prefers non-reflection path).</summary>
         private static void TryRepairDestroyedEntries(MMObjectPooler pooler)
         {
             if (!pooler) return;
+
+            // Fast path: our custom pooler exposes pruning directly.
+            if (pooler is EnigmaSimpleObjectPooler enigmaPooler)
+            {
+                try { enigmaPooler.PruneDestroyedEntries(); } catch { /* ignore */ }
+                return;
+            }
+
+            // Fallback path: reflection into MMObjectPooler (kept for safety/compat).
             try
             {
-                // MMObjectPooler has a protected field "_objectPool" with a list 'PooledGameObjects'
                 var objectPoolField = typeof(MMObjectPooler).GetField("_objectPool",
                     BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
                 var objectPool = objectPoolField?.GetValue(pooler);

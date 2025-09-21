@@ -1,11 +1,9 @@
 ﻿// File: Assets/PROJECT/Scripts/Core/Service/VfxService.cs
-
 using OneBitRob.FX;
 using UnityEngine;
 
 namespace OneBitRob.VFX
 {
-
     public static class VfxService
     {
         public static void PlayByHash(int vfxIdHash, Vector3 position, Transform follow = null)
@@ -21,8 +19,8 @@ namespace OneBitRob.VFX
             var go = PoolHub.GetPooled(PoolKind.Vfx, id); // SAFE pooled retrieval
             if (!go) return;
 
-            VfxPoolManager.Ensure().SendMessage("PrepareOneShot", new object[] { go, position, follow }, SendMessageOptions.DontRequireReceiver);
-            // The VfxPoolManager handles parenting/activation.
+            // Direct call – avoids SendMessage allocations & visibility issues
+            VfxPoolManager.Ensure().PrepareOneShot(go, position, follow);
         }
 
         // Persistent (ref-counted) by hash

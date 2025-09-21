@@ -6,7 +6,6 @@ using UnityEngine;
 namespace OneBitRob.VFX
 {
     using OneBitRob.FX;
-    using Unity.Collections;
 
     [DefaultExecutionOrder(-9999)]
     public sealed class VfxPoolManager : MonoBehaviour
@@ -64,18 +63,43 @@ namespace OneBitRob.VFX
             RebuildMap();
         }
 
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            for (int i = 0; i < Pools.Count; i++)
+            {
+                var e = Pools[i];
+                if (!string.IsNullOrEmpty(e.Id)) e.Id = e.Id.Trim();
+                Pools[i] = e;
+            }
+            if (!Application.isPlaying) RebuildMap();
+        }
+#endif
+
         private void RebuildMap()
         {
             _map = new Dictionary<string, MMObjectPooler>(Pools.Count);
+#if UNITY_EDITOR
+            var seen = new HashSet<string>();
+#endif
             foreach (var e in Pools)
-                if (!string.IsNullOrEmpty(e.Id) && e.Pooler != null)
-                    _map[e.Id] = e.Pooler;
+            {
+                if (string.IsNullOrEmpty(e.Id) || e.Pooler == null) continue;
+                var id = e.Id.Trim();
+#if UNITY_EDITOR
+                if (!seen.Add(id))
+                {
+                    Debug.LogWarning($"[VfxPoolManager] Duplicate id '{id}' in Pools list. Last entry wins.", this);
+                }
+#endif
+                _map[id] = e.Pooler;
+            }
         }
 
         public static MMObjectPooler GetPooler(string id)
         {
             Ensure();
-            if (string.IsNullOrEmpty(id) || _map == null || !_map.TryGetValue(id, out var pool))
+            if (string.IsNullOrEmpty(id) || _map == null || !_map.TryGetValue(id.Trim(), out var pool))
             {
 #if UNITY_EDITOR
                 if (_instance && _instance.LogMissing && !_warned.Contains(id ?? "<null>"))
@@ -92,7 +116,7 @@ namespace OneBitRob.VFX
         public static GameObject GetPooled(string id)
         {
             // Route through PoolHub to gain exception safety
-            return PoolHub.GetPooled(PoolKind.Vfx, id);
+            return PoolHub.GetPooled(OneBitRob.FX.PoolKind.Vfx, id);
         }
 
         public static void PlayById(string id, Vector3 position, Transform follow = null)
@@ -102,8 +126,11 @@ namespace OneBitRob.VFX
             Ensure().PrepareOneShot(go, position, follow);
         }
 
-        private void PrepareOneShot(GameObject go, Vector3 position, Transform follow)
+        // *** Exposed (no SendMessage indirection) ***
+        public void PrepareOneShot(GameObject go, Vector3 position, Transform follow = null)
         {
+            if (!go) return;
+
             if (follow) { go.transform.SetParent(follow, true); go.transform.position = follow.position; }
             else        { go.transform.SetParent(null, true);   go.transform.position = position;      }
 
@@ -120,7 +147,7 @@ namespace OneBitRob.VFX
             _refs.TryGetValue(key, out var rc);
             _refs[key] = rc + 1;
 
-            var go = PoolHub.GetPooled(PoolKind.Vfx, id);
+            var go = PoolHub.GetPooled(OneBitRob.FX.PoolKind.Vfx, id);
             if (!go) return;
 
             if (_active.TryGetValue(key, out var entry) && entry.Go)
@@ -147,7 +174,7 @@ namespace OneBitRob.VFX
             if (!_active.TryGetValue(key, out var entry) || entry.Go == null)
             {
                 var id  = VisualAssetRegistry.GetVfxId(idHash);
-                var go  = PoolHub.GetPooled(PoolKind.Vfx, id);
+                var go  = PoolHub.GetPooled(OneBitRob.FX.PoolKind.Vfx, id);
                 if (!go) return;
 
                 _instance.PreparePersistent(go, position, follow);

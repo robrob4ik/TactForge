@@ -50,18 +50,43 @@ namespace OneBitRob.ECS
             RebuildMap();
         }
 
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            for (int i = 0; i < Pools.Count; i++)
+            {
+                var e = Pools[i];
+                if (!string.IsNullOrEmpty(e.Id)) e.Id = e.Id.Trim();
+                Pools[i] = e;
+            }
+            if (!Application.isPlaying) RebuildMap();
+        }
+#endif
+
         private void RebuildMap()
         {
             _map = new Dictionary<string, MMObjectPooler>(Pools.Count);
+#if UNITY_EDITOR
+            var seen = new HashSet<string>();
+#endif
             foreach (var p in Pools)
-                if (p.Pooler != null && !string.IsNullOrEmpty(p.Id))
-                    _map[p.Id] = p.Pooler;
+            {
+                if (p.Pooler == null || string.IsNullOrEmpty(p.Id)) continue;
+                var id = p.Id.Trim();
+#if UNITY_EDITOR
+                if (!seen.Add(id))
+                {
+                    Debug.LogWarning($"[ProjectilePoolManager] Duplicate id '{id}' in Pools list. Last entry wins.", this);
+                }
+#endif
+                _map[id] = p.Pooler;
+            }
         }
 
         public static MMObjectPooler GetPooler(string id)
         {
             Ensure();
-            if (string.IsNullOrEmpty(id) || _map == null || !_map.TryGetValue(id, out var pooler))
+            if (string.IsNullOrEmpty(id) || _map == null || !_map.TryGetValue(id.Trim(), out var pooler))
             {
 #if UNITY_EDITOR
                 if (_instance && _instance.LogMissing && !_warned.Contains(id ?? "<null>"))

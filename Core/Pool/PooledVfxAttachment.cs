@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-
 namespace OneBitRob.FX
 {
     /// <summary>Attach to pooled FX that may be parented under units. Lets us detach back to the pool before the unit is destroyed.</summary>
