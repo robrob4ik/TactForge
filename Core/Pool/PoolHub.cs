@@ -1,10 +1,10 @@
-﻿// File: Assets/PROJECT/Scripts/Core/Pool/PoolHub.cs
-using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Reflection;
 using MoreMountains.Tools;
+using OneBitRob.ECS;
 using UnityEngine;
-using OneBitRob.Tools; // <-- to see EnigmaSimpleObjectPooler
+using OneBitRob.Tools;
+using OneBitRob.VFX; 
 
 namespace OneBitRob.FX
 {
@@ -25,9 +25,9 @@ namespace OneBitRob.FX
 
             switch (kind)
             {
-                case PoolKind.Projectile: pooler = OneBitRob.ECS.ProjectilePoolManager.GetPooler(id); break;
+                case PoolKind.Projectile: pooler = ProjectilePoolManager.GetPooler(id); break;
                 case PoolKind.Feedback:   pooler = FeedbackPoolManager.GetPooler(id); break;
-                case PoolKind.Vfx:        pooler = OneBitRob.VFX.VfxPoolManager.GetPooler(id); break;
+                case PoolKind.Vfx:        pooler = VfxPoolManager.GetPooler(id); break;
             }
             return pooler != null;
         }

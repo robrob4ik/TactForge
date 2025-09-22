@@ -1,12 +1,11 @@
 ﻿using Unity.Mathematics;
 using Unity.Transforms;
 
-namespace PROJECT.Scripts.AI.Brain
+namespace OneBitRob
 {
    
     namespace OneBitRob.Core
     {
-        /// <summary>Immutable snapshot of an entity's pose with cached basis vectors.</summary>
         public readonly struct AttackPose
         {
             public readonly float3 Position;

@@ -1,4 +1,5 @@
 ﻿using OneBitRob.AI;
+using OneBitRob.Core;
 using Unity.Entities;
 using UnityEngine;
 
@@ -19,7 +20,7 @@ namespace OneBitRob.ECS
                     var facePos = (Vector3)desiredFacing.ValueRO.TargetPosition;
                     brain.SetForcedFacing(facePos);
 #if UNITY_EDITOR
-                    Debug.DrawLine(brain.transform.position, facePos, Color.yellow, 0.6f, false);
+                    Debug.DrawLine(brain.transform.position, facePos, DebugPalette.Facing, 0.6f, false);
 #endif
                 }
                 desiredFacing.ValueRW = default; // consume

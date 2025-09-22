@@ -26,7 +26,7 @@ namespace OneBitRob.ECS
         public float Cooldown;
         public float Range;
 
-        public float Amount; // signed handled at usage time
+        public float Amount;
 
         // Projectile
         public float ProjectileSpeed;
@@ -72,9 +72,7 @@ namespace OneBitRob.ECS
     {
         public float NextTime;
     }
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // Requests -> enableable components
+    
     // Cast
     public struct CastRequest : IComponentData, IEnableableComponent
     {
@@ -92,12 +90,12 @@ namespace OneBitRob.ECS
         public float3 Origin;
         public float3 Direction;
         public float Speed;
-        public float Damage; // signed for heal
+        public float Damage; 
         public float MaxDistance;
         public float Radius;
         public int ProjectileIdHash;
         public int LayerMask;
-        public byte Pierce; // bool as byte for compactness
+        public byte Pierce;
     }
 
     public struct SummonRequest : IComponentData, IEnableableComponent
@@ -108,7 +106,7 @@ namespace OneBitRob.ECS
         public byte Faction;
     }
 
-// Spell DoTs/HoTs & visuals
+
     public struct DotOnTarget : IComponentData
     {
         public Entity Target;

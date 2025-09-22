@@ -1,9 +1,6 @@
-﻿// File: OneBitRob/AI/SpellPlanSystem.cs
-
-using OneBitRob.ECS;
+﻿using OneBitRob.ECS;
 using Unity.Burst;
 using Unity.Entities;
-using Unity.Mathematics;
 using static Unity.Mathematics.math;
 using Unity.Transforms;
 using float3 = Unity.Mathematics.float3;

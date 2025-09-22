@@ -1,5 +1,5 @@
 ﻿using OneBitRob.AI;
-using Unity.Collections;
+using OneBitRob.Core;
 using Unity.Entities;
 using Unity.Transforms;
 using UnityEngine;
@@ -26,7 +26,7 @@ namespace OneBitRob.ECS
                 transformRW.ValueRW = value;
 
 #if UNITY_EDITOR
-                Debug.DrawLine(t.position, t.position + Vector3.up * 0.6f, new Color(1f, 0f, 1f, 0.85f), 0.35f, false);
+                Debug.DrawLine(t.position, t.position + Vector3.up * 0.6f, DebugPalette.TransformSync, 0.35f, false);
 #endif
             }
         }

@@ -1,97 +1,71 @@
-﻿using UnityEngine;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
+﻿using UnityEditor;
+using UnityEngine;
 
 namespace OneBitRob.Debugging
 {
-    /// Centralized debug draw facade for runtime (Debug.Draw*) and Scene/Gizmo (Gizmos/Handles).
-    /// Uses DebugSettings for behavior (duration, thickness, depth test).
-    /// Now robust even if no DebugSettings asset is injected/loaded.
     public static class DebugDraw
     {
         private static DebugSettings _settings;
 
-        private const float DEFAULT_DURATION = 0f;        // one frame
+        private const float DEFAULT_DURATION = 0f;
         private const bool  DEFAULT_DEPTH_TEST = true;
         private const float DEFAULT_LINE_THICKNESS = 1.5f;
         private const float DEFAULT_DISC_THICKNESS = 1.5f;
-        private const int   DEFAULT_DISC_SEGMENTS = 64;
 
-        /// <summary>Inject settings at runtime/editor if you don’t want to rely on Resources.</summary>
         public static void SetSettings(DebugSettings settings) => _settings = settings;
 
-        // Null-safe helpers
-        private static bool  Enabled                   => _settings?.enableDebugDraws ?? true;
+        private static bool  Enabled                   => _settings?.enableDebugDraws ?? false;
         private static float Duration(float? v)        => v ?? (_settings?.defaultDuration      ?? DEFAULT_DURATION);
         private static bool  Depth(bool? v)            => v ?? (_settings?.depthTest            ?? DEFAULT_DEPTH_TEST);
         private static float LineThickness(float? v)   => v ?? (_settings?.defaultLineThickness ?? DEFAULT_LINE_THICKNESS);
         private static float DiscThickness(float? v)   => v ?? (_settings?.defaultDiscThickness ?? DEFAULT_DISC_THICKNESS);
-
-#if UNITY_EDITOR
-        [InitializeOnLoadMethod]
-        private static void AutoLoadSettings()
+        
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        static bool _complainedOnce;
+#endif
+        private static bool ShouldDraw()
         {
             if (_settings == null)
             {
-                _settings = Resources.Load<DebugSettings>("CFG_DebugDraw");
+                return false;
             }
+            return Enabled;
         }
-#endif
 
-        private static bool ShouldDraw() => Enabled;
-
-        /// <summary>Runtime line (Game/Scene view). Thickness unsupported at runtime.</summary>
         public static void Line(Vector3 start, Vector3 end, Color color, float? duration = null, bool? depthTest = null)
         {
             if (!ShouldDraw()) return;
             Debug.DrawLine(start, end, color, Duration(duration), Depth(depthTest));
         }
 
-        /// <summary>Runtime ray (Game/Scene view). Thickness unsupported at runtime.</summary>
         public static void Ray(Vector3 origin, Vector3 direction, Color color, float? duration = null, bool? depthTest = null)
         {
             if (!ShouldDraw()) return;
             Debug.DrawRay(origin, direction, color, Duration(duration), Depth(depthTest));
         }
 
-        /// <summary>Draw a line in the Scene view. Editor supports thickness; runtime falls back to Gizmos line.</summary>
         public static void GizmoLine(Vector3 start, Vector3 end, Color color, float? thickness = null)
         {
             if (!ShouldDraw()) return;
-
             var prev = Handles.color;
             Handles.color = color;
-
             float t = LineThickness(thickness);
-            if (t > 0f)
-                Handles.DrawAAPolyLine(t, new[] { start, end });
-            else
-                Handles.DrawLine(start, end);
-
+            if (t > 0f) Handles.DrawAAPolyLine(t, new[] { start, end });
+            else Handles.DrawLine(start, end);
             Handles.color = prev;
-
         }
 
-        /// <summary>Draw a ray in the Scene view. Editor thickness supported via GizmoLine.</summary>
         public static void GizmoRay(Vector3 origin, Vector3 direction, Color color, float length, float? thickness = null)
         {
             if (!ShouldDraw()) return;
-
             if (direction.sqrMagnitude < 1e-6f) return;
             var end = origin + direction.normalized * Mathf.Max(0f, length);
             GizmoLine(origin, end, color, thickness);
         }
 
-        /// <summary>
-        /// Draw a disc on the XZ plane.
-        /// Editor uses Handles.DrawWireDisc (thickness supported),
-        /// runtime approximates with segments using Gizmos.
-        /// </summary>
         public static void DiscXZ(Vector3 center, float radius, Color color, float? thickness = null, int? segmentsOverride = null)
         {
             if (!ShouldDraw() || radius <= 0f) return;
-
             var prev = Handles.color;
             Handles.color = color;
             float t = DiscThickness(thickness);
@@ -99,7 +73,6 @@ namespace OneBitRob.Debugging
             Handles.color = prev;
         }
 
-        /// <summary>Solid sphere gizmo at position.</summary>
         public static void GizmoSphere(Vector3 center, float radius, Color color)
         {
             if (!ShouldDraw()) return;
@@ -109,7 +82,6 @@ namespace OneBitRob.Debugging
             Gizmos.color = prev;
         }
 
-        /// <summary>Wireframe sphere gizmo at position.</summary>
         public static void GizmoWireSphere(Vector3 center, float radius, Color color)
         {
             if (!ShouldDraw()) return;
@@ -119,10 +91,47 @@ namespace OneBitRob.Debugging
             Gizmos.color = prev;
         }
 
-        /// <summary>Small point helper (solid sphere) for anchors/targets.</summary>
-        public static void Point(Vector3 center, float radius, Color color)
+        public static void Point(Vector3 center, float radius, Color color) => GizmoSphere(center, radius, color);
+        
+        public static void WireSphereXYZ(Vector3 center, float radius, Color color, int segments = 24)
         {
-            GizmoSphere(center, radius, color);
+            if (!ShouldDraw() || radius <= 0f || segments < 3) return;
+
+            // XY plane
+            {
+                Vector3 prev = center + Vector3.right * radius;
+                for (int i = 1; i <= segments; i++)
+                {
+                    float t = (i / (float)segments) * 2f * Mathf.PI;
+                    Vector3 p = center + new Vector3(Mathf.Cos(t) * radius, Mathf.Sin(t) * radius, 0f);
+                    Line(prev, p, color);
+                    prev = p;
+                }
+            }
+
+            // XZ plane
+            {
+                Vector3 prev = center + Vector3.forward * radius;
+                for (int i = 1; i <= segments; i++)
+                {
+                    float t = (i / (float)segments) * 2f * Mathf.PI;
+                    Vector3 p = center + new Vector3(Mathf.Cos(t) * radius, 0f, Mathf.Sin(t) * radius);
+                    Line(prev, p, color);
+                    prev = p;
+                }
+            }
+
+            // YZ plane
+            {
+                Vector3 prev = center + Vector3.up * radius;
+                for (int i = 1; i <= segments; i++)
+                {
+                    float t = (i / (float)segments) * 2f * Mathf.PI;
+                    Vector3 p = center + new Vector3(0f, Mathf.Cos(t) * radius, Mathf.Sin(t) * radius);
+                    Line(prev, p, color);
+                    prev = p;
+                }
+            }
         }
     }
 }

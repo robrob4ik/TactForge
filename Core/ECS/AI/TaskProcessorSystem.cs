@@ -5,7 +5,10 @@ using Unity.Entities;
 
 namespace OneBitRob.AI
 {
-    public interface ITaskCommand { ushort Index { get; set; } }
+    public interface ITaskCommand
+    {
+        ushort Index { get; set; }
+    }
 
     public abstract partial class TaskProcessorSystem<TCmd, TTag> : SystemBase
         where TCmd : unmanaged, IBufferElementData, ITaskCommand
@@ -18,26 +21,27 @@ namespace OneBitRob.AI
             _query = GetEntityQuery(
                 ComponentType.ReadOnly<TTag>(),
                 ComponentType.ReadWrite<TaskComponent>(),
-                ComponentType.ReadWrite<TCmd>());
+                ComponentType.ReadWrite<TCmd>()
+            );
         }
 
         protected override void OnUpdate()
         {
-            var queue  = new NativeQueue<Entity>(Allocator.TempJob);
+            var queue = new NativeQueue<Entity>(Allocator.TempJob);
             var writer = queue.AsParallelWriter();
 
-            var cmdHandle    = GetBufferTypeHandle<TCmd>(true);
-            var taskHandle   = GetBufferTypeHandle<TaskComponent>(false);
+            var cmdHandle = GetBufferTypeHandle<TCmd>(true);
+            var taskHandle = GetBufferTypeHandle<TaskComponent>(false);
             var entityHandle = GetEntityTypeHandle();
-            var tagHandle    = GetComponentTypeHandle<TTag>(true);
+            var tagHandle = GetComponentTypeHandle<TTag>(true);
 
             Dependency = new CollectRunningJob<TCmd, TTag>
             {
-                CmdHandle    = cmdHandle,
-                TaskHandle   = taskHandle,
+                CmdHandle = cmdHandle,
+                TaskHandle = taskHandle,
                 EntityHandle = entityHandle,
-                TagHandle    = tagHandle,
-                QueueWriter  = writer
+                TagHandle = tagHandle,
+                QueueWriter = writer
             }.ScheduleParallel(_query, Dependency);
 
             // Managed section after collection
@@ -50,7 +54,7 @@ namespace OneBitRob.AI
                 if (brain == null) continue;
 
                 var tasks = em.GetBuffer<TaskComponent>(e);
-                var cmds  = em.GetBuffer<TCmd>(e);
+                var cmds = em.GetBuffer<TCmd>(e);
 
                 foreach (var cmd in cmds)
                 {

@@ -1,7 +1,8 @@
-﻿// File: OneBitRob/ECS/Brain_EcsToMono_SpellProjectileBridgeSystem.cs
+﻿using OneBitRob.AI;
 using Unity.Entities;
 using UnityEngine;
 using OneBitRob.FX;
+using OneBitRob.VFX;
 
 namespace OneBitRob.ECS
 {
@@ -17,10 +18,10 @@ namespace OneBitRob.ECS
                 if (!SystemAPI.IsComponentEnabled<SpellProjectileSpawnRequest>(entity)) continue;
                 var spawnRequest = spawnRW.ValueRO;
 
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(entity);
+                var brain = UnitBrainRegistry.Get(entity);
                 if (brain && brain.UnitCombatController != null)
                 {
-                    var projId = OneBitRob.VFX.VisualAssetRegistry.GetProjectileId(spawnRequest.ProjectileIdHash);
+                    var projId = VisualAssetRegistry.GetProjectileId(spawnRequest.ProjectileIdHash);
                     if (!string.IsNullOrEmpty(projId))
                     {
                         var spells = brain.UnitDefinition != null ? brain.UnitDefinition.unitSpells : null;

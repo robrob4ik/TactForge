@@ -1,5 +1,4 @@
-﻿// File: OneBitRob/AI/SpellWindupAndFireSystem.cs
-using Unity.Collections;
+﻿using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;

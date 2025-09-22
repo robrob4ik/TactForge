@@ -1,5 +1,4 @@
-﻿// File: Assets/PROJECT/Scripts/Mono/Combat/UnitCombatController.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MoreMountains.Tools;
 using OneBitRob.Anim;
 using UnityEngine;
@@ -46,71 +45,6 @@ namespace OneBitRob.AI
         }
 
         public bool IsAlive => _character != null && _character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
-
-        // public void PlayMeleeAttack(AttackAnimationSettings settings)
-        // {
-        //     // Compute Animator first
-        //     var meleeCompute = (_brain?.UnitDefinition?.weapon as MeleeWeaponDefinition)?.attackAnimationsCompute
-        //                        ?? _unitAnim?.AnimationsDefinition?.Melee;
-        //     if (_unitAnim && _unitAnim.IsComputeActive && meleeCompute && meleeCompute.HasEntries)
-        //     {
-        //         _unitAnim.PlayMelee(meleeCompute);
-        //         return;
-        //     }
-        //
-        //     // fallback (existing)
-        //     if (_anim == null || settings == null || !settings.HasEntries) return;
-        //     var param = settings.SelectParameter(ref _nextMeleeIdx);
-        //     if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
-        // }
-        //
-        // public void PlayRangedPrepare(TwoStageAttackAnimationSettings settings)
-        // {
-        //     var rangedCompute = (_brain?.UnitDefinition?.weapon as RangedWeaponDefinition)?.animationsCompute
-        //                         ?? _unitAnim?.AnimationsDefinition?.Ranged;
-        //     if (_unitAnim && _unitAnim.IsComputeActive && rangedCompute && rangedCompute.HasPrepare)
-        //     {
-        //         _unitAnim.PlayRangedPrepare(rangedCompute);
-        //         return;
-        //     }
-        //
-        //     if (_anim == null || settings == null || !settings.HasPrepare) return;
-        //     var param = settings.SelectPrepare(ref _nextPrepareIdx);
-        //     if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
-        // }
-        //
-        // public void PlayRangedFire(TwoStageAttackAnimationSettings settings)
-        // {
-        //     var rangedCompute = (_brain?.UnitDefinition?.weapon as RangedWeaponDefinition)?.animationsCompute
-        //                         ?? _unitAnim?.AnimationsDefinition?.Ranged;
-        //     if (_unitAnim && _unitAnim.IsComputeActive && rangedCompute && rangedCompute.HasFire)
-        //     {
-        //         _unitAnim.PlayRangedFire(rangedCompute);
-        //         return;
-        //     }
-        //
-        //     if (_anim == null || settings == null || !settings.HasFire) return;
-        //     var param = settings.SelectFire(ref _nextFireIdx);
-        //     if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
-        // }
-        //
-        // public void PlaySpell(AttackAnimationSettings settings)
-        // {
-        //     var spells = _brain?.UnitDefinition?.unitSpells;
-        //     var compute = (spells != null && spells.Count > 0 && spells[0] != null)
-        //         ? spells[0].castAnimations
-        //         : _unitAnim?.animsDefinition?.DefaultSpell;
-        //
-        //     if (_unitAnim && _unitAnim.IsComputeActive && compute && compute.HasEntries)
-        //     {
-        //         _unitAnim.PlaySpell(compute);
-        //         return;
-        //     }
-        //
-        //     if (_anim == null || settings == null || !settings.HasEntries) return;
-        //     var param = settings.SelectParameter(ref _nextSpellIdx);
-        //     if (!string.IsNullOrEmpty(param) && AnimatorHasTrigger(param)) _anim.SetTrigger(param);
-        // }
 
         public void PlayMeleeAttackCompute()
         {

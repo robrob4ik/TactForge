@@ -1,7 +1,6 @@
 ﻿using OneBitRob.Config;
 using UnityEngine;
 using Sirenix.OdinInspector;
-using OneBitRob.FX;
 
 namespace OneBitRob
 {
@@ -27,11 +26,13 @@ namespace OneBitRob
 
         [BoxGroup("Feedbacks")]
         [LabelText("Attack (Swing) Feedback")]
-        [AssetsOnly] public FeedbackDefinition attackFeedback;
+        [AssetsOnly]
+        public FeedbackDefinition attackFeedback;
 
         [BoxGroup("Feedbacks")]
         [LabelText("Hit Feedback")]
-        [AssetsOnly] public FeedbackDefinition hitFeedback;
+        [AssetsOnly]
+        public FeedbackDefinition hitFeedback;
 
         [BoxGroup("Timing")]
         [LabelText("Swing Lock"), SuffixLabel("s", true)]

@@ -5,11 +5,9 @@ using Unity.Entities;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("ReadyToCastSpellAction")]
     public class ReadyToCastSpellAction : AbstractTaskAction<ReadyToCastSpellComponent, ReadyToCastSpellTag, ReadyToCastSpellSystem>, IAction
     {
-        protected override ReadyToCastSpellComponent CreateBufferElement(ushort runtimeIndex)
-            => new ReadyToCastSpellComponent { Index = runtimeIndex };
+        protected override ReadyToCastSpellComponent CreateBufferElement(ushort runtimeIndex) => new ReadyToCastSpellComponent { Index = runtimeIndex };
     }
 
     public struct ReadyToCastSpellComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }

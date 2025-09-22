@@ -1,6 +1,4 @@
-﻿// ECS/HybridSync/MonoToEcs/Brain_MonoToEcs_HealthMirrorSystem.cs
-
-using OneBitRob.AI;
+﻿using OneBitRob.AI;
 using Unity.Collections;
 using Unity.Entities;
 

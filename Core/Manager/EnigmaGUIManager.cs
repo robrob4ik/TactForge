@@ -21,7 +21,6 @@ namespace OneBitRob.EnigmaEngine
         
         protected bool _initialized = false;
         
-        
         [Tooltip("the duration of the fade to black at the end of the level")]
         public float FadeOutDuration = 1f;
         [Tooltip("the tween type to use to fade the startscreen in and out ")]

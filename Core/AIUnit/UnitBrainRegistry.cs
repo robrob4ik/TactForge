@@ -1,5 +1,4 @@
-﻿// File: OneBitRob/AI/UnitBrainRegistry.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using Unity.Entities;
 

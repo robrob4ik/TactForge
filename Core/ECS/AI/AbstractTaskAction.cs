@@ -10,7 +10,9 @@ namespace OneBitRob.AI
         where TTag : unmanaged, IComponentData, IEnableableComponent
         where TSystem : SystemBase
     {
-        [SerializeField] ushort m_Index, m_ParentIndex, m_SiblingIndex;
+        [SerializeField]
+        ushort m_Index, m_ParentIndex, m_SiblingIndex;
+
         public ushort Index { get => m_Index; set => m_Index = value; }
         public ushort ParentIndex { get => m_ParentIndex; set => m_ParentIndex = value; }
         public ushort SiblingIndex { get => m_SiblingIndex; set => m_SiblingIndex = value; }

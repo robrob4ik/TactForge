@@ -1,7 +1,4 @@
 using System.Collections.Generic;
-using OneBitRob.Config;
-using OneBitRob.FX;
-using PROJECT.Scripts.Config.Definition;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -55,6 +52,9 @@ namespace OneBitRob
         [LabelText("Acceleration"), SuffixLabel("m/s²", true)]
         [MinValue(0f)]
         public float acceleration = 10f;
+        
+        [BoxGroup("Base Stats")]
+        public float angularSpeed = 120f;
 
         [BoxGroup("Animations")]
         [LabelText("Locomotion Animations"), AssetsOnly]

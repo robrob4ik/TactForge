@@ -49,16 +49,17 @@ static class UnitBrainLabels
                 float remain = brain.RemainingDistance();
 
                 var worldPos = brain.transform.position + Vector3.up * 2f;
-                var screen   = HandleUtility.WorldToGUIPoint(worldPos);
+                var screen = HandleUtility.WorldToGUIPoint(worldPos);
 
-                GUI.Label(new Rect(screen.x - 80, screen.y - 38, 160, 70),
-                    $"ID:{brain.GetEntity().Index}  ({(brain.UnitDefinition.isEnemy ? "EN" : "AL")})\n" + 
-                    $"BT: {brain.CurrentTaskName}\n" + 
-                    $"Tgt: {tgt} | d={dist:0.0} | rem={remain:0.0}", 
-                    _style);
+                GUI.Label(
+                    new Rect(screen.x - 80, screen.y - 38, 160, 70),
+                    $"ID:{brain.GetEntity().Index}  ({(brain.UnitDefinition.isEnemy ? "EN" : "AL")})\n" +
+                    $"BT: {brain.CurrentTaskName}\n" +
+                    $"Tgt: {tgt} | d={dist:0.0} | rem={remain:0.0}",
+                    _style
+                );
             }
-        }
-        finally { Handles.EndGUI(); }
+        } finally { Handles.EndGUI(); }
     }
 }
 #endif

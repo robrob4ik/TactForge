@@ -1,9 +1,12 @@
 using System.Collections.Generic;
 using OneBitRob.Config;
+using OneBitRob.Core;
 using OneBitRob.Debugging;
 using OneBitRob.EnigmaEngine;
+using ProjectDawn.Navigation;
 using ProjectDawn.Navigation.Hybrid;
 using Unity.Entities;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace OneBitRob.AI
@@ -21,7 +24,7 @@ namespace OneBitRob.AI
         public EnigmaCharacter Character { get; private set; }
         public EnigmaCharacterHandleWeapon HandleWeapon { get; private set; }
         public EnigmaHealth Health { get; private set; }
-        private UnitComputeAnimationAbility _navMove;
+        private UnitLocomotionController _navMove;
         private AgentAuthoring _navAgent;
 
         private LayerMask _targetMask;
@@ -72,7 +75,7 @@ namespace OneBitRob.AI
             Character = GetComponent<EnigmaCharacter>();
             UnitCombatController = GetComponent<UnitCombatController>();
             HandleWeapon = Character ? Character.FindAbility<EnigmaCharacterHandleWeapon>() : null;
-            _navMove = Character ? Character.FindAbility<UnitComputeAnimationAbility>() : null;
+            _navMove = Character ? Character.FindAbility<UnitLocomotionController>() : null;
             _navAgent = GetComponent<AgentAuthoring>();
             Health = GetComponent<EnigmaHealth>();
 
@@ -148,22 +151,26 @@ namespace OneBitRob.AI
 
         private void ApplyNavFromDefinition()
         {
-            if (_navAgent == null) return;
-
-            var body = _navAgent.Body;
- 
-            // TODO FIX HOW TO?
-
-            if (body.IsStopped)
-            {
-                body.IsStopped = false;
-            }
-
-            _navAgent.Body = body;
+            if (_entity == Entity.Null) return;
             
+            var world = World.DefaultGameObjectInjectionWorld;
+            if (world == null || !world.IsCreated) return;
 
+            var em = world.EntityManager;
+
+            if (em.HasComponent<AgentLocomotion>(_entity))
+            {
+                var loco = em.GetComponentData<AgentLocomotion>(_entity);
+
+                loco.Speed           = Mathf.Max(0f, UnitDefinition.moveSpeed);
+                loco.Acceleration    = Mathf.Max(0f, UnitDefinition.acceleration);
+                loco.AngularSpeed    = Mathf.Max(0f, UnitDefinition.angularSpeed);
+                loco.StoppingDistance= Mathf.Max(0f, UnitDefinition.stoppingDistance);
+                
+                em.SetComponentData(_entity, loco);
+            }
         }
-
+        
         public void StopAgentMotion()
         {
             if (_navAgent == null) return;
@@ -180,8 +187,7 @@ namespace OneBitRob.AI
         {
             var targetBrain = CurrentTarget ? CurrentTarget.GetComponent<UnitBrain>() : null;
             if (targetBrain?.Health == null) return false;
-            return targetBrain.Character != null
-                   && targetBrain.Character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
+            return targetBrain.Character != null && targetBrain.Character.ConditionState.CurrentState != EnigmaCharacterStates.CharacterConditions.Dead;
         }
 
         public void MoveToPosition(Vector3 position)
@@ -228,44 +234,29 @@ namespace OneBitRob.AI
         {
             var pos = transform.position;
 
-            // Primary weapon range disc
             if (UnitDefinition != null && UnitDefinition.weapon && UnitDefinition.weapon.attackRange > 0f)
-            {
-                DebugDraw.DiscXZ(pos, UnitDefinition.weapon.attackRange, Color.red);
-            }
+                DebugDraw.DiscXZ(pos, UnitDefinition.weapon.attackRange, DebugPalette.AttackRange);
 
-            // Auto target min-switch distance disc
             if (UnitDefinition != null && UnitDefinition.autoTargetMinSwitchDistance > 0f)
-            {
-                DebugDraw.DiscXZ(pos, UnitDefinition.autoTargetMinSwitchDistance, Color.blue);
-            }
+                DebugDraw.DiscXZ(pos, UnitDefinition.autoTargetMinSwitchDistance, DebugPalette.AutoTargetSwitch);
 
-            // Target position and direct target
             if (CurrentTargetPosition != default)
-            {
-                DebugDraw.GizmoLine(pos, CurrentTargetPosition, Color.cyan);
-            }
+                DebugDraw.GizmoLine(pos, CurrentTargetPosition, DebugPalette.MoveIntent);
 
             if (CurrentTarget)
             {
                 var tpos = CurrentTarget.transform.position;
-                DebugDraw.GizmoLine(pos, tpos, Color.orange);
+                DebugDraw.GizmoLine(pos, tpos, DebugPalette.TargetLine);
             }
 
-            // Facing
             if (DebugDrawFacing)
-            {
-                DebugDraw.GizmoRay(pos + Vector3.up * 0.05f, transform.forward, Color.yellow, 0.9f);
-            }
+                DebugDraw.GizmoRay(pos + Vector3.up * 0.05f, transform.forward, DebugPalette.Facing, 0.9f);
 
-            // Spell #0 range disc
-            if (DebugDrawSpell && UnitDefinition != null && UnitDefinition.unitSpells != null && UnitDefinition.unitSpells.Count > 0)
+            if (DebugDrawSpell && UnitDefinition?.unitSpells != null && UnitDefinition.unitSpells.Count > 0)
             {
                 var sd = UnitDefinition.unitSpells[0];
                 if (sd != null && sd.Range > 0f)
-                {
-                    DebugDraw.DiscXZ(pos, sd.Range, Color.darkRed);
-                }
+                    DebugDraw.DiscXZ(pos, sd.Range, DebugPalette.SpellRange);
             }
         }
 #endif

@@ -1,5 +1,4 @@
-﻿// File: OneBitRob/AI/SpellChainHopSystem.cs
-using OneBitRob.ECS;
+﻿using OneBitRob.ECS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Transforms;
@@ -138,7 +137,7 @@ namespace OneBitRob.AI
                 ? run.CasterFaction
                 : (run.CasterFaction == Constants.GameConstants.ENEMY_FACTION ? Constants.GameConstants.ALLY_FACTION : Constants.GameConstants.ENEMY_FACTION);
 
-            var wanted = new Unity.Collections.FixedList128Bytes<byte>(); wanted.Add(wantFaction);
+            var wanted = new FixedList128Bytes<byte>(); wanted.Add(wantFaction);
 
             if (!_posRO.HasComponent(run.PreviousTarget)) return Entity.Null;
             float3 center = _posRO[run.PreviousTarget].Position;

@@ -1,4 +1,5 @@
 ﻿using OneBitRob.AI;
+using OneBitRob.Core;
 using OneBitRob.Debugging;
 using Unity.Entities;
 using UnityEngine;
@@ -34,7 +35,7 @@ namespace OneBitRob.ECS
                     brain.MoveToPosition(wanted);
 
 #if UNITY_EDITOR
-                DebugDraw.Line(brain.transform.position, wanted, locked ? new Color(1f, 0.6f, 0.1f, 0.9f) : Color.cyan);
+                DebugDraw.Line(brain.transform.position, wanted, locked ? DebugPalette.NavLocked : DebugPalette.MoveIntent);
 #endif
                 desiredDestination.ValueRW = default; // consume
             }

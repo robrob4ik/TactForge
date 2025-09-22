@@ -5,11 +5,9 @@ using Unity.Mathematics;
 using Unity.Transforms;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Finds a valid target via SpatialHash and writes Target component")]
     public class FindTargetAction : AbstractTaskAction<FindTargetComponent, FindTargetTag, FindTargetSystem>, IAction
     {
         protected override FindTargetComponent CreateBufferElement(ushort runtimeIndex) => new FindTargetComponent { Index = runtimeIndex };

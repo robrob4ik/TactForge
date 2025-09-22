@@ -1,5 +1,4 @@
-﻿// File: Assets/PROJECT/Scripts/Core/Service/FeedbackPoolManager.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MoreMountains.Tools;
 using UnityEngine;
 

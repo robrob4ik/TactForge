@@ -1,5 +1,4 @@
-﻿// File: OneBitRob/ECS/SpawnerSystem.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -119,7 +118,10 @@ namespace OneBitRob.ECS
                     // Bridge Mono brain to ECS entity
                     var unitBrainMono = go.GetComponent<AI.UnitBrain>();
                     unitBrainMono.SetEntity(e);
-
+                    
+                    // Unit static
+                    UnitStaticSetup.Apply(state.EntityManager, e, unitBrainMono);
+                    
                     // Register with GPUI
                     var gpui = go.GetComponent<GPUIPrefab>();
                     if (gpui != null)

@@ -1,10 +1,11 @@
 ﻿using GPUInstancerPro.PrefabModule;
+using ProjectDawn.Navigation.Hybrid;
 using Unity.Entities;
 using UnityEngine;
 
 namespace OneBitRob.ECS.GPUI
 {
-    public class GPUIBootstrap : MonoBehaviour
+    public class GPUIAuthoring : EntityBehaviour
     {
         [SerializeField] private GPUIPrefabManager prefabManager;
         

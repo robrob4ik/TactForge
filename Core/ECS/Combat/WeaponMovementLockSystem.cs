@@ -11,7 +11,7 @@ namespace OneBitRob.AI
     {
         public void OnUpdate(ref SystemState state)
         {
-            var em  = state.EntityManager;
+            var em = state.EntityManager;
             float now = (float)SystemAPI.Time.ElapsedTime;
             var ecb = new EntityCommandBuffer(Allocator.Temp);
 
@@ -27,8 +27,10 @@ namespace OneBitRob.AI
                 else
                     ml.Flags &= ~MovementLockFlags.Attacking;
 
-                if (em.HasComponent<MovementLock>(e)) ecb.SetComponent(e, ml);
-                else                                               ecb.AddComponent(e, ml);
+                if (em.HasComponent<MovementLock>(e))
+                    ecb.SetComponent(e, ml);
+                else
+                    ecb.AddComponent(e, ml);
             }
 
             // Time-window lock (melee)
@@ -39,15 +41,18 @@ namespace OneBitRob.AI
                     ? em.GetComponentData<MovementLock>(e)
                     : new MovementLock { Flags = MovementLockFlags.None };
 
-                if (active) ml.Flags |= MovementLockFlags.Attacking;
+                if (active)
+                    ml.Flags |= MovementLockFlags.Attacking;
                 else
                 {
                     ml.Flags &= ~MovementLockFlags.Attacking;
                     ecb.RemoveComponent<ActionLockUntil>(e);
                 }
 
-                if (em.HasComponent<MovementLock>(e)) ecb.SetComponent(e, ml);
-                else                                               ecb.AddComponent(e, ml);
+                if (em.HasComponent<MovementLock>(e))
+                    ecb.SetComponent(e, ml);
+                else
+                    ecb.AddComponent(e, ml);
             }
 
             ecb.Playback(em);

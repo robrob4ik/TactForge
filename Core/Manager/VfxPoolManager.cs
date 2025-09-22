@@ -1,11 +1,10 @@
-﻿// File: Assets/PROJECT/Scripts/Core/Service/VfxPoolManager.cs
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MoreMountains.Tools;
+using OneBitRob.FX;
 using UnityEngine;
 
 namespace OneBitRob.VFX
 {
-    using OneBitRob.FX;
 
     [DefaultExecutionOrder(-9999)]
     public sealed class VfxPoolManager : MonoBehaviour
@@ -116,7 +115,7 @@ namespace OneBitRob.VFX
         public static GameObject GetPooled(string id)
         {
             // Route through PoolHub to gain exception safety
-            return PoolHub.GetPooled(OneBitRob.FX.PoolKind.Vfx, id);
+            return PoolHub.GetPooled(PoolKind.Vfx, id);
         }
 
         public static void PlayById(string id, Vector3 position, Transform follow = null)
@@ -147,7 +146,7 @@ namespace OneBitRob.VFX
             _refs.TryGetValue(key, out var rc);
             _refs[key] = rc + 1;
 
-            var go = PoolHub.GetPooled(OneBitRob.FX.PoolKind.Vfx, id);
+            var go = PoolHub.GetPooled(PoolKind.Vfx, id);
             if (!go) return;
 
             if (_active.TryGetValue(key, out var entry) && entry.Go)
@@ -174,7 +173,7 @@ namespace OneBitRob.VFX
             if (!_active.TryGetValue(key, out var entry) || entry.Go == null)
             {
                 var id  = VisualAssetRegistry.GetVfxId(idHash);
-                var go  = PoolHub.GetPooled(OneBitRob.FX.PoolKind.Vfx, id);
+                var go  = PoolHub.GetPooled(PoolKind.Vfx, id);
                 if (!go) return;
 
                 _instance.PreparePersistent(go, position, follow);

@@ -1,36 +1,37 @@
 ﻿// File: OneBitRob/VFX/ProjectileBase.cs
+
 using System.Collections.Generic;
 using UnityEngine;
 using MoreMountains.Tools;
+using OneBitRob.AI;
 
 namespace OneBitRob.ECS
 {
-    /// <summary>Shared stepping & hit resolution for weapon/spell projectiles.</summary>
     [DisallowMultipleComponent]
     public abstract class ProjectileBase : MMPoolableObject
     {
         protected GameObject _attacker;
-        protected OneBitRob.AI.UnitBrain _attackerBrain;
+        protected UnitBrain _attackerBrain;
         protected bool _attackerIsEnemy;
 
         protected Vector3 _dir;
-        protected float   _speed;
-        protected float   _remaining;
-        protected int     _mask;
-        protected float   _radius;
+        protected float _speed;
+        protected float _remaining;
+        protected int _mask;
+        protected float _radius;
 
         protected Vector3 _lastPos;
-        protected bool    _didImmediateOverlapCheck;
+        protected bool _didImmediateOverlapCheck;
 
         private static readonly RaycastHit[] s_Hits = new RaycastHit[32];
-        private static readonly Collider[]   s_Overlap = new Collider[32];
+        private static readonly Collider[] s_Overlap = new Collider[32];
 
         private readonly List<int> _hitEntityKeys = new List<int>(8);
 
         protected void ArmBase(GameObject attacker, Vector3 origin, Vector3 direction, float speed, float maxDistance, int layerMask, float radius = 0f)
         {
             _attacker = attacker;
-            _attackerBrain = _attacker ? _attacker.GetComponent<OneBitRob.AI.UnitBrain>() : null;
+            _attackerBrain = _attacker ? _attacker.GetComponent<UnitBrain>() : null;
             _attackerIsEnemy = _attackerBrain && _attackerBrain.UnitDefinition && _attackerBrain.UnitDefinition.isEnemy;
 
             _dir = (direction.sqrMagnitude < 1e-6f ? Vector3.forward : direction.normalized);
@@ -42,8 +43,8 @@ namespace OneBitRob.ECS
             _hitEntityKeys.Clear();
 
             transform.position = origin;
-            transform.forward  = _dir;
-            _lastPos           = transform.position;
+            transform.forward = _dir;
+            _lastPos = transform.position;
             _didImmediateOverlapCheck = false;
         }
 
@@ -63,7 +64,11 @@ namespace OneBitRob.ECS
 
         private void StepOrDespawn()
         {
-            if (_remaining <= 0f) { Despawn(); return; }
+            if (_remaining <= 0f)
+            {
+                Despawn();
+                return;
+            }
 
             if (!_didImmediateOverlapCheck)
             {
@@ -72,7 +77,7 @@ namespace OneBitRob.ECS
             }
 
             float stepLen = Mathf.Min(_speed * Time.deltaTime, _remaining);
-            int   count   = TryRayOrSphereCast(stepLen, out RaycastHit bestHit);
+            int count = TryRayOrSphereCast(stepLen, out RaycastHit bestHit);
 
             if (count > 0 && bestHit.collider != null)
             {
@@ -84,6 +89,7 @@ namespace OneBitRob.ECS
                     Advance(bestHit.distance);
                     Despawn();
                 }
+
                 return;
             }
 
@@ -94,8 +100,7 @@ namespace OneBitRob.ECS
         {
             int maskToUse = (_mask == 0) ? ~0 : _mask;
             int count = Physics.OverlapSphereNonAlloc(_lastPos, Mathf.Max(0.05f, _radius), s_Overlap, maskToUse, QueryTriggerInteraction.Collide);
-            if (count == 0 && maskToUse != ~0)
-                count = Physics.OverlapSphereNonAlloc(_lastPos, Mathf.Max(0.05f, _radius), s_Overlap, ~0, QueryTriggerInteraction.Collide);
+            if (count == 0 && maskToUse != ~0) count = Physics.OverlapSphereNonAlloc(_lastPos, Mathf.Max(0.05f, _radius), s_Overlap, ~0, QueryTriggerInteraction.Collide);
             if (count <= 0) return false;
 
             for (int i = 0; i < count; i++)
@@ -104,11 +109,16 @@ namespace OneBitRob.ECS
                 if (!col) continue;
                 if (_attacker && col.transform.root == (_attacker.transform?.root)) continue;
 
-                var brain = col.GetComponentInParent<OneBitRob.AI.UnitBrain>();
+                var brain = col.GetComponentInParent<UnitBrain>();
                 if (brain == null || brain.Health == null) continue;
 
-                if (!ApplyOnHit(brain, _lastPos)) { Despawn(); return true; }
+                if (!ApplyOnHit(brain, _lastPos))
+                {
+                    Despawn();
+                    return true;
+                }
             }
+
             return false;
         }
 
@@ -127,6 +137,7 @@ namespace OneBitRob.ECS
                     ? Physics.SphereCastNonAlloc(_lastPos, _radius, _dir, s_Hits, stepLen, ~0, QueryTriggerInteraction.Collide)
                     : Physics.RaycastNonAlloc(_lastPos, _dir, s_Hits, stepLen, ~0, QueryTriggerInteraction.Collide);
             }
+
             if (count <= 0) return 0;
 
             int best = ClosestValidEnemyHit(count);
@@ -137,6 +148,7 @@ namespace OneBitRob.ECS
                 if (key != 0) _hitEntityKeys.Add(key);
                 return count;
             }
+
             return 0;
         }
 
@@ -152,7 +164,7 @@ namespace OneBitRob.ECS
 
                 if (_attacker && col.transform.root == _attacker.transform.root) continue;
 
-                var brain = col.GetComponentInParent<OneBitRob.AI.UnitBrain>();
+                var brain = col.GetComponentInParent<UnitBrain>();
                 if (brain == null) continue;
 
                 int key = ExtractEntityKey(col);
@@ -167,6 +179,7 @@ namespace OneBitRob.ECS
                     best = i;
                 }
             }
+
             return best;
         }
 
@@ -174,13 +187,13 @@ namespace OneBitRob.ECS
         {
             Vector3 newPos = _lastPos + _dir * distance;
             transform.position = newPos;
-            _lastPos  = newPos;
+            _lastPos = newPos;
             _remaining -= distance;
         }
 
         private bool ResolveImpactAndMaybeContinue(RaycastHit hit)
         {
-            var brain = hit.collider.GetComponentInParent<OneBitRob.AI.UnitBrain>();
+            var brain = hit.collider.GetComponentInParent<UnitBrain>();
             if (brain != null)
             {
                 bool continueFlying = ApplyOnHit(brain, hit.point);
@@ -191,26 +204,27 @@ namespace OneBitRob.ECS
                     return true;
                 }
             }
+
             return false;
         }
 
         protected static int ExtractEntityKey(Collider col)
         {
-            var brain = col ? col.GetComponentInParent<OneBitRob.AI.UnitBrain>() : null;
+            var brain = col ? col.GetComponentInParent<UnitBrain>() : null;
             if (!brain) return 0;
-            var ent = OneBitRob.AI.UnitBrainRegistry.GetEntity(brain.gameObject);
+            var ent = UnitBrainRegistry.GetEntity(brain.gameObject);
             return ent == Unity.Entities.Entity.Null ? brain.gameObject.GetInstanceID() : (ent.Index ^ (ent.Version << 8));
         }
 
         protected void Despawn()
         {
             var poolable = GetComponent<MMPoolableObject>();
-            if (poolable != null) poolable.Destroy();
-            else gameObject.SetActive(false);
+            if (poolable != null)
+                poolable.Destroy();
+            else
+                gameObject.SetActive(false);
         }
 
-        /// <summary>Derived classes implement the actual hit behavior.
-        /// Return true to continue flying (pierce), false to stop.</summary>
-        protected abstract bool ApplyOnHit(OneBitRob.AI.UnitBrain targetBrain, Vector3 point);
+        protected abstract bool ApplyOnHit(UnitBrain targetBrain, Vector3 point);
     }
 }

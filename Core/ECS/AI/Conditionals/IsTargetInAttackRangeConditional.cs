@@ -1,11 +1,9 @@
 ﻿using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Success when target is within attack range (pure ECS flag)")]
     public class IsTargetInAttackRangeConditional : AbstractTaskAction<IsTargetInAttackRangeComponent, IsTargetInAttackRangeTag, IsTargetInAttackRangeSystem>, IConditional
     {
         protected override IsTargetInAttackRangeComponent CreateBufferElement(ushort runtimeIndex) => new() { Index = runtimeIndex };

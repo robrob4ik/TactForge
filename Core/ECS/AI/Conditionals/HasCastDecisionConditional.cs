@@ -1,11 +1,9 @@
 ﻿using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Success only if SpellDecisionSystem produced a CastRequest this frame")]
     public class HasCastDecisionConditional : AbstractTaskAction<HasCastDecisionComponent, HasCastDecisionTag, HasCastDecisionSystem>, IConditional
     {
         protected override HasCastDecisionComponent CreateBufferElement(ushort runtimeIndex) => new HasCastDecisionComponent { Index = runtimeIndex };

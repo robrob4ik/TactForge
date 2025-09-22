@@ -1,11 +1,9 @@
 ﻿using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Unit’s combat style is Ranged (pure ECS)")]
     public class IsRangedConditional : AbstractTaskAction<IsRangedComponent, IsRangedTag, IsRangedSystem>, IConditional
     {
         protected override IsRangedComponent CreateBufferElement(ushort runtimeIndex) => new() { Index = runtimeIndex };

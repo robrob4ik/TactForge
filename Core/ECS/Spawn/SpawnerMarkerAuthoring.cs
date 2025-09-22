@@ -33,16 +33,4 @@ namespace OneBitRob.ECS
         }
         
     }
-    
-    
-    
-    internal class SpawnerMarkerBaker : Baker<SpawnerMarkerAuthoring>
-    {
-        public override void Bake(SpawnerMarkerAuthoring authoring)
-        {
-            var entity = GetEntity(TransformUsageFlags.Dynamic);
-
-            AddComponent(entity, new SpawnerMarker { Type = authoring.Type });
-        }
-    }
 }

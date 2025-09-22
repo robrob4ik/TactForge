@@ -1,5 +1,4 @@
-﻿// Assets/PROJECT/Scripts/Runtime/ECS/Core/Components/TargetingComponents.cs
-using Unity.Entities;
+﻿using Unity.Entities;
 using Unity.Mathematics;
 
 namespace OneBitRob.ECS

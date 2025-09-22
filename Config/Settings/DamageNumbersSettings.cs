@@ -8,6 +8,7 @@ namespace OneBitRob.FX
     {
         [Header("Prefabs (Mesh / Worldspace)")]
         public DamageNumber damagePrefab;
+
         public DamageNumber critPrefab;
         public DamageNumber healPrefab;
         public DamageNumber dotPrefab;
@@ -17,7 +18,9 @@ namespace OneBitRob.FX
 
         [Header("Lifecycle & Pooling")]
         public bool prewarmOnStart = true;
-        [Min(0)] public int extraPrewarmCalls = 0;
+
+        [Min(0)]
+        public int extraPrewarmCalls = 0;
 
         [Header("Placement")]
         [Tooltip("Vertical offset added to world pos if no follow target is given.")]
@@ -28,8 +31,9 @@ namespace OneBitRob.FX
 
         [Header("Culling")]
         public bool cullByCameraDistance = true;
+
         public float maxSpawnDistance = 60f;
-        
+
         [Header("Filtering")]
         [Tooltip("Don’t spawn popups whose absolute value is below this.")]
         public float minAbsoluteValue = 0.5f;

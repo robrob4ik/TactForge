@@ -1,14 +1,11 @@
-﻿using MoreMountains.Tools;
-using OneBitRob.AI;
+﻿using OneBitRob.AI;
 using OneBitRob.Anim;
 using ProjectDawn.Navigation.Hybrid;
-using Unity.Mathematics;
 using UnityEngine;
 
 namespace OneBitRob.EnigmaEngine
 {
-    [AddComponentMenu("Enigma Engine/Enigma Character Agents Navigation Movement")]
-    public class UnitComputeAnimationAbility : EnigmaCharacterAbility
+    public class UnitLocomotionController : EnigmaCharacterAbility
     {
         [Header("Rotation")]
         [Tooltip("Max yaw rotation speed (deg/s).")]
@@ -29,14 +26,6 @@ namespace OneBitRob.EnigmaEngine
         private AgentAuthoring _agent;
         private UnitBrain _unitBrain;
         private UnitAnimator _unitAnim;
-
-        protected const string _walkingAnimationParameterName = "Walking";
-        protected const string _combatStanceAnimationParameterName = "CombatStance";
-        protected const string _idleAnimationParameterName = "Idle";
-
-        protected int _walkingAnimationParameter;
-        protected int _combatStanceAnimationParameter;
-        protected int _idleAnimationParameter;
 
         protected override void Initialization()
         {
@@ -191,23 +180,11 @@ namespace OneBitRob.EnigmaEngine
             _character.transform.rotation = Quaternion.Euler(0f, nextYaw, 0f);
         }
 
-        protected override void InitializeAnimatorParameters()
-        {
-            RegisterAnimatorParameter(_walkingAnimationParameterName, AnimatorControllerParameterType.Bool, out _walkingAnimationParameter);
-            RegisterAnimatorParameter(_idleAnimationParameterName, AnimatorControllerParameterType.Bool, out _idleAnimationParameter);
-            RegisterAnimatorParameter(_combatStanceAnimationParameterName, AnimatorControllerParameterType.Bool, out _combatStanceAnimationParameter);
-        }
-
         private void UpdateMovementAnimators()
         {
             var vel = _agent ? new Vector3(_agent.Body.Velocity.x, 0f, _agent.Body.Velocity.z) : Vector3.zero;
             float maxSpeed = _unitBrain ? Mathf.Max(0.01f, _unitBrain.UnitDefinition.moveSpeed) : 4f;
             _unitAnim.ApplyMovement(_movement.CurrentState, vel, maxSpeed);
-            
-            // TODO remove legacy
-            MMAnimatorExtensions.UpdateAnimatorBool(_animator, _walkingAnimationParameter, (_movement.CurrentState == EnigmaCharacterStates.MovementStates.Walking), _character._animatorParameters, _character.RunAnimatorSanityChecks);
-            MMAnimatorExtensions.UpdateAnimatorBool(_animator, _idleAnimationParameter, (_movement.CurrentState == EnigmaCharacterStates.MovementStates.Idle), _character._animatorParameters, _character.RunAnimatorSanityChecks);
-            MMAnimatorExtensions.UpdateAnimatorBool(_animator, _combatStanceAnimationParameter, (_movement.CurrentState == EnigmaCharacterStates.MovementStates.CombatStance), _character._animatorParameters, _character.RunAnimatorSanityChecks);
         }
     }
 }

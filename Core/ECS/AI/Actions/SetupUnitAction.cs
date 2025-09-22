@@ -4,7 +4,6 @@ using OneBitRob.Core;
 using OneBitRob.ECS;
 using OneBitRob.VFX;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
@@ -12,7 +11,6 @@ using UnityEngine;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Basic setup of EnigmaEngine character")]
     public class SetupUnitAction : AbstractTaskAction<SetupUnitComponent, SetupUnitTag, SetupUnitSystem>, IAction
     {
         protected override SetupUnitComponent CreateBufferElement(ushort runtimeIndex) { return new SetupUnitComponent { Index = runtimeIndex }; }
@@ -37,7 +35,6 @@ namespace OneBitRob.AI
 
             brain.Setup();
 
-            // ── Health mirror
             int hp = 100;
             var def = brain != null ? brain.UnitDefinition : null;
             if (def != null) hp = def.health;
@@ -45,14 +42,12 @@ namespace OneBitRob.AI
             var hm = new HealthMirror { Current = hp, Max = hp };
             em.SetOrAdd(e, hm);
 
-            // ── Combat style from weapon type (1 = melee, 2 = ranged)
             byte style = 1;
             var weapon = def != null ? def.weapon : null;
             if (weapon is RangedWeaponDefinition) style = 2;
 
             em.SetOrAdd(e, new CombatStyle { Value = style });
 
-            // ── Retarget assist scaffolding
             float3 spawnPos = em.HasComponent<LocalTransform>(e) ? em.GetComponentData<LocalTransform>(e).Position : float3.zero;
 
             if (em.HasComponent<RetargetAssist>(e))
@@ -74,7 +69,6 @@ namespace OneBitRob.AI
             }
             if (!em.HasComponent<RetargetCooldown>(e)) em.AddComponentData(e, new RetargetCooldown { NextTime = 0 });
 
-            // ── Spell baseline (first slot only, unchanged logic)
             var spells = def != null ? def.unitSpells : null;
             bool hasSpell = spells != null && spells.Count > 0 && spells[0] != null;
             if (hasSpell)
@@ -140,13 +134,11 @@ namespace OneBitRob.AI
                 }
             }
 
-            // ── Stats scaffolding (unchanged)
             if (!em.HasComponent<UnitRuntimeStats>(e)) em.AddComponentData(e, UnitRuntimeStats.Defaults);
             if (!em.HasBuffer<StatModifier>(e))        em.AddBuffer<StatModifier>(e);
             if (!em.HasComponent<StatsDirtyTag>(e))    em.AddComponent<StatsDirtyTag>(e);
             if (def != null && def.baseScaling != null) StatsService.AddModifiers(e, def.baseScaling);
 
-            // ── UnitStatic consolidated gameplay tunables
             var us = new UnitStatic
             {
                 IsEnemy               = (byte)(def != null && def.isEnemy ? 1 : 0),
@@ -173,8 +165,7 @@ namespace OneBitRob.AI
                 TargetDetectionRange = def != null    ? Mathf.Max(0f, def.targetDetectionRange) : 100f
             };
             em.SetOrAdd(e, us);
-
-            // ── NEW: UnitWeaponStatic (formalized weapon gameplay tunables)
+            
             var uws = new UnitWeaponStatic
             {
                 CombatStyle = style,

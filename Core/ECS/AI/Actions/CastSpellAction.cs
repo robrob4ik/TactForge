@@ -1,7 +1,6 @@
 ﻿using OneBitRob.Debugging;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 using Unity.Transforms;
 using UnityEngine;
@@ -9,7 +8,6 @@ using float3 = Unity.Mathematics.float3;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("CastSpellAction")]
     public class CastSpellAction : AbstractTaskAction<CastSpellComponent, CastSpellTag, CastSpellSystem>, IAction
     {
         protected override CastSpellComponent CreateBufferElement(ushort runtimeIndex) => new CastSpellComponent { Index = runtimeIndex };

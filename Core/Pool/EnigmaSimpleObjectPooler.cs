@@ -1,4 +1,4 @@
-﻿// File: Assets/AssetsWithoutIndex/TopDownEngine/ThirdParty/MoreMountains/MMTools/Core/MMObjectPool/MMSimpleObjectPooler.cs
+﻿
 using UnityEngine;
 using System.Collections.Generic;
 using MoreMountains.Tools;

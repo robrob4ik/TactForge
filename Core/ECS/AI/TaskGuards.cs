@@ -15,6 +15,7 @@ namespace OneBitRob.AI
                 var f = em.GetComponentData<MovementLock>(e).Flags;
                 if ((f & (MovementLockFlags.Casting | MovementLockFlags.Attacking)) != 0) return true;
             }
+
             return false;
         }
     }

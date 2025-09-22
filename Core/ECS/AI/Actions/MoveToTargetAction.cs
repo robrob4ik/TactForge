@@ -1,7 +1,6 @@
 ﻿using OneBitRob.Constants;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -9,7 +8,6 @@ using Unity.Transforms;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Sets DesiredDestination to current Target position")]
     public class MoveToTargetAction : AbstractTaskAction<MoveToTargetComponent, MoveToTargetTag, MoveToTargetSystem>, IAction
     {
         protected override MoveToTargetComponent CreateBufferElement(ushort runtimeIndex) => new MoveToTargetComponent { Index = runtimeIndex };
@@ -18,7 +16,7 @@ namespace OneBitRob.AI
     public struct MoveToTargetComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }
     public struct MoveToTargetTag : IComponentData, IEnableableComponent { }
 
-     [DisableAutoCreation]
+    [DisableAutoCreation]
     [UpdateInGroup(typeof(AITaskSystemGroup))]
     public partial class MoveToTargetSystem : TaskProcessorSystem<MoveToTargetComponent, MoveToTargetTag>
     {
@@ -128,7 +126,7 @@ namespace OneBitRob.AI
             if (!canCheck) return;
 
             var wanted = default(FixedList128Bytes<byte>);
-            wanted.Add(brain.UnitDefinition.isEnemy ? OneBitRob.Constants.GameConstants.ALLY_FACTION : OneBitRob.Constants.GameConstants.ENEMY_FACTION);
+            wanted.Add(brain.UnitDefinition.isEnemy ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION);
 
             float range = ReadTargetDetectionRange(e, brain);
             float stop  = ReadStoppingDistance(e, brain);
@@ -179,8 +177,8 @@ namespace OneBitRob.AI
 
                 if (ra.NoProgressTime > stuckTime)
                 {
-                    var wanted = default(Unity.Collections.FixedList128Bytes<byte>);
-                    wanted.Add(brain.UnitDefinition.isEnemy ? OneBitRob.Constants.GameConstants.ALLY_FACTION : OneBitRob.Constants.GameConstants.ENEMY_FACTION);
+                    var wanted = default(FixedList128Bytes<byte>);
+                    wanted.Add(brain.UnitDefinition.isEnemy ? GameConstants.ALLY_FACTION : GameConstants.ENEMY_FACTION);
 
                     float range = ReadTargetDetectionRange(e, brain);
 
@@ -241,10 +239,10 @@ namespace OneBitRob.AI
             if (_unitStaticRO.HasComponent(e)) return _unitStaticRO[e].TargetDetectionRange;
             return brain.UnitDefinition != null ? math.max(0f, brain.UnitDefinition.targetDetectionRange) : 100f;
         }
-        private OneBitRob.ECS.RetargetingSettings ReadRetarget(Entity e, UnitBrain brain)
+        private RetargetingSettings ReadRetarget(Entity e, UnitBrain brain)
         {
             if (_unitStaticRO.HasComponent(e)) return _unitStaticRO[e].Retarget;
-            return new OneBitRob.ECS.RetargetingSettings
+            return new RetargetingSettings
             {
                 AutoSwitchMinDistance    = brain.UnitDefinition != null ? math.max(0f, brain.UnitDefinition.autoTargetMinSwitchDistance) : 0f,
                 RetargetCheckInterval    = brain.UnitDefinition != null ? math.max(0f, brain.UnitDefinition.retargetCheckInterval)       : 0f,

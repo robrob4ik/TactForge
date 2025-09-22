@@ -1,5 +1,5 @@
-﻿// File: OneBitRob/ECS/Brain_EcsToMono_WeaponProjectileBridgeSystem.cs
-
+﻿using OneBitRob.AI;
+using OneBitRob.Core;
 using OneBitRob.Debugging;
 using Unity.Entities;
 using UnityEngine;
@@ -16,7 +16,7 @@ namespace OneBitRob.ECS
                 if (!SystemAPI.IsComponentEnabled<EcsProjectileSpawnRequest>(entity)) continue;
                 var spawn = spawnRW.ValueRO;
 
-                var brain = OneBitRob.AI.UnitBrainRegistry.Get(entity);
+                var brain = UnitBrainRegistry.Get(entity);
                 if (brain && brain.UnitCombatController != null)
                 {
                     Vector3 origin = (Vector3)spawn.Origin;
@@ -30,7 +30,7 @@ namespace OneBitRob.ECS
                         spawn.CritChance, spawn.CritMultiplier,
                         spawn.PierceChance, spawn.PierceMaxTargets);
 
-                    DebugDraw.Ray(origin, dir * 1.2f, Color.red);
+                    DebugDraw.Ray(origin, dir * 1.2f, DebugPalette.ProjectilePath);
                 }
 
                 SystemAPI.SetComponentEnabled<EcsProjectileSpawnRequest>(entity, false);

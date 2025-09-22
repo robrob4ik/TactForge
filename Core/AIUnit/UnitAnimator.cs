@@ -2,7 +2,6 @@
 using OneBitRob.AI;
 using OneBitRob.Config;
 using OneBitRob.EnigmaEngine;
-using PROJECT.Scripts.Config.Definition;
 using UnityEngine;
 
 namespace OneBitRob.Anim
@@ -16,7 +15,6 @@ namespace OneBitRob.Anim
         LocomotionAnimationsDefinition _loc;
         float _blend;
 
-        // ── CHANGED: private cursors (no public / no authoring)
         int _nextMelee, _nextRangedPrepare, _nextRangedFire, _nextSpell;
 
         void Awake()
@@ -30,10 +28,9 @@ namespace OneBitRob.Anim
             _loc = ud?.locomotionAnimations;
             _blend = (_loc ? Mathf.Max(0f, _loc.defaultBlendSeconds) : 0.12f);
 
-            SeedCursors(); // ── NEW: deterministic per-instance start offsets
+            SeedCursors(); 
         }
 
-        // ── NEW: deterministic seeding so many units don’t sync on the same clip
         void SeedCursors()
         {
             int seed = GetStableSeed();
@@ -48,8 +45,7 @@ namespace OneBitRob.Anim
 
         int GetStableSeed()
         {
-            // Prefer deterministic ECS entity data if available
-            var ent = OneBitRob.AI.UnitBrainRegistry.GetEntity(gameObject);
+            var ent = UnitBrainRegistry.GetEntity(gameObject);
             if (ent != Unity.Entities.Entity.Null)
                 return (ent.Index ^ (ent.Version << 16) ^ GetInstanceID());
             return GetInstanceID();

@@ -56,6 +56,8 @@ namespace OneBitRob.ECS
                         var monoBrain = go.GetComponent<UnitBrain>();
                         monoBrain?.SetEntity(brainEnt);
 
+                        UnitStaticSetup.Apply(em, brainEnt, monoBrain);
+
                         // 4) Baseline ECS shell (mirrors SpawnerSystem)
                         em.AddComponent(brainEnt, ComponentType.ReadOnly<AgentTag>());
                         em.AddComponentData(brainEnt, new SpatialHashTarget { Faction = req.Faction });

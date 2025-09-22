@@ -1,7 +1,6 @@
 ﻿using OneBitRob.Config;
 using UnityEngine;
 using Sirenix.OdinInspector;
-using OneBitRob.FX;
 
 namespace OneBitRob
 {
@@ -41,14 +40,17 @@ namespace OneBitRob
 
         [BoxGroup("Feedbacks")]
         [LabelText("Prepare Feedback")]
-        [AssetsOnly] public FeedbackDefinition prepareFeedback;
+        [AssetsOnly]
+        public FeedbackDefinition prepareFeedback;
 
         [BoxGroup("Feedbacks")]
         [LabelText("Fire Feedback")]
-        [AssetsOnly] public FeedbackDefinition fireFeedback;
+        [AssetsOnly]
+        public FeedbackDefinition fireFeedback;
 
         [BoxGroup("Feedbacks")]
-        [LabelText("Impact Feedback")]            
-        [AssetsOnly] public FeedbackDefinition impactFeedback;
+        [LabelText("Impact Feedback")]
+        [AssetsOnly]
+        public FeedbackDefinition impactFeedback;
     }
 }

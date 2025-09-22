@@ -2,7 +2,6 @@
 using UnityEngine;
 using UnityEngine.Serialization;
 using Sirenix.OdinInspector;
-using OneBitRob.FX;
 
 namespace OneBitRob
 {
@@ -93,8 +92,7 @@ namespace OneBitRob
         [ShowIf("@Kind == SpellKind.EffectOverTimeArea")]
         [LabelText("Area Radius"), SuffixLabel("units", true), MinValue(0f)]
         public float AreaRadius = 3f;
-
-        // Projectile & muzzle (used by ProjectileLine AND Chain)
+        
         [BoxGroup("Projectile")]
         [ShowIf("@Kind == SpellKind.ProjectileLine || Kind == SpellKind.Chain")]
         [LabelText("Projectile Id")]
@@ -132,7 +130,7 @@ namespace OneBitRob
         [BoxGroup("VFX & AOE Visuals")]
         [LabelText("Area VFX Id")]
         public string AreaVfxId = "";
-        
+
         [ShowIf("@Kind == SpellKind.Summon")]
         [LabelText("Summon Prefab"), AssetsOnly]
         public GameObject SummonPrefab;
@@ -179,6 +177,5 @@ namespace OneBitRob
         [AssetsOnly]
         [ShowIf("@Kind == SpellKind.ProjectileLine || Kind == SpellKind.Chain")]
         public FeedbackDefinition perTargetHitFeedback;
-        
     }
 }

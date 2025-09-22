@@ -1,6 +1,8 @@
 ﻿using OneBitRob.AI;
 using Unity.Jobs;
 
+[assembly: RegisterGenericJobType(typeof(CollectRunningJob<AssignBannerComponent, AssignBannerTag>))]
+[assembly: RegisterGenericJobType(typeof(CollectRunningJob<MoveToBannerComponent, MoveToBannerTag>))]
 [assembly: RegisterGenericJobType(typeof(CollectRunningJob<AttackTargetComponent, AttackTargetTag>))]
 [assembly: RegisterGenericJobType(typeof(CollectRunningJob<CastSpellComponent, CastSpellTag>))]
 [assembly: RegisterGenericJobType(typeof(CollectRunningJob<MoveToTargetComponent, MoveToTargetTag>))]
@@ -12,5 +14,5 @@ using Unity.Jobs;
 [assembly: RegisterGenericJobType(typeof(CollectRunningJob<IsRangedComponent, IsRangedTag>))]
 [assembly: RegisterGenericJobType(typeof(CollectRunningJob<IsTargetAliveComponent, IsTargetAliveTag>))]
 [assembly: RegisterGenericJobType(typeof(CollectRunningJob<IsMeleeComponent, IsMeleeTag>))]
-[assembly: RegisterGenericJobType(typeof(CollectRunningJob<IsRangedComponent, IsRangedTag>))]
+[assembly: RegisterGenericJobType(typeof(CollectRunningJob<IsAllyComponent, IsAllyTag>))]
 [assembly: RegisterGenericJobType(typeof(CollectRunningJob<SetupUnitComponent, SetupUnitTag>))]

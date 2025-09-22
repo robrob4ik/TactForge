@@ -25,11 +25,11 @@ namespace OneBitRob
         public float attackCooldownJitter = 0.2f;
 
         [BoxGroup("Criticals")]
-        [LabelText("Crit Chance"), PropertyRange(0f, 1f)]
+        [PropertyRange(0f, 1f)]
         public float critChance = 0f;
 
         [BoxGroup("Criticals")]
-        [LabelText("Crit Multiplier"), MinValue(1f), SuffixLabel("x", true)]
+        [MinValue(1f), SuffixLabel("x", true)]
         public float critMultiplier = 2f;
     }
 }

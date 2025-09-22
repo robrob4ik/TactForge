@@ -1,8 +1,8 @@
 ﻿using UnityEngine;
 
-namespace PROJECT.Scripts.Config.Definition
+namespace OneBitRob
 {
-    [CreateAssetMenu(menuName = "TactForge/Definition/Locomotion Animations Definition", fileName = "LocomotionAnimations")]
+    [CreateAssetMenu(menuName = "TactForge/Definition/Locomotion Animations Definition", fileName = "LocomotionAnimationsDefinition")]
     public sealed class LocomotionAnimationsDefinition : ScriptableObject
     {
         [Header("Movement (loops)")]

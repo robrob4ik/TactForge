@@ -1,11 +1,9 @@
 ﻿using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Unit’s combat style is Melee (pure ECS)")]
     public class IsMeleeConditional : AbstractTaskAction<IsMeleeComponent, IsMeleeTag, IsMeleeSystem>, IConditional
     {
         protected override IsMeleeComponent CreateBufferElement(ushort runtimeIndex) => new() { Index = runtimeIndex };

@@ -1,8 +1,8 @@
+using Unity.Entities;
+using UnityEngine;
+
 namespace OneBitRob.ECS
 {
-    using Unity.Entities;
-    using UnityEngine;
-
     public class SpawnerAuthoring : MonoBehaviour
     {
         [SerializeField] protected SpawnerSettings m_SpawnDefinition;

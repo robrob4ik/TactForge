@@ -1,11 +1,9 @@
 ﻿using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Returns Success while the current target is alive (pure ECS)")]
     public class IsTargetAliveConditional : AbstractTaskAction<IsTargetAliveComponent, IsTargetAliveTag, IsTargetAliveSystem>, IConditional
     {
         protected override IsTargetAliveComponent CreateBufferElement(ushort runtimeIndex) => new() { Index = runtimeIndex };

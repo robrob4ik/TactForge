@@ -1,6 +1,4 @@
-﻿// File: OneBitRob/AI/AttackTargetSystem.cs
-
-using OneBitRob.ECS;
+﻿using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Unity.Entities;
 
@@ -8,8 +6,7 @@ namespace OneBitRob.AI
 {
     public class AttackTargetAction : AbstractTaskAction<AttackTargetComponent, AttackTargetTag, AttackTargetSystem>, IAction
     {
-        protected override AttackTargetComponent CreateBufferElement(ushort runtimeIndex)
-            => new AttackTargetComponent { Index = runtimeIndex };
+        protected override AttackTargetComponent CreateBufferElement(ushort runtimeIndex) => new AttackTargetComponent { Index = runtimeIndex };
     }
 
     public struct AttackTargetComponent : IBufferElementData, ITaskCommand { public ushort Index { get; set; } }

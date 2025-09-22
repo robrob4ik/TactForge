@@ -15,9 +15,14 @@ namespace OneBitRob
         
         private void Awake()
         {
-            if (combatLayersSettings) CombatLayers.Set(combatLayersSettings);
-            if (damageNumbersSettings) DamageNumbersManager.SetProfile(damageNumbersSettings);
-            if (debugSettings) DebugDraw.SetSettings(debugSettings);
+            if (!combatLayersSettings) Debug.LogError("[MainGameManager] CombatLayersSettings missing.", this);
+            else CombatLayers.Set(combatLayersSettings);
+
+            if (!damageNumbersSettings) Debug.LogError("[MainGameManager] DamageNumbersSettings missing.", this);
+            else DamageNumbersManager.SetProfile(damageNumbersSettings);
+
+            if (!debugSettings) Debug.LogError("[MainGameManager] DebugSettings missing. DebugDraw will throw on use.", this);
+            DebugDraw.SetSettings(debugSettings);
         }
     }
 }

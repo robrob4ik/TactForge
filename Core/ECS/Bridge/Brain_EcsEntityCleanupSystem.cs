@@ -1,7 +1,4 @@
-﻿// File: Assets/PROJECT/Scripts/ECS/Brain/Brain_EcsEntityCleanupSystem.cs
-
-using System.Reflection;
-using GPUInstancerPro.PrefabModule;
+﻿using GPUInstancerPro.PrefabModule;
 using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
@@ -14,7 +11,6 @@ namespace OneBitRob.ECS
     [UpdateInGroup(typeof(LateSimulationSystemGroup), OrderLast = true)]
     public partial class Brain_EcsEntityCleanupSystem : SystemBase
     {
-        // Let death anim + nested FX finish
         private const float DeathDespawnDelaySeconds = 1.0f;
 
         protected override void OnUpdate()

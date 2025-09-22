@@ -20,7 +20,8 @@ namespace OneBitRob.ECS
         {
             _targetsQuery = state.GetEntityQuery(
                 ComponentType.ReadOnly<SpatialHashTarget>(),
-                ComponentType.ReadOnly<LocalTransform>());
+                ComponentType.ReadOnly<LocalTransform>()
+            );
 
             state.RequireForUpdate<SpatialHashSettings>();
             _gridNative = new NativeParallelMultiHashMap<int, Entity>(1024, Allocator.Persistent);

@@ -1,13 +1,10 @@
 ﻿using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("CanCastSpell (Conditional)")]
-    public class CanCastSpellConditional
-        : AbstractTaskAction<CanCastSpellComponent, CanCastSpellTag, CanCastSpellSystem>, IConditional
+    public class CanCastSpellConditional : AbstractTaskAction<CanCastSpellComponent, CanCastSpellTag, CanCastSpellSystem>, IConditional
     {
         protected override CanCastSpellComponent CreateBufferElement(ushort runtimeIndex) => new CanCastSpellComponent { Index = runtimeIndex };
     }

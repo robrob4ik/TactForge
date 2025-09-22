@@ -9,18 +9,12 @@ namespace OneBitRob.FX
     public struct DamageNumbersParams
     {
         public DamagePopupKind Kind;
-        public Vector3 Position;      // used if Follow is null
-        public Transform Follow;      // optional follow target
-        public float Amount;          // positive magnitude; we format
-        public Color? OverrideColor;  // optional color override
+        public Vector3 Position;     
+        public Transform Follow;     
+        public float Amount;      
+        public Color? OverrideColor; 
     }
-
-    /// <summary>
-    /// Tiny, predictable Damage Numbers bridge:
-    /// - Optional explicit camera (SetCamera). Falls back to MainCamera / any camera.
-    /// - No Resources / magic paths. Profile is injected via GameConfigInstaller.
-    /// - Safe if profile isn't set (logs once, ignores popups).
-    /// </summary>
+    
     [DefaultExecutionOrder(-10000)]
     public sealed class DamageNumbersManager : MonoBehaviour
     {
@@ -30,8 +24,8 @@ namespace OneBitRob.FX
         [FormerlySerializedAs("_profile")]
         [SerializeField] private DamageNumbersSettings profile;
 
-        private static Camera _overrideCamera;  // optional: set from your bootstrap
-        private Camera _cachedCamera;           // last good camera
+        private static Camera _overrideCamera;  
+        private Camera _cachedCamera;       
         private bool _warnedNoProfile;
         private bool _warnedNoCamera;
 
@@ -44,7 +38,7 @@ namespace OneBitRob.FX
             if (_instance) return _instance;
 
             var go = new GameObject("[DamageNumbersManager]");
-            DontDestroyOnLoad(go);                        // root object we just created
+            DontDestroyOnLoad(go);                      
             _instance = go.AddComponent<DamageNumbersManager>();
             return _instance;
         }

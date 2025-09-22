@@ -1,9 +1,7 @@
-﻿// File: OneBitRob/AI/MeleeHitResolutionSystem.cs
-
+﻿using OneBitRob.Core;
 using OneBitRob.Debugging;
 using OneBitRob.ECS;
 using OneBitRob.FX;
-using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
@@ -22,20 +20,26 @@ namespace OneBitRob.AI
         {
             var em = state.EntityManager;
 
-            foreach (var (reqRW, e) in SystemAPI.Query<RefRW<MeleeHitRequest>>().WithEntityAccess())
+            foreach (var (reqRW, attacker) in SystemAPI.Query<RefRW<MeleeHitRequest>>().WithEntityAccess())
             {
-                if (!SystemAPI.IsComponentEnabled<MeleeHitRequest>(e)) continue;
+                if (!SystemAPI.IsComponentEnabled<MeleeHitRequest>(attacker)) continue;
+
                 var req = reqRW.ValueRO;
+                var attackerBrain = UnitBrainRegistry.Get(attacker);
+                if (attackerBrain == null)
+                {
+                    SystemAPI.SetComponentEnabled<MeleeHitRequest>(attacker, false);
+                    continue;
+                }
 
-                var brain = UnitBrainRegistry.Get(e);
-                if (brain == null) { SystemAPI.SetComponentEnabled<MeleeHitRequest>(e, false); continue; }
-
+#if UNITY_EDITOR
                 DebugDrawVolume(req);
-
+#endif
                 int hitCount = TryGetHits(in req);
-                if (hitCount > 0) ProcessHits(em, e, brain, in req, hitCount);
+                if (hitCount > 0)
+                    ProcessHits(em, attacker, attackerBrain, in req, hitCount);
 
-                SystemAPI.SetComponentEnabled<MeleeHitRequest>(e, false);
+                SystemAPI.SetComponentEnabled<MeleeHitRequest>(attacker, false);
             }
         }
 
@@ -52,71 +56,83 @@ namespace OneBitRob.AI
         {
             bool attackerIsEnemy = attackerBrain.UnitDefinition != null && attackerBrain.UnitDefinition.isEnemy;
 
-            float3 forward = math.normalizesafe(req.Forward);
-            float cosHalf  = math.cos(req.HalfAngleRad);
-            float cosHalfSq= cosHalf * cosHalf;
-            float rangeSq  = req.Range * req.Range;
-            int   maxT     = math.max(1, req.MaxTargets);
-            int   applied  = 0;
+            float3 forward   = math.normalizesafe(req.Forward);
+            float  cosHalf   = math.cos(req.HalfAngleRad);
+            float  cosHalfSq = cosHalf * cosHalf;
+            float  rangeSq   = req.Range * req.Range;
+            int    maxTargets   = math.max(1, req.MaxTargets);
+            int    appliedCount = 0;
 
-            var meleeDef = attackerBrain.UnitDefinition?.weapon as OneBitRob.MeleeWeaponDefinition;
+            var meleeDef = attackerBrain.UnitDefinition?.weapon as MeleeWeaponDefinition;
 
             for (int i = 0; i < hitCount; i++)
             {
                 var col = s_SphereOverlapHits[i];
                 if (!col) continue;
 
-                if (attackerBrain && col.transform.root == attackerBrain.transform.root)
-                    continue;
+                if (attackerBrain && col.transform.root == attackerBrain.transform.root) continue;
 
-                if (!ShouldAffectTarget(col, attackerIsEnemy, in req, forward, cosHalfSq, rangeSq, out var targetBrain, out var to))
-                    continue;
+                if (!ShouldAffectTarget(col, attackerIsEnemy, in req, forward, cosHalfSq, rangeSq, out var targetBrain, out var toDelta)) continue;
 
-                DebugDraw.Line((Vector3)req.Origin, targetBrain.transform.position, new Color(0.2f, 1f, 0.2f, 0.95f));
-                DebugDraw.Line((Vector3)req.Origin + Vector3.up * 0.03f, targetBrain.transform.position + Vector3.up * 0.03f, new Color(1f, 0.95f, 0.2f, 1f));
+#if UNITY_EDITOR
+                DebugDraw.Line((Vector3)req.Origin, targetBrain.transform.position, DebugPalette.MeleeArc);
+                DebugDraw.Line((Vector3)req.Origin + Vector3.up * 0.03f,
+                               targetBrain.transform.position + Vector3.up * 0.03f,
+                               DebugPalette.ProjectilePath);
+#endif
 
-                ApplyDamageAndFX(in req, attackerBrain, targetBrain, ((Vector3)to).normalized, meleeDef);
+                ApplyDamageAndFX(in req, attackerBrain, targetBrain, ((Vector3)toDelta).normalized, meleeDef);
 
-                if (++applied >= maxT) break;
+                if (++appliedCount >= maxTargets) break;
             }
         }
 
-        private static bool ShouldAffectTarget(Collider col, bool attackerIsEnemy, in MeleeHitRequest req,
-                                               float3 forward, float cosHalfSq, float rangeSq,
-                                               out UnitBrain targetBrain, out float3 to)
+        private static bool ShouldAffectTarget(
+            Collider col, bool attackerIsEnemy, in MeleeHitRequest req,
+            float3 forward, float cosHalfSq, float rangeSq,
+            out UnitBrain targetBrain, out float3 toDelta)
         {
             targetBrain = col.GetComponentInParent<UnitBrain>();
             if (targetBrain == null || targetBrain.Health == null || !targetBrain.IsTargetAlive())
-            { to = default; return false; }
+            {
+                toDelta = default;
+                return false;
+            }
 
             bool targetIsEnemy = targetBrain.UnitDefinition != null && targetBrain.UnitDefinition.isEnemy;
-            if (attackerIsEnemy == targetIsEnemy) { to = default; return false; }
+            if (attackerIsEnemy == targetIsEnemy)
+            {
+                toDelta = default;
+                return false;
+            }
 
-            to = (float3)targetBrain.transform.position - req.Origin;
-            float sq = math.lengthsq(to);
-            if (sq > rangeSq) return false;
+            toDelta = (float3)targetBrain.transform.position - req.Origin;
+            float toDistSq = math.lengthsq(toDelta);
+            if (toDistSq > rangeSq) return false;
 
-            float dot = math.dot(forward, to);
+            float dot = math.dot(forward, toDelta);
             if (dot <= 0f) return false;
-            if ((dot * dot) < (cosHalfSq * sq)) return false;
+            if ((dot * dot) < (cosHalfSq * toDistSq)) return false;
 
             return true;
         }
 
-        private static void ApplyDamageAndFX(in MeleeHitRequest req, UnitBrain attackerBrain, UnitBrain targetBrain, Vector3 impactDir, OneBitRob.MeleeWeaponDefinition meleeDef)
+        private static void ApplyDamageAndFX(in MeleeHitRequest req, UnitBrain attackerBrain, UnitBrain targetBrain, Vector3 impactDir, MeleeWeaponDefinition meleeDef)
         {
             bool  isCrit = (req.CritChance > 0f) && (UnityEngine.Random.value < req.CritChance);
             float dmg    = isCrit ? req.Damage * math.max(1f, req.CritMultiplier) : req.Damage;
 
             targetBrain.Health.Damage(dmg, attackerBrain.gameObject, 0f, req.Invincibility, impactDir);
 
-            DamageNumbersManager.Popup(new DamageNumbersParams
-            {
-                Kind     = isCrit ? DamagePopupKind.CritDamage : DamagePopupKind.Damage,
-                Follow   = targetBrain.transform,
-                Position = targetBrain.transform.position,
-                Amount   = dmg
-            });
+            DamageNumbersManager.Popup(
+                new DamageNumbersParams
+                {
+                    Kind     = isCrit ? DamagePopupKind.CritDamage : DamagePopupKind.Damage,
+                    Follow   = targetBrain.transform,
+                    Position = targetBrain.transform.position,
+                    Amount   = dmg
+                }
+            );
 
             if (meleeDef != null && meleeDef.hitFeedback != null)
                 FeedbackService.TryPlay(meleeDef.hitFeedback, targetBrain.transform, targetBrain.transform.position);
@@ -125,49 +141,19 @@ namespace OneBitRob.AI
 #if UNITY_EDITOR
         private static void DebugDrawVolume(in MeleeHitRequest req)
         {
-            Color sphereColor = new Color(1f, 0f, 0f, 0.28f);
-            DrawWireSphere(req.Origin, req.Range, sphereColor, 0.25f);
+            DebugDraw.WireSphereXYZ(req.Origin, req.Range, DebugPalette.AttackRange);
 
             Vector3 origin = (Vector3)req.Origin;
-            Vector3 fwd = ((Vector3)req.Forward).normalized;
-            DebugDraw.Ray(origin, fwd * (req.Range * 0.9f), Color.red);
+            Vector3 fwd    = ((Vector3)req.Forward).normalized;
 
-            float deg = degrees(req.HalfAngleRad);
-            Quaternion left  = Quaternion.AngleAxis(-deg, Vector3.up);
-            Quaternion right = Quaternion.AngleAxis( deg, Vector3.up);
-            DebugDraw.Ray(origin, (left  * fwd) * req.Range, new Color(1f, 0.6f, 0.2f, 0.95f));
-            DebugDraw.Ray(origin, (right * fwd) * req.Range, new Color(1f, 0.6f, 0.2f, 0.95f));
-        }
+            DebugDraw.Ray(origin, fwd * (req.Range * 0.9f), DebugPalette.AttackRange);
 
-        private static void DrawWireSphere(float3 center, float radius, Color color, float duration)
-        {
-            const int segments = 24;
-            Vector3 c = (Vector3)center;
+            float deg    = degrees(req.HalfAngleRad);
+            Quaternion l = Quaternion.AngleAxis(-deg, Vector3.up);
+            Quaternion r = Quaternion.AngleAxis(deg,  Vector3.up);
 
-            Vector3 prev = c + Vector3.right * radius;
-            for (int i = 1; i <= segments; i++)
-            {
-                float t = (i / (float)segments) * 2f * Mathf.PI;
-                Vector3 p = c + new Vector3(Mathf.Cos(t) * radius, Mathf.Sin(t) * radius, 0f);
-                DebugDraw.Line(prev, p, color);
-                prev = p;
-            }
-            prev = c + Vector3.forward * radius;
-            for (int i = 1; i <= segments; i++)
-            {
-                float t = (i / (float)segments) * 2f * Mathf.PI;
-                Vector3 p = c + new Vector3(Mathf.Cos(t) * radius, 0f, Mathf.Sin(t) * radius);
-                DebugDraw.Line(prev, p, color);
-                prev = p;
-            }
-            prev = c + Vector3.up * radius;
-            for (int i = 1; i <= segments; i++)
-            {
-                float t = (i / (float)segments) * 2f * Mathf.PI;
-                Vector3 p = c + new Vector3(0f, Mathf.Cos(t) * radius, Mathf.Sin(t) * radius);
-                DebugDraw.Line(prev, p, color);
-                prev = p;
-            }
+            DebugDraw.Ray(origin, (l * fwd) * req.Range, DebugPalette.Warning);
+            DebugDraw.Ray(origin, (r * fwd) * req.Range, DebugPalette.Warning);
         }
 #endif
     }

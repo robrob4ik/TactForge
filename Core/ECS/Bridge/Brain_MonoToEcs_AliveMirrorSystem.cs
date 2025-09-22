@@ -1,5 +1,4 @@
-﻿// Assets/PROJECT/Scripts/ECS/Brain_MonoToEcs_AliveMirrorSystem.cs
-using OneBitRob.AI;
+﻿using OneBitRob.AI;
 using OneBitRob.Anim;
 using Unity.Collections;
 using Unity.Entities;

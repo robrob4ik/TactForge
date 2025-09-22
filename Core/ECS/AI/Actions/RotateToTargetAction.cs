@@ -1,12 +1,10 @@
 ﻿using Opsive.BehaviorDesigner.Runtime.Tasks;
-using Opsive.GraphDesigner.Runtime;
 using Unity.Entities;
 using Unity.Transforms;
 using OneBitRob.ECS;
 
 namespace OneBitRob.AI
 {
-    [NodeDescription("Rotating to target (writes DesiredFacing)")]
     public class RotateToTargetAction : AbstractTaskAction<RotateToTargetComponent, RotateToTargetTag, RotateToTargetSystem>, IAction
     {
         protected override RotateToTargetComponent CreateBufferElement(ushort runtimeIndex) => new RotateToTargetComponent { Index = runtimeIndex };
