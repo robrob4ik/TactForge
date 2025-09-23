@@ -4,6 +4,7 @@ using OneBitRob.Constants;
 using OneBitRob.ECS;
 using Opsive.BehaviorDesigner.Runtime.Tasks;
 using Unity.Collections;
+using Unity.Mathematics;
 using static Unity.Mathematics.math;
 using float3 = Unity.Mathematics.float3;
 
@@ -23,11 +24,15 @@ namespace OneBitRob.AI
     {
     }
 
+
     [UpdateInGroup(typeof(AIPlanPhaseGroup))]
     public partial class AssignBannerSystem : TaskProcessorSystem<AssignBannerComponent, AssignBannerTag>
     {
         ComponentLookup<LocalTransform> _ltwRO;
         EntityQuery _bannerQ;
+
+        // NEW
+        private EntityCommandBuffer _ecb;
 
         protected override void OnCreate()
         {
@@ -39,14 +44,19 @@ namespace OneBitRob.AI
         protected override void OnUpdate()
         {
             _ltwRO.Update(this);
+
+            // NEW: start ECB, run traversal, then playback
+            _ecb = new EntityCommandBuffer(Allocator.Temp);
             base.OnUpdate();
+            _ecb.Playback(EntityManager);
+            _ecb.Dispose();
         }
 
         protected override TaskStatus Execute(Entity e, UnitBrain _)
         {
             var em = EntityManager;
 
-            if (_bannerQ.CalculateEntityCount() == 0) return TaskStatus.Failure;
+            if (_bannerQ.CalculateEntityCount() == 0) return TaskStatus.Success;
             if (em.HasComponent<BannerAssignment>(e)) return TaskStatus.Success;
 
             byte faction = GameConstants.ALLY_FACTION;
@@ -58,6 +68,7 @@ namespace OneBitRob.AI
 
             var banners = _bannerQ.ToEntityArray(Allocator.Temp);
             var bData = _bannerQ.ToComponentDataArray<Banner>(Allocator.Temp);
+
             float3 selfP = _ltwRO.HasComponent(e) ? _ltwRO[e].Position : float3.zero;
 
             Entity best = Entity.Null;
@@ -68,8 +79,9 @@ namespace OneBitRob.AI
             {
                 var b = bData[i];
                 if (b.Faction != faction) continue;
+
                 float3 p = _ltwRO.HasComponent(banners[i]) ? _ltwRO[banners[i]].Position : b.Position;
-                float d2 = distancesq(selfP, p);
+                float d2 = math.distancesq(selfP, p);
                 if (d2 < bestD2)
                 {
                     bestD2 = d2;
@@ -80,15 +92,18 @@ namespace OneBitRob.AI
 
             banners.Dispose();
             bData.Dispose();
-            if (best == Entity.Null) return TaskStatus.Failure;
+
+            if (best == Entity.Null) return TaskStatus.Success;
 
             float seed = (e.Index ^ (e.Version << 8)) * 0.0001220703125f;
             float ang = seed * 6.2831853f;
             float r = 0.35f;
-            float3 offset = new float3(cos(ang) * r, 0f, sin(ang) * r);
+            float3 offset = new float3(math.cos(ang) * r, 0f, math.sin(ang) * r);
 
-            em.AddComponentData(
-                e, new BannerAssignment
+            // CHANGED: defer structural write
+            _ecb.AddComponent(
+                e,
+                new BannerAssignment
                 {
                     Banner = best,
                     Strategy = bestB.Strategy,

@@ -8,10 +8,10 @@ namespace OneBitRob.Spawning
     [DisallowMultipleComponent]
     public sealed class AdvancedSpawnerAuthoring : MonoBehaviour
     {
-        [Header("Enemy Waves (optional)")]
-        public EnemyWavesDefinition enemyWaves;
+        [Header("Enemy Spawn Definition (Wave-based)")]
+        public EnemyWavesDefinition enemySpawns;
 
-        [Header("Allies Periodic Spawns (optional)")]
+        [Header("Allies Spawn Definition")]
         public AllySpawnDefinition allySpawns;
     }
 
@@ -19,18 +19,16 @@ namespace OneBitRob.Spawning
     {
         public override void Bake(AdvancedSpawnerAuthoring authoring)
         {
-            // Single runtime entity carrying the managed refs/timer
             var e = GetEntity(TransformUsageFlags.None);
 
-            if (authoring.enemyWaves != null)
+            if (authoring.enemySpawns != null)
             {
-                AddComponentObject(e, new EnemyWavesRef { Waves = authoring.enemyWaves });
+                AddComponentObject(e, new EnemySpawnDefinitionRef { EnemySpawnDefinition = authoring.enemySpawns });
             }
 
             if (authoring.allySpawns != null)
             {
-                AddComponentObject(e, new AllySpawnSetRef { Set = authoring.allySpawns });
-                // Initialize to force an immediate first ally spawn on play
+                AddComponentObject(e, new AllySpawnDefinitionRef { AllySpawnDefinition = authoring.allySpawns });
                 AddComponent(e, new AllySpawnTimer { Elapsed = 9999f });
             }
         }

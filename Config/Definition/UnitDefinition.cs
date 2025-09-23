@@ -46,12 +46,12 @@ namespace OneBitRob
         [BoxGroup("Base Stats")]
         [LabelText("Move Speed"), SuffixLabel("m/s", true)]
         [MinValue(0f)]
-        public float moveSpeed = 4f;
+        public float moveSpeed = 3f;
 
         [BoxGroup("Base Stats")]
         [LabelText("Acceleration"), SuffixLabel("m/s²", true)]
         [MinValue(0f)]
-        public float acceleration = 10f;
+        public float acceleration = 6f;
         
         [BoxGroup("Base Stats")]
         public float angularSpeed = 120f;

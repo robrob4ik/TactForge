@@ -7,11 +7,8 @@ using GPUInstancerPro.PrefabModule;
 using OneBitRob.AI;
 using OneBitRob.ECS.GPUI;
 using OneBitRob.OneBitRob.Spawning;
-// using OneBitRob.Spawning; // (only if you actually reference types from this ns)
+using Opsive.BehaviorDesigner.Runtime;
 using Unity.Collections;
-
-using static Unity.Mathematics.math;
-using float3 = Unity.Mathematics.float3;
 
 namespace OneBitRob.ECS
 {
@@ -19,7 +16,7 @@ namespace OneBitRob.ECS
     [UpdateAfter(typeof(MonoToEcsSyncGroup))]
     public partial struct EnemyWaveSpawnerSystem : ISystem
     {
-        private EntityQuery _markerQ; // OK to store
+        private EntityQuery _markerQ;
 
         public void OnCreate(ref SystemState state)
         {
@@ -29,26 +26,25 @@ namespace OneBitRob.ECS
                     All = new[] { ComponentType.ReadOnly<SpawnerMarker>(), ComponentType.ReadOnly<LocalTransform>() }
                 }
             );
-            state.RequireForUpdate<EnemyWavesRef>();
-            state.RequireForUpdate<SpawnerData>();
+            state.RequireForUpdate<EnemySpawnDefinitionRef>();
+            state.RequireForUpdate<EnemyWavesConfig>(); // NEW
         }
 
         public void OnUpdate(ref SystemState state)
         {
             var em = state.EntityManager;
 
-            // GPUI manager (optional, managed; do not store on struct)
             GPUIPrefabManager gpuiMgr = null;
             try { gpuiMgr = SystemAPI.ManagedAPI.GetSingleton<GPUIManagerRef>()?.Value; } catch { }
 
-            var wavesRef = SystemAPI.ManagedAPI.GetSingleton<EnemyWavesRef>()?.Waves;
+            var wavesRef = SystemAPI.ManagedAPI.GetSingleton<EnemySpawnDefinitionRef>()?.EnemySpawnDefinition;
             if (wavesRef == null || wavesRef.waves == null || wavesRef.waves.Count == 0) return;
 
-            // Ensure runtime singleton exists
+            var cfg = SystemAPI.GetSingleton<EnemyWavesConfig>(); // NEW
+
             var runtimeEnt = GetOrCreateSingleton(ref state);
             var rt = em.GetComponentData<EnemyWaveRuntime>(runtimeEnt);
 
-            // If not active, arm
             if (rt.Active == 0)
             {
                 rt = new EnemyWaveRuntime { WaveIndex = 0, WaveElapsed = 0f, InterDelayRemaining = 0f, Active = 1 };
@@ -57,14 +53,11 @@ namespace OneBitRob.ECS
             }
 
             float dt = (float)SystemAPI.Time.DeltaTime;
-            var data = SystemAPI.ManagedAPI.GetSingleton<SpawnerData>();
-
-            // Collect enemy spawn centers
             var centers = GatherCenters(ref state, SpawnerType.Enemy);
 
             if (rt.InterDelayRemaining > 0f)
             {
-                rt.InterDelayRemaining = max(0f, rt.InterDelayRemaining - dt);
+                rt.InterDelayRemaining = math.max(0f, rt.InterDelayRemaining - dt);
                 em.SetComponentData(runtimeEnt, rt);
                 return;
             }
@@ -79,64 +72,63 @@ namespace OneBitRob.ECS
             }
 
             var wave = wavesRef.waves[rt.WaveIndex];
-            float remainingWave = max(0f, wave.durationSeconds - rt.WaveElapsed);
+            float remainingWave = math.max(0f, wave.durationSeconds - rt.WaveElapsed);
 
-            // Drive entry cursors
             var cursors = em.GetBuffer<EnemyWaveEntryCursor>(runtimeEnt);
             int totalEntries = wave.entries.Count;
 
-            float clampDt = min(dt, remainingWave);
+            float clampDt = math.min(dt, remainingWave);
             bool anyImmediateAdds = false;
+            bool spawnedAny = false;
 
             for (int i = 0; i < totalEntries; i++)
             {
                 ref var cur = ref cursors.ElementAt(i);
                 if (cur.Remaining <= 0 || cur.RatePerSec <= 0f || cur.Window <= 0f) continue;
 
-                // Pause this entry after its individual window
                 float windowElapsed = rt.WaveElapsed;
                 if (windowElapsed > cur.Window) continue;
 
                 cur.Accum += cur.RatePerSec * clampDt;
-                int spawnNow = (int)floor(cur.Accum);
+                int spawnNow = (int)math.floor(cur.Accum);
                 if (spawnNow <= 0) continue;
 
-                int toSpawn = min(spawnNow, cur.Remaining);
+                int toSpawn = math.min(spawnNow, cur.Remaining);
                 cur.Accum -= toSpawn;
 
                 for (int s = 0; s < toSpawn; s++)
                 {
                     var entry = wave.entries[i];
 
-                    // choose center + jitter in SpawnerData area
                     Vector3 center = centers.Count > 0 ? centers[(int)(SystemAPI.Time.ElapsedTime * 997 + i + s) % centers.Count] : Vector3.zero;
-                    Vector3 pos = RandomInArea(data.SpawnAreaFrom, data.SpawnAreaTo) + center;
+                    Vector3 pos = RandomInArea(cfg.SpawnAreaFrom, cfg.SpawnAreaTo) + center; // NEW
 
-                    anyImmediateAdds |= SpawnUnitPrefab(ref state, data.EntityPrefab, entry.unitPrefab, pos, Constants.GameConstants.ENEMY_FACTION, gpuiMgr);
+                    bool usedImmediate = SpawnUnitPrefab(ref state, cfg.AgentEntityPrefab, entry.unitPrefab, pos, Constants.GameConstants.ENEMY_FACTION, gpuiMgr);
+
+                    anyImmediateAdds |= usedImmediate;
+                    spawnedAny = true;
                 }
 
                 cur.Remaining -= toSpawn;
             }
 
-            // Advance wave timer
             rt.WaveElapsed += dt;
             if (rt.WaveElapsed >= wave.durationSeconds)
             {
                 rt.WaveIndex++;
                 rt.WaveElapsed = 0f;
-                rt.InterDelayRemaining = max(0f, wavesRef.interWaveDelaySeconds);
+                rt.InterDelayRemaining = math.max(0f, wavesRef.interWaveDelaySeconds);
                 em.SetComponentData(runtimeEnt, rt);
 
                 if (rt.WaveIndex < wavesRef.waves.Count) InitCursorsForWave(ref state, runtimeEnt, wavesRef, rt.WaveIndex);
             }
-            else
-            {
-                em.SetComponentData(runtimeEnt, rt);
-            }
+            else { em.SetComponentData(runtimeEnt, rt); }
 
-            if (anyImmediateAdds && gpuiMgr != null)
-                GPUIPrefabAPI.UpdateTransformData(gpuiMgr);
+            if (anyImmediateAdds && gpuiMgr != null) GPUIPrefabAPI.UpdateTransformData(gpuiMgr);
+
+            if (spawnedAny) BehaviorTree.EnableBakedBehaviorTreeSystem(World.DefaultGameObjectInjectionWorld);
         }
+
 
         // --- helpers ---
         private Entity GetOrCreateSingleton(ref SystemState state)
@@ -193,26 +185,24 @@ namespace OneBitRob.ECS
             return centers;
         }
 
-        private static Vector3 RandomInArea(Vector3 from, Vector3 to)
+        private static Vector3 RandomInArea(float3 from, float3 to)
         {
-            float rx = UnityEngine.Random.Range(min(from.x, to.x), max(from.x, to.x));
-            float ry = UnityEngine.Random.Range(min(from.y, to.y), max(from.y, to.y));
-            float rz = UnityEngine.Random.Range(min(from.z, to.z), max(from.z, to.z));
+            float rx = UnityEngine.Random.Range(math.min(from.x, to.x), math.max(from.x, to.x));
+            float ry = UnityEngine.Random.Range(math.min(from.y, to.y), math.max(from.y, to.y));
+            float rz = UnityEngine.Random.Range(math.min(from.z, to.z), math.max(from.z, to.z));
             return new Vector3(rx, ry, rz);
         }
 
-        private static bool SpawnUnitPrefab(ref SystemState state, Entity unitEntityPrefab, GameObject bodyPrefab, Vector3 pos, byte faction, GPUIPrefabManager gpuiManager)
+        private static bool SpawnUnitPrefab(ref SystemState state, Entity agentEntityPrefab, GameObject bodyPrefab, Vector3 pos, byte faction, GPUIPrefabManager gpuiManager)
         {
             var em = state.EntityManager;
-            var e = em.Instantiate(unitEntityPrefab);
+            var e = em.Instantiate(agentEntityPrefab);
             em.SetComponentData(e, LocalTransform.FromPosition(pos));
 
             var go = Object.Instantiate(bodyPrefab, pos, Quaternion.identity);
-
             var brain = go.GetComponent<UnitBrain>();
             brain.SetEntity(e);
 
-            // Hard requirement: UnitStatic must be applied
             UnitStaticSetup.Apply(em, e, brain);
 
             bool usedImmediate = false;
@@ -225,16 +215,17 @@ namespace OneBitRob.ECS
                     if (proto < 0) proto = GPUIPrefabAPI.AddPrototype(gpuiManager, bodyPrefab);
                     usedImmediate = GPUIPrefabAPI.AddPrefabInstanceImmediate(gpuiManager, gpui, proto) >= 0;
                 }
-
                 if (!usedImmediate) GPUIPrefabAPI.AddPrefabInstance(gpui);
             }
 
-            PrimeAgentEntity(em, e, faction);
+            PrimeAgentEntity(ref state, e, faction);
             return usedImmediate;
         }
 
-        private static void PrimeAgentEntity(EntityManager em, Entity e, byte faction)
+        private static void PrimeAgentEntity(ref SystemState state, Entity e, byte faction)
         {
+            var em = state.EntityManager;
+            
             em.AddComponent(e, ComponentType.ReadOnly<AgentTag>());
             em.AddComponentData(e, new SpatialHashTarget { Faction = faction });
 

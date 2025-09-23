@@ -27,4 +27,10 @@ namespace OneBitRob.ECS
         /// <summary>Additional grace distance before snapping back.</summary>
         public float Slack;
     }
+    
+    public struct DesiredStoppingDistance : IComponentData
+    {
+        public float Value;
+        public byte  HasValue; // 1 = apply and consume
+    }
 }

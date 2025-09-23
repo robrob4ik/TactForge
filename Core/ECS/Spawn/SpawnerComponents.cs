@@ -1,6 +1,7 @@
 ﻿using OneBitRob.OneBitRob.Spawning;
 using OneBitRob.Spawning;
 using Unity.Entities;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace OneBitRob.ECS
@@ -17,13 +18,28 @@ namespace OneBitRob.ECS
         public Vector3 SpawnAreaFrom, SpawnAreaTo;
     }
     
+    public struct AllyKeepConfig : IComponentData
+    {
+        public Entity AgentEntityPrefab;
+        public float3 SpawnAreaFrom;
+        public float3 SpawnAreaTo;
+    }
+    
+    // NEW: config for Enemy Waves (no SpawnerSettings needed)
+    public struct EnemyWavesConfig : IComponentData
+    {
+        public Entity AgentEntityPrefab;
+        public float3 SpawnAreaFrom;
+        public float3 SpawnAreaTo;
+    }
+    
     public struct AllySpawnTimer : IComponentData { public float Elapsed; }
     
-    public sealed class AllySpawnSetRef : IComponentData { public AllySpawnDefinition Set; }
+    public sealed class AllySpawnDefinitionRef : IComponentData { public AllySpawnDefinition AllySpawnDefinition; }
 
-    public sealed class EnemyWavesRef : IComponentData
+    public sealed class EnemySpawnDefinitionRef : IComponentData
     {
-        public EnemyWavesDefinition Waves;
+        public EnemyWavesDefinition EnemySpawnDefinition;
     }
 
     public struct EnemyWaveRuntime : IComponentData

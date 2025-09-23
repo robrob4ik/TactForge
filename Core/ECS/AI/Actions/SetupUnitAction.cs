@@ -203,6 +203,44 @@ namespace OneBitRob.AI
 
             em.SetOrAdd(e, uws);
 
+            // ------------------------------------------------------------------
+            // NEW: Engagement preferences (tactical distance, not nav stop)
+            // ------------------------------------------------------------------
+            {
+                float attackRangeBase = us.AttackRangeBase;
+                bool isRanged = (style == 2);
+
+                // Defaults: Ranged ~60% of range (or range - 1u), Melee ~90% of range
+                float engage =
+                    isRanged ? math.min(attackRangeBase * 0.6f, attackRangeBase - 1f)
+                             : math.min(attackRangeBase * 0.9f, attackRangeBase - 0.1f);
+
+                engage = math.max(0.25f, engage);
+
+                if (!em.HasComponent<EngagementPreferences>(e))
+                {
+                    em.AddComponentData(e, new EngagementPreferences
+                    {
+                        EngageDistance = engage,
+                        KiteBuffer     = 0f
+                    });
+                }
+                else
+                {
+                    var ep = em.GetComponentData<EngagementPreferences>(e);
+                    if (ep.EngageDistance <= 0f) ep.EngageDistance = engage;
+                    em.SetComponentData(e, ep);
+                }
+            }
+
+            // ------------------------------------------------------------------
+            // NEW: Default leash (will be updated by MoveToBannerSystem each frame)
+            // ------------------------------------------------------------------
+            if (!em.HasComponent<BannerLeash>(e))
+            {
+                em.AddComponentData(e, new BannerLeash { Radius = 99999f, Slack = 1.5f });
+            }
+
             return TaskStatus.Success;
         }
     }

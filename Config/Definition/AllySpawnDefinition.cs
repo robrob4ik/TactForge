@@ -9,6 +9,9 @@ namespace OneBitRob.Spawning
     {
         [Min(1f)]
         public float periodSeconds = 30f;
+        
+        [Tooltip("Prefab reference ECS behavior tree entity")]
+        [SerializeField] protected GameObject m_EntityPrefab;
 
         public List<AllySpawnConfig> entries = new();
     }

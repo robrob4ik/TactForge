@@ -3,13 +3,13 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Transforms;
 using UnityEngine;
-
 using GPUInstancerPro.PrefabModule;
 using OneBitRob.AI;
 using OneBitRob.ECS.GPUI;
+using Opsive.BehaviorDesigner.Runtime;
+using Unity.Mathematics;
+using Random = UnityEngine.Random;
 
-using static Unity.Mathematics.math;
-using float3 = Unity.Mathematics.float3;
 
 namespace OneBitRob.ECS
 {
@@ -17,22 +17,20 @@ namespace OneBitRob.ECS
     [UpdateAfter(typeof(MonoToEcsSyncGroup))]
     public partial struct AllyKeepSpawnerSystem : ISystem
     {
-        private EntityQuery _markerQ; // OK to store
+        private EntityQuery _markerQ;
 
         public void OnCreate(ref SystemState state)
         {
-            state.RequireForUpdate<AllySpawnSetRef>();
-            state.RequireForUpdate<SpawnerData>();
+            state.RequireForUpdate<AllySpawnDefinitionRef>();
             state.RequireForUpdate<AllySpawnTimer>();
+            state.RequireForUpdate<AllyKeepConfig>(); // NEW
 
-            _markerQ = state.GetEntityQuery(new EntityQueryDesc
-            {
-                All = new[]
+            _markerQ = state.GetEntityQuery(
+                new EntityQueryDesc
                 {
-                    ComponentType.ReadOnly<SpawnerMarker>(),
-                    ComponentType.ReadOnly<LocalTransform>()
+                    All = new[] { ComponentType.ReadOnly<SpawnerMarker>(), ComponentType.ReadOnly<LocalTransform>() }
                 }
-            });
+            );
         }
 
         public void OnUpdate(ref SystemState state)
@@ -40,58 +38,62 @@ namespace OneBitRob.ECS
             var em = state.EntityManager;
             float dt = (float)SystemAPI.Time.DeltaTime;
 
-            var setRef = SystemAPI.ManagedAPI.GetSingleton<AllySpawnSetRef>();
-            var set = setRef?.Set;
+            var setRef = SystemAPI.ManagedAPI.GetSingleton<AllySpawnDefinitionRef>();
+            var set = setRef?.AllySpawnDefinition;
             if (set == null || set.entries == null || set.entries.Count == 0) return;
 
-            var data = SystemAPI.ManagedAPI.GetSingleton<SpawnerData>();
+            var cfg = SystemAPI.GetSingleton<AllyKeepConfig>(); // NEW
 
             var timerEnt = SystemAPI.GetSingletonEntity<AllySpawnTimer>();
             var timer = em.GetComponentData<AllySpawnTimer>(timerEnt);
             timer.Elapsed += dt;
 
-            float period = max(1f, set.periodSeconds);
+            float period = math.max(1f, set.periodSeconds);
             if (timer.Elapsed + 1e-5f < period)
             {
                 em.SetComponentData(timerEnt, timer);
                 return;
             }
 
-            // Resolve GPUI manager when needed (managed; do not store on struct)
             GPUIPrefabManager gpuiMgr = null;
-            try { gpuiMgr = SystemAPI.ManagedAPI.GetSingleton<GPUIManagerRef>()?.Value; } catch { /* optional */ }
+            try { gpuiMgr = SystemAPI.ManagedAPI.GetSingleton<GPUIManagerRef>()?.Value; } catch { }
 
             var centers = GatherAllyCenters(ref state);
+
             bool anyImmediateAdds = false;
+            bool spawnedAny = false;
 
             for (int entryIndex = 0; entryIndex < set.entries.Count; entryIndex++)
             {
-                var cfg = set.entries[entryIndex];
-                if (cfg.unitPrefab == null || cfg.count <= 0) continue;
+                var cfgEntry = set.entries[entryIndex];
+                if (cfgEntry.unitPrefab == null || cfgEntry.count <= 0) continue;
 
-                for (int i = 0; i < cfg.count; i++)
+                for (int i = 0; i < cfgEntry.count; i++)
                 {
                     Vector3 center = centers.Count > 0 ? centers[(i + entryIndex) % centers.Count] : Vector3.zero;
-                    Vector3 pos = RandomInArea(data.SpawnAreaFrom, data.SpawnAreaTo) + center;
+                    Vector3 pos = RandomInArea(cfg.SpawnAreaFrom, cfg.SpawnAreaTo) + center; // NEW
 
-                    anyImmediateAdds |= SpawnUnitPrefab(
+                    bool usedImmediate = SpawnUnitPrefab(
                         ref state,
-                        data.EntityPrefab,
-                        cfg.unitPrefab,
+                        cfg.AgentEntityPrefab, // NEW
+                        cfgEntry.unitPrefab,
                         pos,
                         Constants.GameConstants.ALLY_FACTION,
-                        gpuiMgr);
+                        gpuiMgr
+                    );
+
+                    anyImmediateAdds |= usedImmediate;
+                    spawnedAny = true;
                 }
             }
 
-            if (anyImmediateAdds && gpuiMgr != null)
-                GPUIPrefabAPI.UpdateTransformData(gpuiMgr);
+            if (anyImmediateAdds && gpuiMgr != null) GPUIPrefabAPI.UpdateTransformData(gpuiMgr);
+
+            if (spawnedAny) BehaviorTree.EnableBakedBehaviorTreeSystem(World.DefaultGameObjectInjectionWorld);
 
             timer.Elapsed = 0f;
             em.SetComponentData(timerEnt, timer);
         }
-
-        // -------- helpers (instance; no SystemAPI.Query here) --------
 
         private List<Vector3> GatherAllyCenters(ref SystemState state)
         {
@@ -107,20 +109,22 @@ namespace OneBitRob.ECS
                 var lt = em.GetComponentData<LocalTransform>(e);
                 centers.Add(lt.Position);
             }
+
             return centers;
         }
 
-        private static Vector3 RandomInArea(Vector3 from, Vector3 to)
+        // CHANGED: area from float3
+        private static Vector3 RandomInArea(float3 from, float3 to)
         {
-            float rx = Random.Range(min(from.x, to.x), max(from.x, to.x));
-            float ry = Random.Range(min(from.y, to.y), max(from.y, to.y));
-            float rz = Random.Range(min(from.z, to.z), max(from.z, to.z));
+            float rx = UnityEngine.Random.Range(math.min(from.x, to.x), math.max(from.x, to.x));
+            float ry = UnityEngine.Random.Range(math.min(from.y, to.y), math.max(from.y, to.y));
+            float rz = UnityEngine.Random.Range(math.min(from.z, to.z), math.max(from.z, to.z));
             return new Vector3(rx, ry, rz);
         }
 
         private static bool SpawnUnitPrefab(
             ref SystemState state,
-            Entity unitEntityPrefab,
+            Entity agentEntityPrefab,           // NEW name
             GameObject bodyPrefab,
             Vector3 pos,
             byte faction,
@@ -128,19 +132,15 @@ namespace OneBitRob.ECS
         {
             var em = state.EntityManager;
 
-            // Create ECS shell
-            var e = em.Instantiate(unitEntityPrefab);
+            var e = em.Instantiate(agentEntityPrefab); // NEW
             em.SetComponentData(e, LocalTransform.FromPosition(pos));
 
-            // Instantiate GO and wire brain
             var go = Object.Instantiate(bodyPrefab, pos, Quaternion.identity);
             var brain = go.GetComponent<UnitBrain>();
             brain.SetEntity(e);
 
-            // Hard requirement: UnitStatic must be applied
             UnitStaticSetup.Apply(em, e, brain);
 
-            // Register with GPUI if present
             bool usedImmediate = false;
             var gpui = go.GetComponent<GPUIPrefab>();
             if (gpui != null)
@@ -154,19 +154,19 @@ namespace OneBitRob.ECS
                 if (!usedImmediate) GPUIPrefabAPI.AddPrefabInstance(gpui);
             }
 
-            // Prime ECS gameplay shell (mirrors your SpawnerSystem.PrimeAgentEntity)
             PrimeAgentEntity(em, e, faction);
-
             return usedImmediate;
         }
-
+        
         private static void PrimeAgentEntity(EntityManager em, Entity e, byte faction)
         {
             em.AddComponent(e, ComponentType.ReadOnly<AgentTag>());
             em.AddComponentData(e, new SpatialHashTarget { Faction = faction });
 
-            if (faction == Constants.GameConstants.ALLY_FACTION) em.AddComponent<AllyTag>(e);
-            else em.AddComponent<EnemyTag>(e);
+            if (faction == Constants.GameConstants.ALLY_FACTION)
+                em.AddComponent<AllyTag>(e);
+            else
+                em.AddComponent<EnemyTag>(e);
 
             em.AddComponentData(e, new Target { Value = Entity.Null });
             em.AddComponentData(e, new DesiredDestination { Position = float3.zero, HasValue = 0 });
@@ -176,16 +176,39 @@ namespace OneBitRob.ECS
 
             em.AddComponentData(e, new AttackCooldown { NextTime = 0f });
             em.AddComponentData(e, new AttackWindup { Active = 0, ReleaseTime = 0f });
-            if (!em.HasComponent<AttackRequest>(e)) { em.AddComponent<AttackRequest>(e); em.SetComponentEnabled<AttackRequest>(e, false); }
+            if (!em.HasComponent<AttackRequest>(e))
+            {
+                em.AddComponent<AttackRequest>(e);
+                em.SetComponentEnabled<AttackRequest>(e, false);
+            }
 
-            if (!em.HasComponent<CastRequest>(e))                 { em.AddComponent<CastRequest>(e);                 em.SetComponentEnabled<CastRequest>(e, false); }
-            if (!em.HasComponent<SpellProjectileSpawnRequest>(e)) { em.AddComponent<SpellProjectileSpawnRequest>(e); em.SetComponentEnabled<SpellProjectileSpawnRequest>(e, false); }
-            if (!em.HasComponent<EcsProjectileSpawnRequest>(e))   { em.AddComponent<EcsProjectileSpawnRequest>(e);   em.SetComponentEnabled<EcsProjectileSpawnRequest>(e, false); }
-            if (!em.HasComponent<MeleeHitRequest>(e))             { em.AddComponent<MeleeHitRequest>(e);             em.SetComponentEnabled<MeleeHitRequest>(e, false); }
+            if (!em.HasComponent<CastRequest>(e))
+            {
+                em.AddComponent<CastRequest>(e);
+                em.SetComponentEnabled<CastRequest>(e, false);
+            }
 
-            if (!em.HasComponent<SpellState>(e))    em.AddComponentData(e, new SpellState { CanCast = 1, Ready = 1 });
+            if (!em.HasComponent<SpellProjectileSpawnRequest>(e))
+            {
+                em.AddComponent<SpellProjectileSpawnRequest>(e);
+                em.SetComponentEnabled<SpellProjectileSpawnRequest>(e, false);
+            }
+
+            if (!em.HasComponent<EcsProjectileSpawnRequest>(e))
+            {
+                em.AddComponent<EcsProjectileSpawnRequest>(e);
+                em.SetComponentEnabled<EcsProjectileSpawnRequest>(e, false);
+            }
+
+            if (!em.HasComponent<MeleeHitRequest>(e))
+            {
+                em.AddComponent<MeleeHitRequest>(e);
+                em.SetComponentEnabled<MeleeHitRequest>(e, false);
+            }
+
+            if (!em.HasComponent<SpellState>(e)) em.AddComponentData(e, new SpellState { CanCast = 1, Ready = 1 });
             if (!em.HasComponent<SpellCooldown>(e)) em.AddComponentData(e, new SpellCooldown { NextTime = 0f });
-            if (!em.HasComponent<SpellWindup>(e))   em.AddComponentData(e, new SpellWindup { Active = 0, ReleaseTime = 0f });
+            if (!em.HasComponent<SpellWindup>(e)) em.AddComponentData(e, new SpellWindup { Active = 0, ReleaseTime = 0f });
         }
     }
 }

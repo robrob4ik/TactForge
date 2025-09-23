@@ -229,7 +229,7 @@ namespace OneBitRob.AI
         {
             if (DebugDrawCombatGizmos) DrawCombatGizmos();
         }
-
+        
         private void DrawCombatGizmos()
         {
             var pos = transform.position;
