@@ -9,6 +9,7 @@ namespace OneBitRob.Config
         Random
     }
 
+  
     [CreateAssetMenu(menuName = "TactForge/Animation/Compute Attack Set", fileName = "ComputeAttackSet")]
     public sealed class ComputeAttackAnimationSettings : ScriptableObject
     {
@@ -20,7 +21,7 @@ namespace OneBitRob.Config
         {
             if (!Has) return null;
             if (mode == ClipSelect.Random) return clips[Random.Range(0, clips.Count)];
-            var c = clips[next % clips.Count];
+            var c = clips[AnimIndexUtil.Wrap(next, clips.Count)];
             next++;
             return c;
         }
@@ -42,7 +43,7 @@ namespace OneBitRob.Config
         {
             if (!HasPrepare) return null;
             if (prepareMode == ClipSelect.Random) return prepare[Random.Range(0, prepare.Count)];
-            var c = prepare[next % prepare.Count];
+            var c = prepare[AnimIndexUtil.Wrap(next, prepare.Count)];
             next++;
             return c;
         }
@@ -51,9 +52,19 @@ namespace OneBitRob.Config
         {
             if (!HasFire) return null;
             if (fireMode == ClipSelect.Random) return fire[Random.Range(0, fire.Count)];
-            var c = fire[next % fire.Count];
+            var c = fire[AnimIndexUtil.Wrap(next, fire.Count)];
             next++;
             return c;
         }
+    }
+}
+
+public static class AnimIndexUtil
+{
+    public static int Wrap(int index, int count)
+    {
+        if (count <= 0) return 0;
+        int r = index % count; // C# keeps sign of dividend
+        return (r < 0) ? r + count : r; // make it positive
     }
 }

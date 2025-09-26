@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using OneBitRob.Config;
 using OneBitRob.Core;
 using OneBitRob.Debugging;
@@ -6,7 +5,6 @@ using OneBitRob.EnigmaEngine;
 using ProjectDawn.Navigation;
 using ProjectDawn.Navigation.Hybrid;
 using Unity.Entities;
-using Unity.Mathematics;
 using UnityEngine;
 
 namespace OneBitRob.AI
@@ -30,25 +28,14 @@ namespace OneBitRob.AI
         private LayerMask _targetMask;
 
         [Header("Auto-Assign")]
-        [SerializeField, Tooltip("Set all child colliders to Ally/Enemy faction layer at Awake/Enable/Start depending on flags.")]
+        [SerializeField, Tooltip("Set all child colliders to Ally/Enemy faction layer at Awake depending on flags.")]
         private bool autoAssignFactionLayer = true;
-
-        [SerializeField]
-        private bool reassignOnEnable = true;
 
         [SerializeField, Tooltip("If true, minimal nav init runs on Start (does NOT change tunables).")]
         private bool applyNavFromDefinitionOnStart = true;
 
 #if UNITY_EDITOR
         public string CurrentTaskName { get; set; } = "Idle";
-
-        [Header("Debug")]
-        public bool DebugDrawCombatGizmos = true;
-
-        public bool DebugAlwaysDraw = false;
-        public bool DebugDrawFacing = true;
-        public bool DebugDrawSpell = true;
-
 #endif
 
         public GameObject CurrentTarget { get; set; }
@@ -88,7 +75,7 @@ namespace OneBitRob.AI
 
             RecomputeMasks();
 
-            if (autoAssignFactionLayer) AssignFactionLayers("Awake");
+            if (autoAssignFactionLayer) AssignFactionLayers();
 
             if (HandleWeapon != null)
             {
@@ -99,14 +86,7 @@ namespace OneBitRob.AI
 
         private void Start()
         {
-            if (autoAssignFactionLayer) AssignFactionLayers("Start");
-
             if (applyNavFromDefinitionOnStart) ApplyNavFromDefinition();
-        }
-
-        private void OnEnable()
-        {
-            if (autoAssignFactionLayer && reassignOnEnable) AssignFactionLayers("OnEnable");
         }
 
         private void OnDisable()
@@ -121,7 +101,7 @@ namespace OneBitRob.AI
 
         private void RecomputeMasks() { _targetMask = CombatLayers.TargetMaskFor(_isEnemy); }
 
-        private void AssignFactionLayers(string reason)
+        private void AssignFactionLayers()
         {
             int layer = CombatLayers.FactionLayerIndexFor(_isEnemy);
             if (layer < 0 || layer > 31) return;
@@ -145,7 +125,7 @@ namespace OneBitRob.AI
 
 #if UNITY_EDITOR
             string layerName = LayerMask.LayerToName(layer);
-            Debug.Log($"[UnitBrain] '{name}' set {changed}/{total} colliders to layer {layer} ({layerName}). Reason={reason}", this);
+            Debug.Log($"[UnitBrain] '{name}' set {changed}/{total} colliders to layer {layer} ({layerName})", this);
 #endif
         }
 
@@ -222,12 +202,12 @@ namespace OneBitRob.AI
 #if UNITY_EDITOR
         private void OnDrawGizmos()
         {
-            if (DebugDrawCombatGizmos && DebugAlwaysDraw) DrawCombatGizmos();
+            if (DebugDraw.Enabled) DrawCombatGizmos();
         }
 
         private void OnDrawGizmosSelected()
-        {
-            if (DebugDrawCombatGizmos) DrawCombatGizmos();
+        {  
+            if (DebugDraw.Enabled) DrawCombatGizmos();
         }
         
         private void DrawCombatGizmos()
@@ -248,11 +228,11 @@ namespace OneBitRob.AI
                 var tpos = CurrentTarget.transform.position;
                 DebugDraw.GizmoLine(pos, tpos, DebugPalette.TargetLine);
             }
-
-            if (DebugDrawFacing)
+            
+            if (DebugDraw.Enabled)
                 DebugDraw.GizmoRay(pos + Vector3.up * 0.05f, transform.forward, DebugPalette.Facing, 0.9f);
 
-            if (DebugDrawSpell && UnitDefinition?.unitSpells != null && UnitDefinition.unitSpells.Count > 0)
+            if (DebugDraw.Enabled && UnitDefinition?.unitSpells != null && UnitDefinition.unitSpells.Count > 0)
             {
                 var sd = UnitDefinition.unitSpells[0];
                 if (sd != null && sd.Range > 0f)

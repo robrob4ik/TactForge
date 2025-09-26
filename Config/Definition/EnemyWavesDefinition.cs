@@ -11,10 +11,6 @@ namespace OneBitRob
         {
             [Min(0f)]
             public float interWaveDelaySeconds = 3f;
-
-            [Tooltip("Prefab reference ECS behavior tree entity")]
-            [SerializeField] protected GameObject m_EntityPrefab;
-
             
             public bool loop = false;
             public List<EnemyWaveConfig> waves = new();

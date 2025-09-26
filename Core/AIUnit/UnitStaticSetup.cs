@@ -1,6 +1,4 @@
-﻿// UnitStaticsBootstrap.cs (new)
-using OneBitRob.AI;
-using OneBitRob.Config;
+﻿using OneBitRob.AI;
 using OneBitRob.Constants;
 using OneBitRob.Core;
 using Unity.Entities;
@@ -23,13 +21,6 @@ namespace OneBitRob.ECS
                 IsEnemy               = (byte)(def.isEnemy ? 1 : 0),
                 Faction               = (byte)(def.isEnemy ? GameConstants.ENEMY_FACTION : GameConstants.ALLY_FACTION),
                 CombatStyle           = style,
-                Layers = new UnitLayerMasks
-                {
-                    FriendlyMask         = CombatLayers.FriendlyMaskFor(def.isEnemy).value,
-                    HostileMask          = CombatLayers.HostileMaskFor(def.isEnemy).value,
-                    TargetMask           = CombatLayers.TargetMaskFor(def.isEnemy).value,
-                    DamageableLayerIndex = CombatLayers.FactionLayerIndexFor(def.isEnemy)
-                },
                 Retarget = new RetargetingSettings
                 {
                     AutoSwitchMinDistance    = Mathf.Max(0f, def.autoTargetMinSwitchDistance),

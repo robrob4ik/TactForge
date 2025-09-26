@@ -38,20 +38,21 @@ namespace OneBitRob.AI
         protected override void OnCreate()
         {
             base.OnCreate();
-            _posRO       = GetComponentLookup<LocalTransform>(true);
-            _factRO      = GetComponentLookup<SpatialHashTarget>(true);
-            _inRangeRO   = GetComponentLookup<InAttackRange>(true);
-            _lockRO      = GetComponentLookup<MovementLock>(true);
-            _windRO      = GetComponentLookup<AttackWindup>(true);
-            _unitStaticRO= GetComponentLookup<UnitStatic>(true);
-            _statsRO     = GetComponentLookup<UnitRuntimeStats>(true);
+            _posRO        = GetComponentLookup<LocalTransform>(true);
+            _factRO       = GetComponentLookup<SpatialHashTarget>(true);
+            _inRangeRO    = GetComponentLookup<InAttackRange>(true);
+            _lockRO       = GetComponentLookup<MovementLock>(true);
+            _windRO       = GetComponentLookup<AttackWindup>(true);
+            _unitStaticRO = GetComponentLookup<UnitStatic>(true);
+            _statsRO      = GetComponentLookup<UnitRuntimeStats>(true);
 
-            _asgRO       = GetComponentLookup<BannerAssignment>(true);
-            _bannerRO    = GetComponentLookup<Banner>(true);
+            _asgRO        = GetComponentLookup<BannerAssignment>(true);
+            _bannerRO     = GetComponentLookup<Banner>(true);
         }
 
         protected override void OnUpdate()
         {
+            // Update lookups once per tick (valid until the next structural change).
             _posRO.Update(this);
             _factRO.Update(this);
             _inRangeRO.Update(this);
@@ -88,7 +89,8 @@ namespace OneBitRob.AI
             // Leash ONLY for DEFEND
             if (IsDefendAndOutsideArea(e, selfPos, targetPos))
             {
-                SystemAPI.SetComponent(e, new Target { Value = Entity.Null });
+                if (SystemAPI.HasComponent<Target>(e))
+                    SystemAPI.SetComponent(e, new Target { Value = Entity.Null });
                 ParkAtSelf(e);
                 return TaskStatus.Failure;
             }
@@ -96,10 +98,11 @@ namespace OneBitRob.AI
             // Chase target: destination = target position
             SetDesiredDestination(e, targetPos);
 
-            // Stop at effective attack range
+            // Stop at effective attack range (no immediate structural change!)
             float stopAtRange = ComputeEffectiveAttackRange(e, brain);
-            EntityManager.SetOrAdd(e, new DesiredStoppingDistance { Value = stopAtRange, HasValue = 1 });
+            SetDesiredStoppingDistance(e, stopAtRange);
 
+            // Possibly yield (deferred add for cooldown)
             if (ShouldYield(e, now, brain))
                 return TaskStatus.Failure;
 
@@ -133,11 +136,29 @@ namespace OneBitRob.AI
             SetDesiredDestination(e, here);
         }
 
+        // Hardened: add via ECB if component is missing.
         private void SetDesiredDestination(Entity e, float3 position)
         {
-            var dd = SystemAPI.GetComponent<DesiredDestination>(e);
-            dd.Position = position; dd.HasValue = 1;
-            SystemAPI.SetComponent(e, dd);
+            if (SystemAPI.HasComponent<DesiredDestination>(e))
+            {
+                var dd = SystemAPI.GetComponent<DesiredDestination>(e);
+                dd.Position = position; dd.HasValue = 1;
+                SystemAPI.SetComponent(e, dd);
+            }
+            else
+            {
+                _ecb.AddComponent(e, new DesiredDestination { Position = position, HasValue = 1 });
+            }
+        }
+
+        // New helper: never call EntityManager.SetOrAdd here.
+        private void SetDesiredStoppingDistance(Entity e, float value)
+        {
+            var data = new DesiredStoppingDistance { Value = value, HasValue = 1 };
+            if (SystemAPI.HasComponent<DesiredStoppingDistance>(e))
+                SystemAPI.SetComponent(e, data);
+            else
+                _ecb.AddComponent(e, data);
         }
 
         private float ComputeEffectiveAttackRange(Entity e, UnitBrain brain)

@@ -14,7 +14,7 @@ namespace OneBitRob.Debugging
 
         public static void SetSettings(DebugSettings settings) => _settings = settings;
 
-        private static bool  Enabled                   => _settings?.enableDebugDraws ?? false;
+        public static bool  Enabled                   => _settings?.enableDebugDraws ?? false;
         private static float Duration(float? v)        => v ?? (_settings?.defaultDuration      ?? DEFAULT_DURATION);
         private static bool  Depth(bool? v)            => v ?? (_settings?.depthTest            ?? DEFAULT_DEPTH_TEST);
         private static float LineThickness(float? v)   => v ?? (_settings?.defaultLineThickness ?? DEFAULT_LINE_THICKNESS);
