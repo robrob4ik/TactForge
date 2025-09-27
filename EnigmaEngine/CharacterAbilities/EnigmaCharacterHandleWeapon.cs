@@ -6,7 +6,7 @@ using Sirenix.OdinInspector;
 
 namespace OneBitRob.EnigmaEngine
 {
-    [AddComponentMenu("Enigma Engine/Character/Abilities/Enigma Character Handle Weapon (Trimmed)")]
+    [AddComponentMenu("Enigma Engine/Character/Abilities/Enigma Character Handle Weapon")]
     public class EnigmaCharacterHandleWeapon : EnigmaCharacterAbility
     {
         [Title("Weapon")]
@@ -212,7 +212,6 @@ namespace OneBitRob.EnigmaEngine
             }
         }
 
-        // ---------- Animator glue ----------
         protected override void InitializeAnimatorParameters()
         {
             if (CharacterAnimator == null) return;
@@ -223,15 +222,12 @@ namespace OneBitRob.EnigmaEngine
 
         public override void UpdateAnimator()
         {
-            MMAnimatorExtensions.UpdateAnimatorBool(_animator, _weaponEquippedParam,
-                (CurrentWeapon != null), _character._animatorParameters, _character.RunAnimatorSanityChecks);
+            MMAnimatorExtensions.UpdateAnimatorBool(_animator, _weaponEquippedParam, (CurrentWeapon != null), _character._animatorParameters, _character.RunAnimatorSanityChecks);
 
             int id = (CurrentWeapon != null) ? CurrentWeapon.WeaponAnimationID : -1;
-            MMAnimatorExtensions.UpdateAnimatorInteger(_animator, _weaponEquippedIDParam,
-                id, _character._animatorParameters, _character.RunAnimatorSanityChecks);
+            MMAnimatorExtensions.UpdateAnimatorInteger(_animator, _weaponEquippedIDParam, id, _character._animatorParameters, _character.RunAnimatorSanityChecks);
         }
 
-        // ---------- Character events ----------
         protected override void OnHit()
         {
             base.OnHit();

@@ -415,7 +415,6 @@ namespace OneBitRob.EnigmaEngine
                 MMAnimatorExtensions.UpdateAnimatorTrigger(animator, _interruptedParam, list);
         }
 
-        // No-op, kept so HandleWeapon.Reload() compiles without doing anything
         public virtual void InitiateReloadWeapon() { }
     }
 }
